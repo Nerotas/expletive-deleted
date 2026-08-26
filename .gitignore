@@ -1,0 +1,86 @@
+# Workflow Folders (batch processing)
+/processed
+/ready
+/transcoded
+/transcripts
+
+# Python Environment
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+*.egg
+
+# Whisper AI Cache (models auto-downloaded)
+.cache/
+.whisper/
+/whisper-cache/
+/.whisper-timing.json
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS Files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary & Test Files
+*.tmp
+*.log
+test_*.mp*
+*_segment_*.mp3
+original_segment_*.mp3
+temp_*
+~$*
+
+# Local Configuration (may contain paths)
+config.ini
+.env
+.env.local
+/cookies.txt
+/yt-dlp.conf
+
+# FFmpeg Temp (if any)
+*.wav
+*.tmp.mp4
+
+# Audio & Video Media
+*.aac
+*.flac
+*.m4a
+*.mka
+*.mp3
+*.ogg
+*.opus
+*.wma
+*.3gp
+*.avi
+*.m2ts
+*.m4v
+*.mkv
+*.mov
+*.mp4
+*.mpeg
+*.mpg
+*.ts
+*.webm
+*.wmv
+
+# Build/Output Cache
+output.log
+error-output.txt
+diagnostics.py
+/staging
+/docs
