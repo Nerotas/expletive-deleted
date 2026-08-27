@@ -28,7 +28,11 @@ type Settings = {
 }
 type InstallPlan = { plan_id: string }
 
-const invoke = <T,>(method: Parameters<typeof window.profanityCensor.invoke>[0], params?: Record<string, unknown>) => window.profanityCensor.invoke<T>(method, params)
+const desktopApi = () => {
+  if (!window.profanityCensor) throw new Error('The Electron preload bridge did not load. Restart the desktop application.')
+  return window.profanityCensor
+}
+const invoke = <T,>(method: string, params?: Record<string, unknown>) => desktopApi().invoke<T>(method, params)
 const fileName = (path: string) => path.split(/[\\/]/).pop() ?? path
 const formatEta = (seconds: number) => { const total = Math.max(0, Math.round(seconds)); const minutes = Math.floor(total / 60); return minutes ? `${minutes}m ${total % 60}s` : `${total}s` }
 const statusLabel = (status: LibraryStatus | JobStatus) => ({ ready: 'Ready', transcribed: 'Transcribed', finished: 'Finished', queued: 'Ready', transcribing: 'Transcribing', censoring: 'Censoring', verifying: 'Verifying', completed: 'Finished', failed: 'Failed', cancelled: 'Cancelled' })[status]
@@ -99,7 +103,7 @@ function App() {
   })
   const chooseDirectory = async (key: keyof Settings['directories']) => {
     if (!settings) return
-    const selected = await window.profanityCensor.selectDirectory(settings.directories[key])
+    const selected = await desktopApi().selectDirectory(settings.directories[key])
     if (selected) setSettings({ ...settings, directories: { ...settings.directories, [key]: selected } })
   }
   const retryJob = async (job: Job) => run(async () => { await invoke<Job>('jobs.submit', { source: job.source, mode: job.mode }); setNotice(`${fileName(job.source)} queued again`) })
