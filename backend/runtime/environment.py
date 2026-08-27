@@ -255,6 +255,23 @@ def _find_executable(name: str, environment_variable: str) -> str | None:
         if candidate.is_file():
             return str(candidate)
         return None
+    if os.name == "nt":
+        local_app_data = os.environ.get("LOCALAPPDATA")
+        if local_app_data:
+            winget_packages = Path(local_app_data) / "Microsoft" / "WinGet" / "Packages"
+            if winget_packages.is_dir():
+                candidates = sorted(
+                    (candidate for candidate in winget_packages.rglob(f"{name}.exe") if candidate.is_file()),
+                    key=lambda candidate: str(candidate).casefold(),
+                    reverse=True,
+                )
+                if candidates:
+                    return str(candidates[0])
+
+            winget_alias = Path(local_app_data) / "Microsoft" / "WinGet" / "Links" / f"{name}.exe"
+            if winget_alias.is_file():
+                return str(winget_alias)
+
     path_executable = shutil.which(name)
     if path_executable:
         return path_executable
@@ -262,18 +279,9 @@ def _find_executable(name: str, environment_variable: str) -> str | None:
     if os.name == "nt":
         local_app_data = os.environ.get("LOCALAPPDATA")
         if local_app_data:
-            winget_alias = Path(local_app_data) / "Microsoft" / "WinGet" / "Links" / f"{name}.exe"
-            if winget_alias.is_file():
-                return str(winget_alias)
             windows_apps_alias = Path(local_app_data) / "Microsoft" / "WindowsApps" / f"{name}.exe"
             if windows_apps_alias.is_file():
                 return str(windows_apps_alias)
-
-            winget_packages = Path(local_app_data) / "Microsoft" / "WinGet" / "Packages"
-            if winget_packages.is_dir():
-                for candidate in winget_packages.rglob(f"{name}.exe"):
-                    if candidate.is_file():
-                        return str(candidate)
     return None
 
 

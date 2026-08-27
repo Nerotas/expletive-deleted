@@ -55,7 +55,21 @@ class DependencyInventoryTests(unittest.TestCase):
             status = inspect_executable("ffmpeg", "FFmpeg", "C:\\ffmpeg.exe", "8.0")
 
         self.assertEqual(status.state, "invalid")
-        self.assertIn("supported release 8.0", status.detail)
+        self.assertIn("requires 8.0", status.detail)
+
+    def test_newer_ffmpeg_release_is_supported(self):
+        completed = MagicMock(
+            returncode=0,
+            stdout="ffmpeg version 9.0.1-full_build Copyright\n",
+            stderr="",
+        )
+        with patch("backend.runtime.dependencies.subprocess.run", return_value=completed):
+            status = inspect_executable(
+                "ffmpeg", "FFmpeg", "C:\\ffmpeg.exe", "8.0 or later"
+            )
+
+        self.assertTrue(status.ready)
+        self.assertEqual(status.installed_version, "9.0.1-full_build")
 
     def test_python_dependency_version_mismatch_is_invalid(self):
         required = dict(PYTHON_DEPENDENCIES)
@@ -132,7 +146,7 @@ class DependencyPlanTests(unittest.TestCase):
         self.assertEqual(first.id, second.id)
         self.assertEqual(len(first.actions), 3)
         self.assertIn("GyanD/codexffmpeg", first.actions[0].source_url)
-        self.assertIn("8.0", first.actions[0].command)
+        self.assertNotIn("--version", first.actions[0].command)
         self.assertTrue(all(requirement in first.actions[1].command for requirement in PYTHON_REQUIREMENTS))
         self.assertIn(WHISPER_MODEL_REVISION, first.actions[2].source_url)
 

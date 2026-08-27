@@ -29,7 +29,8 @@ DependencyState = Literal["ready", "missing", "invalid"]
 InstallKind = Literal["command", "model_download"]
 
 FFMPEG_WINGET_PACKAGE_ID = "Gyan.FFmpeg.Shared"
-FFMPEG_VERSION = "8.0"
+FFMPEG_VERSION = "8.0 or later"
+FFMPEG_MINIMUM_VERSION = (8, 0)
 WHISPER_MODEL_ID = "Systran/faster-whisper-large-v3"
 WHISPER_MODEL_REVISION = "edaa852ec7e145841d8ffdb056a99866b5f0a478"
 WHISPER_MODEL_SIZE_BYTES = 3_090_835_702
@@ -210,8 +211,6 @@ def build_install_plan(
                     "--id",
                     FFMPEG_WINGET_PACKAGE_ID,
                     "--exact",
-                    "--version",
-                    FFMPEG_VERSION,
                     "--accept-package-agreements",
                     "--accept-source-agreements",
                     "--disable-interactivity",
@@ -413,11 +412,9 @@ def inspect_executable(
             install_supported=True,
         )
     version, detail = _executable_version(executable)
-    version_supported = bool(
-        version and (required_version is None or version.startswith(required_version))
-    )
+    version_supported = bool(version and _version_is_supported(version, required_version))
     if version and not version_supported:
-        detail = f"installed {version}; supported release {required_version}"
+        detail = f"installed {version}; requires {required_version}"
     return DependencyStatus(
         id=dependency_id,
         name=name,
@@ -428,6 +425,18 @@ def inspect_executable(
         detail=detail,
         install_supported=True,
     )
+
+
+def _version_is_supported(version: str, required_version: str | None) -> bool:
+    """Accept every FFmpeg release at or newer than the supported baseline."""
+    if required_version != FFMPEG_VERSION:
+        return required_version is None or version.startswith(required_version)
+    parts = version.split("-", 1)[0].split(".")
+    try:
+        parsed = tuple(int(part) for part in parts[:2])
+    except ValueError:
+        return False
+    return parsed >= FFMPEG_MINIMUM_VERSION
 
 
 def inspect_python_dependencies() -> tuple[DependencyStatus, ...]:
