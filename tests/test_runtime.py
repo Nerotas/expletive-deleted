@@ -1,3 +1,4 @@
+import importlib
 import os
 import io
 import tempfile
@@ -5,13 +6,14 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from censor_profanity import (
+from backend.censor.engine import (
     ProfanityCensor,
     run_ffmpeg_with_progress,
     transcript_cache_is_compatible,
 )
 from better_profanity import profanity
-from workflow_runtime import (
+from backend.runtime.environment import (
+    PROJECT_ROOT,
     ensure_executable_directory_on_path,
     find_ffmpeg,
     find_ffprobe,
@@ -31,6 +33,42 @@ from workflow_runtime import (
 
 
 class RuntimeTests(unittest.TestCase):
+    def test_legacy_censor_module_aliases_packaged_engine(self):
+        self.assertIs(
+            importlib.import_module("censor_profanity"),
+            importlib.import_module("backend.censor.engine"),
+        )
+
+    def test_legacy_runtime_module_aliases_packaged_environment(self):
+        self.assertIs(
+            importlib.import_module("workflow_runtime"),
+            importlib.import_module("backend.runtime.environment"),
+        )
+
+    def test_default_policy_files_are_packaged_resources(self):
+        self.assertEqual(
+            get_profanity_censor_words_file(),
+            PROJECT_ROOT / "resources" / "profanity_censor_words.txt",
+        )
+        self.assertEqual(
+            get_profanity_exclusions_file(),
+            PROJECT_ROOT / "resources" / "profanity_exclusions.txt",
+        )
+        self.assertTrue(get_profanity_censor_words_file().is_file())
+        self.assertTrue(get_profanity_exclusions_file().is_file())
+
+    def test_custom_media_root_does_not_relocate_packaged_policy_defaults(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            runtime_root = Path(temporary_directory)
+            self.assertEqual(
+                get_profanity_censor_words_file(runtime_root),
+                PROJECT_ROOT / "resources" / "profanity_censor_words.txt",
+            )
+            self.assertEqual(
+                get_profanity_exclusions_file(runtime_root),
+                PROJECT_ROOT / "resources" / "profanity_exclusions.txt",
+            )
+
     def test_ffmpeg_progress_reports_percent_speed_and_eta(self):
         process = MagicMock()
         process.stdout = iter([
@@ -45,8 +83,8 @@ class RuntimeTests(unittest.TestCase):
 
         output = io.StringIO()
         with (
-            patch("censor_profanity.subprocess.Popen", return_value=process) as popen,
-            patch("censor_profanity.sys.stdout", output),
+            patch("backend.censor.engine.subprocess.Popen", return_value=process) as popen,
+            patch("backend.censor.engine.sys.stdout", output),
         ):
             result = run_ffmpeg_with_progress(["ffmpeg", "-i", "input.mkv", "output.mkv"], 10.0)
 
@@ -67,7 +105,7 @@ class RuntimeTests(unittest.TestCase):
         censor.get_media_duration_seconds = MagicMock(return_value=90.0)
         completed = MagicMock(returncode=0, stderr="")
 
-        with patch("censor_profanity.run_ffmpeg_with_progress", return_value=completed) as run:
+        with patch("backend.censor.engine.run_ffmpeg_with_progress", return_value=completed) as run:
             success = censor.censor_video([])
 
         self.assertTrue(success)
@@ -124,8 +162,8 @@ class RuntimeTests(unittest.TestCase):
         censor.extract_center_channel = MagicMock(return_value="center.wav")
 
         with (
-            patch("censor_profanity.os.path.exists", return_value=False),
-            patch("censor_profanity.record_transcription_timing"),
+            patch("backend.censor.engine.os.path.exists", return_value=False),
+            patch("backend.censor.engine.record_transcription_timing"),
         ):
             transcript = censor.transcribe_with_timestamps()
 
@@ -149,10 +187,10 @@ class RuntimeTests(unittest.TestCase):
 
         output = io.StringIO()
         with (
-            patch("censor_profanity.os.path.exists", return_value=False),
-            patch("censor_profanity.record_transcription_timing"),
-            patch("censor_profanity.time.perf_counter", side_effect=[100.0, 110.0, 120.0]),
-            patch("censor_profanity.sys.stdout", output),
+            patch("backend.censor.engine.os.path.exists", return_value=False),
+            patch("backend.censor.engine.record_transcription_timing"),
+            patch("backend.censor.engine.time.perf_counter", side_effect=[100.0, 110.0, 120.0]),
+            patch("backend.censor.engine.sys.stdout", output),
         ):
             censor.transcribe_with_timestamps()
 
@@ -174,7 +212,7 @@ class RuntimeTests(unittest.TestCase):
         censor.get_video_codec = MagicMock(return_value="h264")
 
         completed = MagicMock(returncode=0, stderr="")
-        with patch("censor_profanity.run_ffmpeg_with_progress", return_value=completed) as run:
+        with patch("backend.censor.engine.run_ffmpeg_with_progress", return_value=completed) as run:
             success = censor.censor_video([{"start": 1.0, "end": 2.0}])
 
         self.assertTrue(success)
@@ -187,7 +225,7 @@ class RuntimeTests(unittest.TestCase):
             transcript_path = Path(temporary_directory) / "episode-transcript.json"
             transcript_path.write_text('{"text": "", "words": []}')
 
-            with patch("censor_profanity.probe_audio_stream", return_value=(6, "5.1")):
+            with patch("backend.censor.engine.probe_audio_stream", return_value=(6, "5.1")):
                 self.assertFalse(
                     transcript_cache_is_compatible("episode.mkv", str(transcript_path), "ffprobe")
                 )
@@ -195,7 +233,7 @@ class RuntimeTests(unittest.TestCase):
             transcript_path.write_text(
                 '{"text": "", "words": [], "audio_source": "front_center"}'
             )
-            with patch("censor_profanity.probe_audio_stream", return_value=(6, "5.1")):
+            with patch("backend.censor.engine.probe_audio_stream", return_value=(6, "5.1")):
                 self.assertTrue(
                     transcript_cache_is_compatible("episode.mkv", str(transcript_path), "ffprobe")
                 )
@@ -212,8 +250,8 @@ class RuntimeTests(unittest.TestCase):
 
     def test_working_encoder_preserves_preference(self):
         with patch(
-            "workflow_runtime.video_encoder_runtime_available",
-            side_effect=lambda _ffmpeg, encoder: encoder in {"h264_qsv", "libx264"},
+            "backend.runtime.environment.video_encoder_runtime_available",
+            side_effect=lambda *arguments: arguments[1] in {"h264_qsv", "libx264"},
         ):
             encoder = select_working_video_encoder(
                 "ffmpeg",
@@ -223,8 +261,8 @@ class RuntimeTests(unittest.TestCase):
 
     def test_working_encoder_skips_unusable_hardware(self):
         with patch(
-            "workflow_runtime.video_encoder_runtime_available",
-            side_effect=lambda _ffmpeg, encoder: encoder == "libx264",
+            "backend.runtime.environment.video_encoder_runtime_available",
+            side_effect=lambda *arguments: arguments[1] == "libx264",
         ):
             encoder = select_working_video_encoder(
                 "ffmpeg",
@@ -239,6 +277,8 @@ class RuntimeTests(unittest.TestCase):
                 paths.create()
             self.assertEqual(paths.root, Path(temporary_directory))
             self.assertTrue(paths.ready.is_dir())
+            self.assertTrue(paths.finished.is_dir())
+            self.assertEqual(paths.transcoded, paths.finished)
             self.assertTrue(paths.transcripts.is_dir())
 
     def test_windows_winget_package_install_is_discoverable(self):
@@ -257,7 +297,7 @@ class RuntimeTests(unittest.TestCase):
             (package_root / "ffprobe.exe").write_text("")
 
             with patch.dict(os.environ, {"LOCALAPPDATA": temporary_directory}, clear=False):
-                with patch("workflow_runtime.shutil.which", return_value=None):
+                with patch("backend.runtime.environment.shutil.which", return_value=None):
                     self.assertEqual(find_ffmpeg(), str(package_root / "ffmpeg.exe"))
                     self.assertEqual(find_ffprobe(), str(package_root / "ffprobe.exe"))
 
@@ -294,7 +334,10 @@ class RuntimeTests(unittest.TestCase):
     def test_transcription_timing_uses_recent_matching_profile_median(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
-            with patch("workflow_runtime.get_whisper_profile_key", return_value="large:cpu:int8"):
+            with patch(
+                "backend.runtime.environment.get_whisper_profile_key",
+                return_value="large:cpu:int8",
+            ):
                 record_transcription_timing(100.0, 200.0, root=root)
                 record_transcription_timing(100.0, 400.0, root=root)
                 record_transcription_timing(100.0, 300.0, root=root)
@@ -302,7 +345,7 @@ class RuntimeTests(unittest.TestCase):
             self.assertEqual(factor, 3.0)
 
     def test_whisper_uses_cpu_when_cuda_is_unavailable(self):
-        with patch("workflow_runtime.ctranslate2", None):
+        with patch("backend.runtime.environment.ctranslate2", None):
             status = get_whisper_device_status()
         self.assertEqual(status.selected, "cpu")
         self.assertEqual(status.compute_type, "int8")
@@ -317,8 +360,8 @@ class RuntimeTests(unittest.TestCase):
         ctranslate2.get_cuda_device_count.return_value = 1
         ctranslate2.get_supported_compute_types.return_value = {"float16", "int8"}
         with (
-            patch("workflow_runtime.ctranslate2", ctranslate2),
-            patch("workflow_runtime.get_cuda_memory_mib", return_value=12288),
+            patch("backend.runtime.environment.ctranslate2", ctranslate2),
+            patch("backend.runtime.environment.get_cuda_memory_mib", return_value=12288),
         ):
             status = get_whisper_device_status("large")
         self.assertEqual(status.selected, "cuda")
@@ -329,8 +372,8 @@ class RuntimeTests(unittest.TestCase):
         ctranslate2.get_cuda_device_count.return_value = 1
         ctranslate2.get_supported_compute_types.return_value = {"int8_float32", "int8"}
         with (
-            patch("workflow_runtime.ctranslate2", ctranslate2),
-            patch("workflow_runtime.get_cuda_memory_mib", return_value=4096),
+            patch("backend.runtime.environment.ctranslate2", ctranslate2),
+            patch("backend.runtime.environment.get_cuda_memory_mib", return_value=4096),
         ):
             status = get_whisper_device_status("large")
         self.assertEqual(status.selected, "cpu")
