@@ -28,7 +28,7 @@ from .environment import (
 DependencyState = Literal["ready", "missing", "invalid"]
 InstallKind = Literal["command", "model_download"]
 
-FFMPEG_WINGET_PACKAGE_ID = "Gyan.FFmpeg.Shared"
+STATIC_FFMPEG_VERSION = "3.0"
 FFMPEG_VERSION = "8.0 or later"
 FFMPEG_MINIMUM_VERSION = (8, 0)
 WHISPER_MODEL_ID = "Systran/faster-whisper-large-v3"
@@ -142,18 +142,6 @@ class DependencyNotReadyError(RuntimeError):
     """Raised when processing requests an unprepared dependency."""
 
 
-def find_winget() -> str | None:
-    """Find winget, including its Windows application alias."""
-    winget = shutil.which("winget")
-    if winget:
-        return winget
-    local_app_data = os.environ.get("LOCALAPPDATA", "").strip()
-    if not local_app_data:
-        return None
-    alias = Path(local_app_data) / "Microsoft" / "WindowsApps" / "winget.exe"
-    return str(alias) if alias.is_file() else None
-
-
 def _plan_id(actions: tuple[InstallAction, ...]) -> str:
     payload = [
         {
@@ -178,7 +166,6 @@ def build_install_plan(
     python_executable: Path | None = None,
     cache_dir: Path | None = None,
     platform_name: str | None = None,
-    winget: str | None = None,
 ) -> InstallPlan:
     """Build an inspectable plan without running commands or using the network."""
     requested = tuple(dict.fromkeys(components))
@@ -192,28 +179,36 @@ def build_install_plan(
     actions: list[InstallAction] = []
 
     if "ffmpeg" in requested:
-        if platform_name != "Windows":
-            raise DependencyPlanError("Automatic FFmpeg installation is currently supported on Windows only")
-        winget = winget or find_winget()
-        if not winget:
-            raise DependencyPlanError("winget is required for automatic FFmpeg installation")
         actions.append(
             InstallAction(
-                id="install-ffmpeg",
+                id="install-static-ffmpeg-package",
+                dependency_ids=(),
+                kind="command",
+                description="Install the approved cross-platform FFmpeg runtime manager",
+                source_name="Python Package Index / static-ffmpeg",
+                source_url="https://pypi.org/project/static-ffmpeg/",
+                command=(
+                    str(python_executable),
+                    "-m",
+                    "pip",
+                    "install",
+                    "--disable-pip-version-check",
+                    f"static-ffmpeg=={STATIC_FFMPEG_VERSION}",
+                ),
+            )
+        )
+        actions.append(
+            InstallAction(
+                id="download-managed-ffmpeg-runtime",
                 dependency_ids=("ffmpeg", "ffprobe"),
                 kind="command",
-                description="Install the approved Gyan FFmpeg shared build with winget",
-                source_name="Microsoft WinGet / Gyan FFmpeg",
-                source_url="https://github.com/GyanD/codexffmpeg/releases",
+                description="Download and verify the approved FFmpeg and FFprobe runtime",
+                source_name="static-ffmpeg platform binaries",
+                source_url="https://pypi.org/project/static-ffmpeg/",
                 command=(
-                    winget,
-                    "install",
-                    "--id",
-                    FFMPEG_WINGET_PACKAGE_ID,
-                    "--exact",
-                    "--accept-package-agreements",
-                    "--accept-source-agreements",
-                    "--disable-interactivity",
+                    str(python_executable),
+                    "-m",
+                    "scripts.download_ffmpeg_runtime",
                 ),
             )
         )

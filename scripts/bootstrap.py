@@ -12,12 +12,9 @@ import sys
 from pathlib import Path
 
 from backend.runtime import (
-    DependencyPlanError,
     PROJECT_ROOT,
-    build_install_plan,
     find_ffmpeg,
     find_ffprobe,
-    find_winget,
     format_bytes,
     get_directory_size,
     get_external_whisper_cache_dir,
@@ -38,21 +35,12 @@ VENV_PYTHON = PROJECT_ROOT / ".venv" / (
 
 
 def system_install_command() -> list[str] | None:
-    """Return the supported FFmpeg installation command for this platform."""
-    if platform.system() == "Windows":
-        try:
-            return list(build_install_plan(["ffmpeg"]).actions[0].command)
-        except DependencyPlanError:
-            return None
+    """Legacy bootstrap leaves approved FFmpeg retrieval to the dependency-plan UI."""
     return None
 
 
 def ffmpeg_guidance() -> str:
-    if platform.system() == "Windows":
-        if find_winget():
-            return "Install FFmpeg with: winget install --id Gyan.FFmpeg.Shared -e"
-        return "Review an install plan with: python manage_dependencies.py plan --component ffmpeg"
-    return "Automatic FFmpeg installation is currently supported on Windows only."
+    return "Review an install plan with: python manage_dependencies.py plan --component ffmpeg"
 
 
 def run(command: list[str]) -> int:
@@ -155,8 +143,7 @@ def main() -> int:
                     print(f"FFprobe installation completed. Found: {ffprobe}")
                     print(f"Bootstrap complete. Run: {VENV_PYTHON} diagnostics.py")
                     return 0
-                print("FFmpeg installation completed, but the binaries are not yet discoverable.")
-                print("If you expect winget aliases, open a new terminal and rerun setup.")
+                print("FFmpeg installation is managed through the approved dependency plan in the desktop app.")
                 return 0
             print("No supported package manager was detected.")
         print(ffmpeg_guidance())

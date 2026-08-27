@@ -69,11 +69,7 @@ Review the exact plan first. To perform an approved installation, replace `PLAN_
 .\.venv\Scripts\python.exe manage_dependencies.py install --component whisper_model --approve PLAN_ID
 ```
 
-On Windows, FFmpeg uses the approved WinGet package `Gyan.FFmpeg.Shared`. A manual equivalent is:
-
-```powershell
-winget install --id Gyan.FFmpeg.Shared -e
-```
+The FFmpeg plan installs the pinned cross-platform `static-ffmpeg` runtime manager, then downloads its matching `ffmpeg` and `ffprobe` binaries only after approval. It does not require WinGet or modify the system `PATH`.
 
 ### Diagnose and run backend jobs
 

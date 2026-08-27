@@ -80,6 +80,23 @@ def get_whisper_cache_dir(root: Path | None = None) -> Path:
     return candidate.resolve() if candidate.is_absolute() else (project_root / candidate).resolve()
 
 
+def get_managed_ffmpeg_manifest_path(root: Path | None = None) -> Path:
+    """Return the local manifest written after an approved managed FFmpeg download."""
+    return get_whisper_cache_dir(root).parent / "ffmpeg-runtime.json"
+
+
+def get_managed_ffmpeg_paths(root: Path | None = None) -> tuple[str | None, str | None]:
+    """Read the verified, application-managed FFmpeg paths without downloading anything."""
+    manifest_path = get_managed_ffmpeg_manifest_path(root)
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        ffmpeg = Path(payload["ffmpeg"]).resolve()
+        ffprobe = Path(payload["ffprobe"]).resolve()
+    except (OSError, KeyError, TypeError, json.JSONDecodeError):
+        return None, None
+    return (str(ffmpeg) if ffmpeg.is_file() else None, str(ffprobe) if ffprobe.is_file() else None)
+
+
 def get_whisper_timing_history_path(root: Path | None = None) -> Path:
     """Return the local, machine-specific transcription timing history file."""
     return get_project_root(root) / WHISPER_TIMING_HISTORY_FILE
@@ -287,12 +304,12 @@ def _find_executable(name: str, environment_variable: str) -> str | None:
 
 def find_ffmpeg() -> str | None:
     """Find FFmpeg from CENSOR_FFMPEG or PATH."""
-    return _find_executable("ffmpeg", "CENSOR_FFMPEG")
+    return _find_executable("ffmpeg", "CENSOR_FFMPEG") or get_managed_ffmpeg_paths()[0]
 
 
 def find_ffprobe() -> str | None:
     """Find FFprobe from CENSOR_FFPROBE or PATH."""
-    return _find_executable("ffprobe", "CENSOR_FFPROBE")
+    return _find_executable("ffprobe", "CENSOR_FFPROBE") or get_managed_ffmpeg_paths()[1]
 
 
 def ensure_executable_directory_on_path(executable_path: str | None) -> None:

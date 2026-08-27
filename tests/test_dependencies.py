@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -22,9 +23,27 @@ from backend.runtime.dependencies import (
     inspect_whisper_model,
     require_whisper_model_path,
 )
+from backend.runtime.environment import get_managed_ffmpeg_manifest_path, get_managed_ffmpeg_paths
 
 
 class DependencyInventoryTests(unittest.TestCase):
+    def test_managed_ffmpeg_manifest_is_discovered_without_path_changes(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            binaries = root / "binaries"
+            binaries.mkdir()
+            ffmpeg = binaries / "ffmpeg.exe"
+            ffprobe = binaries / "ffprobe.exe"
+            ffmpeg.write_text("")
+            ffprobe.write_text("")
+            manifest = get_managed_ffmpeg_manifest_path(root)
+            manifest.write_text(
+                json.dumps({"ffmpeg": str(ffmpeg), "ffprobe": str(ffprobe)}),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(get_managed_ffmpeg_paths(root), (str(ffmpeg), str(ffprobe)))
+
     def test_missing_executable_is_reported_without_running_a_command(self):
         with patch("backend.runtime.dependencies.subprocess.run") as run:
             status = inspect_executable("ffmpeg", "FFmpeg", None)
@@ -137,22 +156,22 @@ class DependencyPlanTests(unittest.TestCase):
             "python_executable": Path("C:\\Python\\python.exe"),
             "cache_dir": Path("C:\\models"),
             "platform_name": "Windows",
-            "winget": "C:\\winget.exe",
         }
 
         first = build_install_plan(["ffmpeg", "python", "whisper_model"], **kwargs)
         second = build_install_plan(["ffmpeg", "python", "whisper_model"], **kwargs)
 
         self.assertEqual(first.id, second.id)
-        self.assertEqual(len(first.actions), 3)
-        self.assertIn("GyanD/codexffmpeg", first.actions[0].source_url)
-        self.assertNotIn("--version", first.actions[0].command)
-        self.assertTrue(all(requirement in first.actions[1].command for requirement in PYTHON_REQUIREMENTS))
-        self.assertIn(WHISPER_MODEL_REVISION, first.actions[2].source_url)
+        self.assertEqual(len(first.actions), 4)
+        self.assertIn("static-ffmpeg", first.actions[0].source_url)
+        self.assertIn("static-ffmpeg==3.0", first.actions[0].command)
+        self.assertIn("scripts.download_ffmpeg_runtime", first.actions[1].command)
+        self.assertTrue(all(requirement in first.actions[2].command for requirement in PYTHON_REQUIREMENTS))
+        self.assertIn(WHISPER_MODEL_REVISION, first.actions[3].source_url)
 
-    def test_non_windows_ffmpeg_auto_install_is_rejected(self):
-        with self.assertRaisesRegex(ValueError, "Windows only"):
-            build_install_plan(["ffmpeg"], platform_name="Linux")
+    def test_non_windows_ffmpeg_plan_is_supported(self):
+        plan = build_install_plan(["ffmpeg"], platform_name="Linux")
+        self.assertEqual(len(plan.actions), 2)
 
     def test_exact_plan_approval_is_required_before_execution(self):
         plan = build_install_plan(["python"], python_executable=Path("C:\\python.exe"))

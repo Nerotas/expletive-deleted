@@ -16,7 +16,6 @@ from faster_whisper import WhisperModel
 from better_profanity import profanity
 from backend.runtime import (
     available_encoders,
-    ensure_executable_directory_on_path,
     find_ffmpeg,
     find_ffprobe,
     get_profanity_censor_words_file,
@@ -257,8 +256,6 @@ class ProfanityCensor:
                 "FFmpeg and FFprobe must be available on PATH or configured with "
                 "CENSOR_FFMPEG and CENSOR_FFPROBE."
             )
-        ensure_executable_directory_on_path(self.ffmpeg_bin)
-        ensure_executable_directory_on_path(self.ffprobe_bin)
         self.encoders = available_encoders(self.ffmpeg_bin)
         self.video_encoder = select_working_video_encoder(
             self.ffmpeg_bin,

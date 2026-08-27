@@ -88,14 +88,7 @@ Settings are stored at `%LOCALAPPDATA%\ProfanityCensor\settings\settings.json` b
 
 Setup also creates a repository-local Whisper cache at `whisper-cache/` by default and prints both the active cache path and current cache size. If Whisper models were previously downloaded to the user cache outside the repo, setup points you to the cache migration helper.
 
-When FFmpeg is missing, the approved Windows dependency plan uses WinGet. It can also be installed manually:
-
-```powershell
-# Windows: winget, including the WindowsApps alias when it is not on PATH
-winget install --id Gyan.FFmpeg.Shared -e
-```
-
-On Windows, start a new PowerShell session after an FFmpeg install if commands are not yet available from `PATH`. The runtime also recognizes winget-managed FFmpeg aliases directly.
+When FFmpeg is missing, the approved dependency plan installs the pinned cross-platform `static-ffmpeg` runtime manager and then downloads its matching `ffmpeg` and `ffprobe` binaries. The app records their paths locally; it does not require WinGet or modify the system `PATH`.
 
 ## Verify Readiness
 
