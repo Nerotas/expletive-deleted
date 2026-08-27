@@ -9,6 +9,12 @@ Normal users should follow the desktop application workflow. Do not start `backe
 
 ## Desktop application (recommended)
 
+The desktop source build is tested with Node.js 22 LTS (22.12 or later, but before 23). Confirm it before installing frontend packages:
+
+```powershell
+node --version
+```
+
 For a source checkout, create the local Python environment once from the repository root:
 
 ```powershell
