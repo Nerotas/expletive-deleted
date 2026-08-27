@@ -123,6 +123,7 @@ class WhisperSettings:
 @dataclass(frozen=True)
 class SourceSettings:
     archive_after_success: bool = False
+    scan_subdirectories: bool = True
 
 
 @dataclass(frozen=True)
@@ -193,6 +194,8 @@ class AppSettings:
 
         if not isinstance(self.source.archive_after_success, bool):
             issues.append("source.archive_after_success must be a boolean")
+        if not isinstance(self.source.scan_subdirectories, bool):
+            issues.append("source.scan_subdirectories must be a boolean")
 
         for name, value in (
             ("runtime.ffmpeg_path", self.runtime.ffmpeg_path),

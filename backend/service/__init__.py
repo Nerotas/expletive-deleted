@@ -1,11 +1,12 @@
 """Application-facing backend operations."""
 
-from .application import BackendService, ServiceBusyError
+from .application import ArchiveSourceError, BackendService, ServiceBusyError
 from .capabilities import get_capabilities
 from .library import LibraryItem, LibraryScanError, LibraryStatus, scan_library
 
 __all__ = [
-	"BackendService",
+    "BackendService",
+    "ArchiveSourceError",
 	"LibraryItem",
 	"LibraryScanError",
 	"LibraryStatus",

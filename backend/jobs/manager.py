@@ -14,7 +14,7 @@ from backend.censor import ProfanityCensor
 from backend.settings import AppSettings
 
 from .events import JobEvent
-from .media import MEDIA_EXTENSIONS, output_path
+from .media import MEDIA_EXTENSIONS, archive_path, output_path, relative_media_path, transcript_path
 from .models import JobError, JobMode, JobRecord, JobStatus
 
 
@@ -48,6 +48,10 @@ class JobManager:
 
     def submit(self, source: Path, mode: JobMode | None = None) -> JobRecord:
         source = source.expanduser().resolve()
+        try:
+            relative_media_path(source, self.settings.directories.input)
+        except ValueError as exc:
+            raise JobSubmissionError(str(exc)) from exc
         if not source.is_file():
             raise JobSubmissionError(f"Source file does not exist: {source}")
         if source.suffix.lower() not in MEDIA_EXTENSIONS:
@@ -159,7 +163,16 @@ class JobManager:
     def _run(self, job_id: str) -> None:
         cancellation = self._cancellations[job_id]
         source = self._jobs[job_id].source
-        destination = output_path(source, self.settings.directories.output)
+        destination = output_path(
+            source,
+            self.settings.directories.output,
+            self.settings.directories.input,
+        )
+        transcript = transcript_path(
+            source,
+            self.settings.directories.transcripts,
+            self.settings.directories.input,
+        )
         created_output = False
         try:
             if cancellation.is_set():
@@ -167,6 +180,7 @@ class JobManager:
                 return
             if self._jobs[job_id].mode == "censor" and destination.exists():
                 raise JobSubmissionError(f"Output already exists: {destination}")
+            destination.parent.mkdir(parents=True, exist_ok=True)
 
             with self._lock:
                 self._set_status(job_id, "transcribing", percent=0.0)
@@ -174,7 +188,7 @@ class JobManager:
                 str(source),
                 str(destination),
                 self.settings.whisper.model,
-                str(self.settings.directories.transcripts),
+                str(transcript.parent),
                 whisper_library=self.settings.whisper.library,
                 whisper_device=self.settings.processing.device,
                 censor_method="karaoke"
@@ -209,9 +223,14 @@ class JobManager:
             if not destination.is_file():
                 raise RuntimeError(f"Expected output was not created: {destination}")
             if self.settings.source.archive_after_success:
-                archive = self.settings.directories.archive / source.name
+                archive = archive_path(
+                    source,
+                    self.settings.directories.archive,
+                    self.settings.directories.input,
+                )
                 if archive.exists():
                     raise RuntimeError(f"Archive destination already exists: {archive}")
+                archive.parent.mkdir(parents=True, exist_ok=True)
                 shutil.move(str(source), archive)
             with self._lock:
                 self._set_status(job_id, "completed", percent=100.0, message="Processing completed")

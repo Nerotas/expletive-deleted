@@ -48,21 +48,22 @@ def scan_library(
 
     ffprobe_bin = ffprobe_bin or find_ffprobe()
     try:
+        candidates = paths.ready.rglob("*") if settings.source.scan_subdirectories else paths.ready.iterdir()
         sources = sorted(
             (
                 path
-                for path in paths.ready.iterdir()
-                if path.is_file() and path.suffix.lower() in MEDIA_EXTENSIONS
+                for path in candidates
+                if path.is_file() and not path.is_symlink() and path.suffix.lower() in MEDIA_EXTENSIONS
             ),
-            key=lambda path: path.name.casefold(),
+            key=lambda path: str(path.relative_to(paths.ready)).casefold(),
         )
     except OSError as exc:
         raise LibraryScanError(f"Could not scan input directory {paths.ready}: {exc}") from exc
 
     items: list[LibraryItem] = []
     for source in sources:
-        transcript = transcript_path(source, paths.transcripts)
-        output = output_path(source, paths.finished)
+        transcript = transcript_path(source, paths.transcripts, paths.ready)
+        output = output_path(source, paths.finished, paths.ready)
         if output.is_file():
             items.append(
                 LibraryItem(
@@ -76,6 +77,8 @@ def scan_library(
             str(source),
             str(transcript),
             ffprobe_bin,
+            settings.whisper.library,
+            settings.whisper.model,
         ):
             items.append(LibraryItem(source, "transcribed", transcript=transcript))
         else:

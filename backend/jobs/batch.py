@@ -25,7 +25,7 @@ from backend.settings import (
     load_effective_settings,
 )
 
-from .media import MEDIA_EXTENSIONS, output_path, transcript_path
+from .media import MEDIA_EXTENSIONS, archive_path, output_path, transcript_path
 
 
 def format_seconds(seconds: float) -> str:
@@ -101,7 +101,8 @@ def process_file(
     whisper_device: str = "auto",
 ) -> tuple[str, set[str], bool, int]:
     started = time.perf_counter()
-    destination = output_path(input_file, paths.finished)
+    destination = output_path(input_file, paths.finished, paths.ready)
+    transcript = transcript_path(input_file, paths.transcripts, paths.ready)
     print(f"\n[FILE {index}/{total}] {input_file.name}")
     if report_only:
         print(f"[FILE {index}/{total}] Mode: report-only")
@@ -122,11 +123,12 @@ def process_file(
         print(f"[PROCESS] {input_file.name}")
 
     try:
+        destination.parent.mkdir(parents=True, exist_ok=True)
         censor = ProfanityCensor(
             str(input_file),
             str(destination),
             model_name,
-            str(paths.transcripts),
+            str(transcript.parent),
             whisper_model=whisper_model,
             whisper_library=whisper_library,
             whisper_device=whisper_device,
@@ -164,13 +166,14 @@ def process_file(
         return "fail", discovered, used_cached, profane_count
 
     if archive_after_success:
-        archive_path = paths.processed / input_file.name
-        if archive_path.exists():
-            print(f"[FAILED] Archive destination already exists; source retained: {archive_path}")
+        archive_destination = archive_path(input_file, paths.processed, paths.ready)
+        if archive_destination.exists():
+            print(f"[FAILED] Archive destination already exists; source retained: {archive_destination}")
             print(f"[FILE {index}/{total}] Elapsed: {format_seconds(time.perf_counter() - started)}")
             return "fail", discovered, used_cached, profane_count
         try:
-            shutil.move(str(input_file), archive_path)
+            archive_destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(input_file), archive_destination)
         except OSError as exc:
             print(f"[FAILED] Could not archive source; source retained: {exc}")
             print(f"[FILE {index}/{total}] Elapsed: {format_seconds(time.perf_counter() - started)}")
@@ -266,11 +269,18 @@ def main(argv: list[str] | None = None, store: SettingsStore | None = None) -> i
         parser.error("--overwrite cannot be used with --report-only")
 
     paths = settings.directories.to_runtime_paths()
-    files = sorted(path for path in paths.ready.iterdir() if path.suffix.lower() in MEDIA_EXTENSIONS)
+    candidates = paths.ready.rglob("*") if settings.source.scan_subdirectories else paths.ready.iterdir()
+    files = sorted(
+        (
+            path for path in candidates
+            if path.is_file() and not path.is_symlink() and path.suffix.lower() in MEDIA_EXTENSIONS
+        ),
+        key=lambda path: str(path.relative_to(paths.ready)).casefold(),
+    )
     if args.list:
         print(f"[LIST] Found {len(files)} supported file(s) in {paths.ready}")
         for file in files:
-            print(file.name)
+            print(file.relative_to(paths.ready))
         return 0
     if not files:
         print(f"No supported media found in: {paths.ready}")
@@ -305,7 +315,7 @@ def main(argv: list[str] | None = None, store: SettingsStore | None = None) -> i
     needs_transcription = ffprobe_bin is None or any(
         not transcript_cache_is_compatible(
             str(file),
-            str(transcript_path(file, paths.transcripts)),
+            str(transcript_path(file, paths.transcripts, paths.ready)),
             ffprobe_bin,
             whisper_library,
             model_name,

@@ -115,7 +115,7 @@ def settings_from_dict(data: object, defaults: AppSettings | None = None) -> App
     audio = _group(mapping, "audio", {"surround_output"})
     video = _group(mapping, "video", {"mode"})
     whisper = _group(mapping, "whisper", {"library", "model"})
-    source = _group(mapping, "source", {"archive_after_success"})
+    source = _group(mapping, "source", {"archive_after_success", "scan_subdirectories"})
     runtime = _group(mapping, "runtime", {"ffmpeg_path", "ffprobe_path", "whisper_cache"})
 
     parsed = AppSettings(
@@ -198,7 +198,13 @@ def settings_from_dict(data: object, defaults: AppSettings | None = None) -> App
                 "archive_after_success",
                 base.source.archive_after_success,
                 "source.archive_after_success",
-            )
+            ),
+            scan_subdirectories=_boolean(
+                source,
+                "scan_subdirectories",
+                base.source.scan_subdirectories,
+                "source.scan_subdirectories",
+            ),
         ),
         runtime=RuntimeSettings(
             ffmpeg_path=_optional_path(
@@ -248,7 +254,10 @@ def settings_to_dict(settings: AppSettings) -> dict[str, object]:
         "audio": {"surround_output": settings.audio.surround_output},
         "video": {"mode": settings.video.mode},
         "whisper": {"library": settings.whisper.library, "model": settings.whisper.model},
-        "source": {"archive_after_success": settings.source.archive_after_success},
+        "source": {
+            "archive_after_success": settings.source.archive_after_success,
+            "scan_subdirectories": settings.source.scan_subdirectories,
+        },
         "runtime": {
             "ffmpeg_path": str(settings.runtime.ffmpeg_path) if settings.runtime.ffmpeg_path else None,
             "ffprobe_path": str(settings.runtime.ffprobe_path) if settings.runtime.ffprobe_path else None,

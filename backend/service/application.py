@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import shutil
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Callable
 
 from backend.jobs import JobManager, JobMode, JobRecord
+from backend.jobs.media import MEDIA_EXTENSIONS, archive_path, relative_media_path
 from backend.settings import (
     AppSettings,
     SettingsStore,
@@ -22,6 +24,10 @@ from .library import LibraryItem, scan_library
 
 class ServiceBusyError(RuntimeError):
     """Raised when settings cannot change while jobs are active."""
+
+
+class ArchiveSourceError(ValueError):
+    """Raised when a Queue source cannot be archived safely."""
 
 
 class BackendService:
@@ -70,6 +76,38 @@ class BackendService:
 
     def submit_job(self, source: Path, mode: JobMode | None = None) -> JobRecord:
         return self.jobs.submit(source, mode)
+
+    def archive_source(self, source: Path) -> dict[str, object]:
+        """Move a completed or transcribed source out of the Queue without touching artifacts."""
+        active = tuple(
+            job for job in self.jobs.list()
+            if job.status not in ("completed", "failed", "cancelled", "transcribed")
+        )
+        if active:
+            raise ServiceBusyError("Files cannot be archived while jobs are active")
+
+        source = source.expanduser().resolve()
+        input_root = self.settings.directories.input.resolve()
+        try:
+            relative_media_path(source, input_root)
+        except ValueError as exc:
+            raise ArchiveSourceError(str(exc)) from exc
+        if not source.is_file() or source.suffix.lower() not in MEDIA_EXTENSIONS:
+            raise ArchiveSourceError(f"Queue source is unavailable or unsupported: {source}")
+
+        item = next((candidate for candidate in self.get_library() if candidate.source.resolve() == source), None)
+        if item is None or item.status not in ("transcribed", "finished"):
+            raise ArchiveSourceError("Only transcribed or finished Queue files can be archived")
+
+        destination = archive_path(source, self.settings.directories.archive, input_root)
+        if destination.exists():
+            raise ArchiveSourceError(f"Archive destination already exists: {destination}")
+        try:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(source), destination)
+        except OSError as exc:
+            raise ArchiveSourceError(f"Could not archive source: {exc}") from exc
+        return {"source": str(source), "archived_to": str(destination)}
 
     def close(self) -> None:
         self.jobs.close()

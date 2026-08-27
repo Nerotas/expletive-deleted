@@ -112,6 +112,8 @@ class DesktopBridge:
             return [asdict(result) for result in results]
         if method == "library.list":
             return [item.to_dict() for item in self.service.get_library()]
+        if method == "library.archive":
+            return self.service.archive_source(Path(params["source"]))
         if method == "jobs.list":
             return [job.to_dict() for job in self.service.jobs.list()]
         if method == "jobs.submit":

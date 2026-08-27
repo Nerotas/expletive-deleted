@@ -1,0 +1,140 @@
+.app-header {
+  background: var(--surface-header);
+  box-shadow: 0 1px 12px var(--shadow);
+}
+
+.header-status {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.theme-toggle {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.theme-toggle:hover {
+  border-color: var(--signal);
+  color: var(--signal);
+}
+
+.top-nav,
+.segmented,
+.path-bar,
+.policy-list span,
+.discovered-list {
+  background: var(--soft);
+}
+
+.top-nav button.active,
+.segmented button.selected,
+.runtime-pill,
+.button,
+.icon-button,
+.queue-summary,
+.table-frame,
+.settings-section,
+.path-field input,
+.field select,
+.number-input,
+.modal,
+.dictionary-add input,
+.dictionary-add select,
+.dictionary-total,
+.dictionary-workspace,
+.dictionary-page .policy-list,
+.discovered-words > div,
+.discovered-words button,
+.review-list button,
+.policy-inventory > div,
+.about-setting {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.settings-section > header,
+th,
+.file-icon,
+.policy-inventory > div,
+.about-setting {
+  background: var(--surface-raised);
+}
+
+.button.primary {
+  border-color: var(--signal);
+  background: var(--signal);
+  color: #fff;
+}
+
+.button.primary:hover {
+  border-color: var(--signal-strong);
+  background: var(--signal-strong);
+}
+
+.setup-band {
+  background: #12354b;
+  box-shadow: 0 8px 24px var(--shadow);
+}
+
+[data-theme='dark'] .setup-band {
+  background: #0d2838;
+}
+
+.progress-track {
+  background: var(--soft);
+}
+
+.whisper-notice.recommended {
+  border-color: color-mix(in srgb, var(--success) 40%, var(--line));
+  background: color-mix(in srgb, var(--success) 10%, var(--surface));
+  color: var(--success);
+}
+
+.whisper-notice.warning {
+  border-color: color-mix(in srgb, var(--warning) 45%, var(--line));
+  background: color-mix(in srgb, var(--warning) 11%, var(--surface));
+  color: var(--warning);
+}
+
+.alert.error {
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--line));
+  background: color-mix(in srgb, var(--danger) 10%, var(--surface));
+  color: var(--danger);
+}
+
+.alert.success {
+  border-color: color-mix(in srgb, var(--success) 40%, var(--line));
+  background: color-mix(in srgb, var(--success) 10%, var(--surface));
+  color: var(--success);
+}
+
+.details-cell button {
+  float: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 10px;
+}
+
+.details-cell button:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+@media (max-width: 1050px) {
+  .header-status {
+    display: flex;
+  }
+
+  .runtime-pill {
+    display: none;
+  }
+}
