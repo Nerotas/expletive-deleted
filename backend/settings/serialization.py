@@ -21,6 +21,8 @@ from .models import (
     SurroundOutput,
     VideoMode,
     VideoSettings,
+    WhisperLibrary,
+    WhisperModel,
     WhisperSettings,
 )
 
@@ -112,7 +114,7 @@ def settings_from_dict(data: object, defaults: AppSettings | None = None) -> App
     )
     audio = _group(mapping, "audio", {"surround_output"})
     video = _group(mapping, "video", {"mode"})
-    whisper = _group(mapping, "whisper", {"model"})
+    whisper = _group(mapping, "whisper", {"library", "model"})
     source = _group(mapping, "source", {"archive_after_success"})
     runtime = _group(mapping, "runtime", {"ffmpeg_path", "ffprobe_path", "whisper_cache"})
 
@@ -181,8 +183,12 @@ def settings_from_dict(data: object, defaults: AppSettings | None = None) -> App
             )
         ),
         whisper=WhisperSettings(
+            library=cast(
+                WhisperLibrary,
+                _string(whisper, "library", base.whisper.library, "whisper.library"),
+            ),
             model=cast(
-                Any,
+                WhisperModel,
                 _string(whisper, "model", base.whisper.model, "whisper.model"),
             )
         ),
@@ -241,7 +247,7 @@ def settings_to_dict(settings: AppSettings) -> dict[str, object]:
         },
         "audio": {"surround_output": settings.audio.surround_output},
         "video": {"mode": settings.video.mode},
-        "whisper": {"model": settings.whisper.model},
+        "whisper": {"library": settings.whisper.library, "model": settings.whisper.model},
         "source": {"archive_after_success": settings.source.archive_after_success},
         "runtime": {
             "ffmpeg_path": str(settings.runtime.ffmpeg_path) if settings.runtime.ffmpeg_path else None,

@@ -33,7 +33,8 @@ ENCODER_PREFERENCE = (
     "h264_videotoolbox",
     "libx264",
 )
-REQUIRED_WHISPER_MODEL = "large"
+REQUIRED_WHISPER_MODEL = "large-v3"
+SUPPORTED_WHISPER_MODELS = ("tiny", "base", "small", "medium", "large-v3")
 WHISPER_TIMING_HISTORY_FILE = ".whisper-timing.json"
 
 
@@ -51,13 +52,14 @@ def get_runtime_paths(root: Path | None = None) -> RuntimePaths:
 
 
 def require_whisper_model(model_name: str) -> str:
-    """Enforce the model required for accurate censorship timestamps."""
-    if model_name != REQUIRED_WHISPER_MODEL:
+    """Validate a supported Whisper model name."""
+    normalized = "large-v3" if model_name == "large" else model_name
+    if normalized not in SUPPORTED_WHISPER_MODELS:
         raise ValueError(
-            f"Censorship processing requires Whisper {REQUIRED_WHISPER_MODEL}; "
-            f"received {model_name!r}."
+            f"Unsupported Whisper model {model_name!r}; choose one of: "
+            f"{', '.join(SUPPORTED_WHISPER_MODELS)}."
         )
-    return REQUIRED_WHISPER_MODEL
+    return normalized
 
 
 def read_project_config(root: Path | None = None) -> configparser.ConfigParser:
@@ -405,7 +407,6 @@ def get_whisper_device_status(
                         "base": 2048,
                         "small": 4096,
                         "medium": 6144,
-                        "large": 8192,
                         "large-v3": 8192,
                     }.get(model_name, 8192)
                     if requested == "cuda" or memory_mib is None or memory_mib >= minimum_memory:

@@ -12,10 +12,12 @@ The "processed" folder was originally meant as a workflow status to indicate tha
 Once a file is done being transcoded, we need a button to archive it for cleanliness. This is a QOL feature that allows users to keep their queue clean. We can add a setting to allow users to automatically handle archiving, but it should default to off.
 
 ## Whisper Model
-"large-v3" is currently the only model that works consistently. However, we should ultimately provide the user with that choice. We should default to "large-v3" but allow users to select another model. There needs to be a notice that quality and accuracy drop noticeably with each smaller model.
+
+Complete. `large-v3` remains the default and recommended model. Users can select `medium`, `small`, `base`, or `tiny`, with a prominent warning that smaller models reduce transcription and timestamp accuracy.
 
 ## Whisper Library
-As noted above, Whisper with large-v3 is the best option and the only one that provides consistently accurate results. However, faster-whisper is also a viable option. Like with the models, the original Whisper library is more accurate, but much slower. This should be an informed user choice.
+
+Complete. Users can choose faster-whisper (the default, faster option) or the original OpenAI Whisper implementation (the accuracy-first, slower option). Setup installs and verifies the selected library and model, and transcript caches are tied to that profile.
 
 ## Color Scheme
 The beige colors are okay, but I much prefer a light blue scheme to give the app more personality. The presumed audience is movie-savvy or otherwise a media enthusiast. Blue/orange is a common action-cinema color scheme that we can draw from.

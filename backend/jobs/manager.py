@@ -173,8 +173,10 @@ class JobManager:
             censor = self._censor_factory(
                 str(source),
                 str(destination),
-                "large",
+                self.settings.whisper.model,
                 str(self.settings.directories.transcripts),
+                whisper_library=self.settings.whisper.library,
+                whisper_device=self.settings.processing.device,
                 censor_method="karaoke"
                 if self.settings.censoring.stereo_method == "karaoke"
                 else "mute",

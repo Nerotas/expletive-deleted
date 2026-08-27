@@ -80,6 +80,8 @@ class DesktopBridge:
             plan = build_install_plan(
                 list(params["components"]),
                 cache_dir=self.service.settings.runtime.whisper_cache or get_whisper_cache_dir(),
+                whisper_library=self.service.settings.whisper.library,
+                whisper_model=self.service.settings.whisper.model,
             )
             self._install_plans[plan.id] = plan
             return {

@@ -10,13 +10,13 @@ from pathlib import Path
 
 from backend.censor import ProfanityCensor, transcript_cache_is_compatible
 from backend.runtime import (
-    REQUIRED_WHISPER_MODEL,
     RuntimePaths,
     find_ffprobe,
     get_whisper_cache_dir,
     get_whisper_device_status,
     require_whisper_model_path,
 )
+from backend.runtime.transcription import load_transcription_model
 from backend.settings import (
     DirectoryAccessError,
     SettingsFileError,
@@ -41,24 +41,41 @@ def load_whisper_model(
     model_name: str,
     requested_device: str = "auto",
     cache_dir: Path | None = None,
+    whisper_library: str = "faster-whisper",
 ):
     """Load the Whisper model once for the entire batch."""
-    from faster_whisper import WhisperModel
     status = get_whisper_device_status(model_name, requested_device)
     device = status.selected
     print(f"[*] Whisper profile: {device} ({status.compute_type}); {status.detail}")
-    model_path = require_whisper_model_path(cache_dir or get_whisper_cache_dir())
-    compute_type = status.compute_type
-    print(f"[*] Loading Whisper {model_name} on {device} ({compute_type})...")
+    print(f"[*] Loading {whisper_library} {model_name} on {device} ({status.compute_type})...")
     load_started = time.perf_counter()
-    model = WhisperModel(
-        str(model_path),
-        device=device,
-        compute_type=compute_type,
-        local_files_only=True,
-    )
+    if whisper_library == "faster-whisper":
+        from faster_whisper import WhisperModel
+
+        model_cache = cache_dir or get_whisper_cache_dir()
+        model_path = (
+            require_whisper_model_path(model_cache)
+            if model_name == "large-v3"
+            else require_whisper_model_path(model_cache, model=model_name)
+        )
+        loaded = (
+            WhisperModel(
+                str(model_path),
+                device=device,
+                compute_type=status.compute_type,
+                local_files_only=True,
+            ),
+            device,
+        )
+    else:
+        loaded = load_transcription_model(
+            whisper_library,
+            model_name,
+            requested_device,
+            cache_dir or get_whisper_cache_dir(),
+        )
     print(f"[*] Model loaded in {format_seconds(time.perf_counter() - load_started)}")
-    return model, device
+    return loaded
 
 
 def process_file(
@@ -80,6 +97,8 @@ def process_file(
     ffmpeg_bin: str | None = None,
     ffprobe_bin: str | None = None,
     whisper_cache_dir: Path | None = None,
+    whisper_library: str = "faster-whisper",
+    whisper_device: str = "auto",
 ) -> tuple[str, set[str], bool, int]:
     started = time.perf_counter()
     destination = output_path(input_file, paths.finished)
@@ -109,6 +128,8 @@ def process_file(
             model_name,
             str(paths.transcripts),
             whisper_model=whisper_model,
+            whisper_library=whisper_library,
+            whisper_device=whisper_device,
             censor_method=censor_method,
             padding_before_ms=padding_before_ms,
             padding_after_ms=padding_after_ms,
@@ -166,9 +187,15 @@ def main(argv: list[str] | None = None, store: SettingsStore | None = None) -> i
     parser = argparse.ArgumentParser(description="Process media from the ready folder")
     parser.add_argument(
         "--model",
-        default=REQUIRED_WHISPER_MODEL,
-        choices=[REQUIRED_WHISPER_MODEL],
-        help="Required for accurate profanity timestamps.",
+        default=None,
+        choices=["tiny", "base", "small", "medium", "large-v3"],
+        help="Override the persisted Whisper model.",
+    )
+    parser.add_argument(
+        "--whisper-library",
+        default=None,
+        choices=["faster-whisper", "openai-whisper"],
+        help="Override the persisted Whisper implementation.",
     )
     parser.add_argument("--list", action="store_true", help="List media without processing it")
     processing_mode = parser.add_mutually_exclusive_group()
@@ -230,6 +257,8 @@ def main(argv: list[str] | None = None, store: SettingsStore | None = None) -> i
         if args.archive_after_success is None
         else args.archive_after_success
     )
+    model_name = args.model or settings.whisper.model
+    whisper_library = args.whisper_library or settings.whisper.library
 
     if report_only and args.include_undiscovered:
         parser.error("--report-only and --include-undiscovered cannot be used together")
@@ -254,7 +283,8 @@ def main(argv: list[str] | None = None, store: SettingsStore | None = None) -> i
     print(f"Finished folder:   {paths.finished}")
     print(f"Processed folder:  {paths.processed}")
     print(f"Transcripts folder:{paths.transcripts}")
-    print(f"Whisper model:     {args.model}")
+    print(f"Whisper library:   {whisper_library}")
+    print(f"Whisper model:     {model_name}")
     print(f"Files queued:      {len(files)}")
     if report_only:
         print("Mode: report-only; source files will remain in ready/ and no outputs will be created.")
@@ -277,14 +307,17 @@ def main(argv: list[str] | None = None, store: SettingsStore | None = None) -> i
             str(file),
             str(transcript_path(file, paths.transcripts)),
             ffprobe_bin,
+            whisper_library,
+            model_name,
         )
         for file in files
     )
     whisper_model = (
         load_whisper_model(
-            args.model,
+            model_name,
             settings.processing.device,
             settings.runtime.whisper_cache,
+            whisper_library,
         )
         if needs_transcription
         else None
@@ -305,7 +338,7 @@ def main(argv: list[str] | None = None, store: SettingsStore | None = None) -> i
         for index, input_file in enumerate(files, start=1):
             status, discovered, used_cached, profane_count = process_file(
                 input_file,
-                args.model,
+                model_name,
                 paths,
                 index,
                 len(files),
@@ -322,6 +355,8 @@ def main(argv: list[str] | None = None, store: SettingsStore | None = None) -> i
                 ffmpeg_bin=str(settings.runtime.ffmpeg_path) if settings.runtime.ffmpeg_path else None,
                 ffprobe_bin=ffprobe_bin,
                 whisper_cache_dir=settings.runtime.whisper_cache,
+                whisper_library=whisper_library,
+                whisper_device=settings.processing.device,
             )
             all_discovered.update(discovered)
             if status == "ok":

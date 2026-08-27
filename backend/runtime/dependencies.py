@@ -41,6 +41,9 @@ WHISPER_MODEL_FILES = (
     "tokenizer.json",
     "vocabulary.json",
 )
+WHISPER_MODELS = ("tiny", "base", "small", "medium", "large-v3")
+WHISPER_LIBRARIES = ("faster-whisper", "openai-whisper")
+OPENAI_WHISPER_VERSION = "20250625"
 PYTHON_DEPENDENCIES = (
     ("faster-whisper", "1.2.1"),
     ("better-profanity", "0.7.0"),
@@ -108,6 +111,8 @@ class InstallAction:
 class InstallPlan:
     id: str
     actions: tuple[InstallAction, ...]
+    whisper_library: str = "faster-whisper"
+    whisper_model: str = "large-v3"
 
 
 @dataclass(frozen=True)
@@ -142,6 +147,10 @@ class DependencyNotReadyError(RuntimeError):
     """Raised when processing requests an unprepared dependency."""
 
 
+def _whisper_dependency_id(library: str, model: str) -> str:
+    return "whisper:large-v3" if (library, model) == ("faster-whisper", "large-v3") else f"whisper:{library}:{model}"
+
+
 def _plan_id(actions: tuple[InstallAction, ...]) -> str:
     payload = [
         {
@@ -166,12 +175,18 @@ def build_install_plan(
     python_executable: Path | None = None,
     cache_dir: Path | None = None,
     platform_name: str | None = None,
+    whisper_library: str = "faster-whisper",
+    whisper_model: str = "large-v3",
 ) -> InstallPlan:
     """Build an inspectable plan without running commands or using the network."""
     requested = tuple(dict.fromkeys(components))
     unknown = sorted(set(requested) - {"ffmpeg", "python", "whisper_model"})
     if unknown:
         raise DependencyPlanError(f"Unknown dependency component(s): {', '.join(unknown)}")
+    if whisper_library not in WHISPER_LIBRARIES:
+        raise DependencyPlanError(f"Unsupported Whisper library: {whisper_library}")
+    if whisper_model not in WHISPER_MODELS:
+        raise DependencyPlanError(f"Unsupported Whisper model: {whisper_model}")
 
     python_executable = (python_executable or Path(sys.executable)).resolve()
     cache_dir = (cache_dir or get_whisper_cache_dir()).resolve()
@@ -214,10 +229,15 @@ def build_install_plan(
         )
 
     if "python" in requested:
+        requirements = list(PYTHON_REQUIREMENTS)
+        dependency_ids = [f"python:{name}" for name, _version in PYTHON_DEPENDENCIES]
+        if whisper_library == "openai-whisper":
+            requirements.append(f"openai-whisper=={OPENAI_WHISPER_VERSION}")
+            dependency_ids.append("python:openai-whisper")
         actions.append(
             InstallAction(
                 id="install-python-dependencies",
-                dependency_ids=tuple(f"python:{name}" for name, _version in PYTHON_DEPENDENCIES),
+                dependency_ids=tuple(dependency_ids),
                 kind="command",
                 description="Install the tested Python dependency versions",
                 source_name="Python Package Index",
@@ -228,28 +248,47 @@ def build_install_plan(
                     "pip",
                     "install",
                     "--disable-pip-version-check",
-                    *PYTHON_REQUIREMENTS,
+                    *requirements,
                 ),
             )
         )
 
     if "whisper_model" in requested:
+        model_dependency_id = _whisper_dependency_id(whisper_library, whisper_model)
+        if whisper_library == "faster-whisper":
+            source_name = "Hugging Face / Systran"
+            source_url = (
+                f"https://huggingface.co/{WHISPER_MODEL_ID}/tree/{WHISPER_MODEL_REVISION}"
+                if whisper_model == "large-v3"
+                else f"https://huggingface.co/Systran/faster-whisper-{whisper_model}"
+            )
+        else:
+            source_name = "OpenAI Whisper model repository"
+            source_url = "https://github.com/openai/whisper"
         actions.append(
             InstallAction(
-                id="download-whisper-large-v3",
-                dependency_ids=("whisper:large-v3",),
+                id=f"download-{whisper_library}-{whisper_model}",
+                dependency_ids=(model_dependency_id,),
                 kind="model_download",
-                description="Download the pinned faster-whisper large-v3 model",
-                source_name="Hugging Face / Systran",
-                source_url=f"https://huggingface.co/{WHISPER_MODEL_ID}/tree/{WHISPER_MODEL_REVISION}",
+                description=f"Download the {whisper_library} {whisper_model} model",
+                source_name=source_name,
+                source_url=source_url,
                 command=(
                     str(python_executable),
                     "-m",
                     "scripts.download_whisper_model",
                     "--cache-dir",
                     str(cache_dir),
+                    "--library",
+                    whisper_library,
+                    "--model",
+                    whisper_model,
                 ),
-                estimated_download_bytes=WHISPER_MODEL_SIZE_BYTES,
+                estimated_download_bytes=(
+                    WHISPER_MODEL_SIZE_BYTES
+                    if whisper_library == "faster-whisper" and whisper_model == "large-v3"
+                    else None
+                ),
                 progress_path=cache_dir,
             )
         )
@@ -257,7 +296,12 @@ def build_install_plan(
     action_tuple = tuple(actions)
     if not action_tuple:
         raise DependencyPlanError("At least one dependency component is required")
-    return InstallPlan(id=_plan_id(action_tuple), actions=action_tuple)
+    return InstallPlan(
+        id=_plan_id(action_tuple),
+        actions=action_tuple,
+        whisper_library=whisper_library,
+        whisper_model=whisper_model,
+    )
 
 
 def _emit(
@@ -354,7 +398,13 @@ def execute_install_plan(
         _emit(progress_callback, InstallProgress(action.id, "starting", action.description))
         output = _run_action(action, cancellation, progress_callback)
         _emit(progress_callback, InstallProgress(action.id, "verifying", "Verifying installation"))
-        statuses = _status_by_id(inspect_dependencies(cache_dir))
+        statuses = _status_by_id(
+            inspect_dependencies(
+                cache_dir,
+                whisper_library=plan.whisper_library,
+                whisper_model=plan.whisper_model,
+            )
+        )
         failures = [
             statuses[dependency_id]
             for dependency_id in action.dependency_ids
@@ -434,9 +484,14 @@ def _version_is_supported(version: str, required_version: str | None) -> bool:
     return parsed >= FFMPEG_MINIMUM_VERSION
 
 
-def inspect_python_dependencies() -> tuple[DependencyStatus, ...]:
+def inspect_python_dependencies(
+    whisper_library: str = "faster-whisper",
+) -> tuple[DependencyStatus, ...]:
     statuses: list[DependencyStatus] = []
-    for distribution, required_version in PYTHON_DEPENDENCIES:
+    dependencies = list(PYTHON_DEPENDENCIES)
+    if whisper_library == "openai-whisper":
+        dependencies.append(("openai-whisper", OPENAI_WHISPER_VERSION))
+    for distribution, required_version in dependencies:
         try:
             installed_version = importlib.metadata.version(distribution)
         except importlib.metadata.PackageNotFoundError:
@@ -466,26 +521,75 @@ def inspect_python_dependencies() -> tuple[DependencyStatus, ...]:
     return tuple(statuses)
 
 
-def inspect_whisper_model(cache_dir: Path | None = None) -> DependencyStatus:
-    """Verify the pinned model through faster-whisper without network access."""
+def inspect_whisper_model(
+    cache_dir: Path | None = None,
+    *,
+    library: str = "faster-whisper",
+    model: str = "large-v3",
+) -> DependencyStatus:
+    """Verify the selected model without network access."""
     cache_dir = (cache_dir or get_whisper_cache_dir()).resolve()
+    dependency_id = _whisper_dependency_id(library, model)
+    display_name = f"Whisper {model} model ({library})"
+    if library == "openai-whisper":
+        try:
+            import whisper
+
+            model_url = whisper._MODELS[model]
+            expected_hash = model_url.split("/")[-2]
+            model_path = cache_dir / Path(model_url).name
+        except (ImportError, KeyError, AttributeError) as exc:
+            return DependencyStatus(
+                id=dependency_id,
+                name=display_name,
+                state="missing",
+                required_version=None,
+                installed_version=None,
+                path=None,
+                detail=f"OpenAI Whisper or its model definition is unavailable: {exc}",
+                install_supported=True,
+            )
+        if not model_path.is_file() or model_path.stat().st_size == 0:
+            return DependencyStatus(
+                id=dependency_id,
+                name=display_name,
+                state="missing",
+                required_version=expected_hash,
+                installed_version=None,
+                path=None,
+                detail="model is not cached",
+                install_supported=True,
+            )
+        return DependencyStatus(
+            id=dependency_id,
+            name=display_name,
+            state="ready",
+            required_version=expected_hash,
+            installed_version=expected_hash,
+            path=model_path,
+            detail="model file is cached",
+            install_supported=True,
+        )
+
+    revision = WHISPER_MODEL_REVISION if model == "large-v3" else None
     try:
         from faster_whisper.utils import download_model
 
+        size_or_id = WHISPER_MODEL_ID if model == "large-v3" else model
         model_path = Path(
             download_model(
-                WHISPER_MODEL_ID,
+                size_or_id,
                 cache_dir=str(cache_dir),
                 local_files_only=True,
-                revision=WHISPER_MODEL_REVISION,
+                revision=revision,
             )
         )
     except Exception as exc:
         return DependencyStatus(
-            id="whisper:large-v3",
-            name="Whisper large-v3 model",
+            id=dependency_id,
+            name=display_name,
             state="missing",
-            required_version=WHISPER_MODEL_REVISION,
+            required_version=revision,
             installed_version=None,
             path=None,
             detail=f"pinned model is not cached: {exc}",
@@ -495,21 +599,21 @@ def inspect_whisper_model(cache_dir: Path | None = None) -> DependencyStatus:
     missing_files = tuple(name for name in WHISPER_MODEL_FILES if not (model_path / name).is_file())
     if missing_files:
         return DependencyStatus(
-            id="whisper:large-v3",
-            name="Whisper large-v3 model",
+            id=dependency_id,
+            name=display_name,
             state="invalid",
-            required_version=WHISPER_MODEL_REVISION,
+            required_version=revision,
             installed_version=None,
             path=model_path,
             detail=f"model cache is incomplete: {', '.join(missing_files)}",
             install_supported=True,
         )
     return DependencyStatus(
-        id="whisper:large-v3",
-        name="Whisper large-v3 model",
+        id=dependency_id,
+        name=display_name,
         state="ready",
-        required_version=WHISPER_MODEL_REVISION,
-        installed_version=WHISPER_MODEL_REVISION,
+        required_version=revision,
+        installed_version=revision,
         path=model_path,
         detail="pinned model files are cached",
         install_supported=True,
@@ -521,6 +625,8 @@ def inspect_dependencies(
     *,
     ffmpeg_bin: str | Path | None = None,
     ffprobe_bin: str | Path | None = None,
+    whisper_library: str = "faster-whisper",
+    whisper_model: str = "large-v3",
 ) -> DependencyInventory:
     """Return dependency state without installing or downloading anything."""
     return DependencyInventory(
@@ -536,17 +642,26 @@ def inspect_dependencies(
             str(ffprobe_bin) if ffprobe_bin else find_ffprobe(),
             FFMPEG_VERSION,
         ),
-        python=inspect_python_dependencies(),
-        whisper_model=inspect_whisper_model(cache_dir),
+        python=inspect_python_dependencies(whisper_library),
+        whisper_model=inspect_whisper_model(
+            cache_dir,
+            library=whisper_library,
+            model=whisper_model,
+        ),
     )
 
 
-def require_whisper_model_path(cache_dir: Path | None = None) -> Path:
-    """Return the verified pinned model path or fail without network access."""
-    status = inspect_whisper_model(cache_dir)
+def require_whisper_model_path(
+    cache_dir: Path | None = None,
+    *,
+    library: str = "faster-whisper",
+    model: str = "large-v3",
+) -> Path:
+    """Return the verified selected model path or fail without network access."""
+    status = inspect_whisper_model(cache_dir, library=library, model=model)
     if not status.ready or status.path is None:
         raise DependencyNotReadyError(
-            "Whisper large-v3 is not prepared. Review and approve a dependency "
-            f"download plan first. {status.detail}"
+            f"Whisper {model} ({library}) is not prepared. Install it from the app setup. "
+            f"{status.detail}"
         )
     return status.path

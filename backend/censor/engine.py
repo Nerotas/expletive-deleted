@@ -24,9 +24,13 @@ from backend.runtime import (
     load_profanity_censor_words,
     load_profanity_exclusions,
     record_transcription_timing,
-    require_whisper_model_path,
     select_working_video_encoder,
     require_whisper_model,
+)
+from backend.runtime.transcription import (
+    load_transcription_model,
+    require_whisper_library,
+    transcribe_segments,
 )
 
 
@@ -73,17 +77,25 @@ def transcript_cache_is_compatible(
     input_file: str,
     transcript_path: str,
     ffprobe_bin: str,
+    whisper_library: str | None = None,
+    whisper_model: str | None = None,
 ) -> bool:
     """Return whether a transcript exists and uses the right source channels."""
     if not os.path.exists(transcript_path):
         return False
     channels, layout = probe_audio_stream(ffprobe_bin, input_file)
-    if not has_discrete_center_channel(channels, layout):
-        return True
     try:
         with open(transcript_path, 'r') as transcript_file:
             transcript_data = json.load(transcript_file)
-        return transcript_data.get('audio_source') == 'front_center'
+        if whisper_library and transcript_data.get("whisper_library") != whisper_library:
+            return False
+        if whisper_model and transcript_data.get("whisper_model") != whisper_model:
+            return False
+        return (
+            transcript_data.get('audio_source') == 'front_center'
+            if has_discrete_center_channel(channels, layout)
+            else True
+        )
     except Exception:
         return False
 
@@ -224,11 +236,10 @@ def run_ffmpeg_with_progress(
 
 
 class ProfanityCensor:
-    # Maps CLI model names to faster-whisper model identifiers.
-    _MODEL_NAME_MAP = {"large": "large-v3"}
-
-    def __init__(self, input_file: str, output_file: str, model_name: str = "large",
+    def __init__(self, input_file: str, output_file: str, model_name: str = "large-v3",
                  transcripts_dir: str = None, whisper_model=None,
+                 whisper_library: str = "faster-whisper",
+                 whisper_device: str = "auto",
                  censor_method: str = "mute", padding_before_ms: int = 150,
                  padding_after_ms: int = 150, surround_output: str = "preserve_5_1",
                  video_mode: str = "h264",
@@ -238,6 +249,8 @@ class ProfanityCensor:
         self.input_file = input_file
         self.output_file = output_file
         self.model_name = require_whisper_model(model_name)
+        self.whisper_library = require_whisper_library(whisper_library)
+        self.whisper_device = whisper_device
         self.transcripts_dir = transcripts_dir
         self.whisper_cache_dir = (whisper_cache_dir or get_whisper_cache_dir()).resolve()
         self._shared_model = whisper_model  # pre-loaded (WhisperModel, device) tuple or None
@@ -386,19 +399,14 @@ class ProfanityCensor:
         return get_whisper_device_status(self.model_name).selected
 
     def _load_whisper_model(self):
-        from faster_whisper import WhisperModel
-
-        status = get_whisper_device_status(self.model_name)
-        preferred_device = status.selected
-        print(f"[*] Whisper profile: {preferred_device} ({status.compute_type}); {status.detail}")
-        model_path = require_whisper_model_path(self.whisper_cache_dir)
-        model = WhisperModel(
-            str(model_path),
-            device=preferred_device,
-            compute_type=status.compute_type,
-            local_files_only=True,
+        status = get_whisper_device_status(self.model_name, self.whisper_device)
+        print(f"[*] Whisper profile: {status.selected} ({status.compute_type}); {status.detail}")
+        return load_transcription_model(
+            self.whisper_library,
+            self.model_name,
+            self.whisper_device,
+            cache_dir=self.whisper_cache_dir,
         )
-        return model, preferred_device
 
     def get_transcript_path(self) -> str:
         """Get path for transcript file."""
@@ -490,15 +498,23 @@ class ProfanityCensor:
             try:
                 with open(transcript_path, 'r') as f:
                     transcript_data = json.load(f)
-                if self.has_discrete_center_audio() and transcript_data.get('audio_source') != 'front_center':
-                    print("[!] Cached surround transcript was not made from the front-center channel; re-transcribing.")
+                compatible = (
+                    transcript_data.get("whisper_library") == self.whisper_library
+                    and transcript_data.get("whisper_model") == self.model_name
+                    and (
+                        not self.has_discrete_center_audio()
+                        or transcript_data.get('audio_source') == 'front_center'
+                    )
+                )
+                if not compatible:
+                    print("[!] Cached transcript uses a different Whisper profile or audio source; re-transcribing.")
                 else:
                     self.used_cached_transcript = True
                     return transcript_data
             except Exception as e:
                 print(f"[!] Failed to load cached transcript, re-transcribing: {e}")
 
-        print(f"[*] Transcribing with Whisper ({self.model_name})...")
+        print(f"[*] Transcribing with {self.whisper_library} ({self.model_name})...")
 
         temporary_audio = None
         try:
@@ -513,14 +529,7 @@ class ProfanityCensor:
                 temporary_audio = self.extract_center_channel()
                 transcription_input = temporary_audio
             # hallucination_silence_threshold prevents drift from hallucinated content in silent sections
-            segments_gen = model.transcribe(
-                transcription_input,
-                language="en",
-                word_timestamps=True,
-                condition_on_previous_text=True,
-                hallucination_silence_threshold=2.0,
-                vad_filter=True,
-            )[0]
+            segments_gen = transcribe_segments(model, self.whisper_library, transcription_input)
 
             words_with_timestamps = []
             full_text_parts = []
@@ -533,31 +542,32 @@ class ProfanityCensor:
 
             for segment in segments_gen:
                 self._check_cancelled()
-                full_text_parts.append(segment.text)
-                if segment.words:
-                    for w in segment.words:
+                full_text_parts.append(segment["text"])
+                if segment["words"]:
+                    for w in segment["words"]:
                         words_with_timestamps.append({
-                            'word': w.word.strip('.,!?;:'),
-                            'start': w.start,
-                            'end': w.end,
+                            'word': str(w["word"]).strip('.,!?;:'),
+                            'start': w["start"],
+                            'end': w["end"],
                         })
                 else:
-                    parts = segment.text.split()
+                    parts = segment["text"].split()
                     num_parts = len(parts)
-                    seg_dur = segment.end - segment.start
-                    for i, word in enumerate(parts):
-                        words_with_timestamps.append({
-                            'word': word.strip('.,!?;:'),
-                            'start': segment.start + (i / num_parts) * seg_dur,
-                            'end': segment.start + ((i + 1) / num_parts) * seg_dur,
-                        })
+                    seg_dur = segment["end"] - segment["start"]
+                    if num_parts:
+                        for i, word in enumerate(parts):
+                            words_with_timestamps.append({
+                                'word': word.strip('.,!?;:'),
+                                'start': segment["start"] + (i / num_parts) * seg_dur,
+                                'end': segment["start"] + ((i + 1) / num_parts) * seg_dur,
+                            })
 
                 if duration > 0:
-                    progress = min(100, int(segment.end / duration * 100))
+                    progress = min(100, int(segment["end"] / duration * 100))
                     if progress != last_percent:
                         elapsed = time.perf_counter() - tx_started
-                        rate = segment.end / elapsed if elapsed > 0 and segment.end > 0 else 0
-                        remaining = (duration - segment.end) / rate if rate > 0 else 0
+                        rate = segment["end"] / elapsed if elapsed > 0 and segment["end"] > 0 else 0
+                        remaining = (duration - segment["end"]) / rate if rate > 0 else 0
                         filled = int(progress * 24 / 100)
                         bar = "#" * filled + "-" * (24 - filled)
                         speed = f"{rate:.2f}x" if rate > 0 else "N/A"
@@ -591,6 +601,8 @@ class ProfanityCensor:
                 'text': "".join(full_text_parts),
                 'words': words_with_timestamps,
                 'audio_source': 'front_center' if temporary_audio else 'full_mix',
+                'whisper_library': self.whisper_library,
+                'whisper_model': self.model_name,
             }
 
             if transcript_path:
