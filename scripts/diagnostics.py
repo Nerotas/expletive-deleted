@@ -6,17 +6,18 @@ from __future__ import annotations
 import importlib.util
 import shutil
 from dataclasses import dataclass
+from pathlib import Path
 
 from backend.runtime import (
     available_encoders,
     find_ffmpeg,
     find_ffprobe,
     format_bytes,
-    get_runtime_paths,
     get_whisper_cache_dir,
     get_whisper_device_status,
     select_working_video_encoder,
 )
+from backend.settings import SettingsFileError, SettingsStore, inspect_directories, load_effective_settings
 
 
 @dataclass(frozen=True)
@@ -27,7 +28,14 @@ class DiagnosticResult:
     required: bool = True
 
 
-def collect_diagnostics() -> list[DiagnosticResult]:
+def _nearest_existing_path(path: Path) -> Path:
+    candidate = path
+    while not candidate.exists() and candidate != candidate.parent:
+        candidate = candidate.parent
+    return candidate
+
+
+def collect_diagnostics(store: SettingsStore | None = None) -> list[DiagnosticResult]:
     results: list[DiagnosticResult] = []
 
     for import_name, display_name in (
@@ -39,12 +47,22 @@ def collect_diagnostics() -> list[DiagnosticResult]:
         detail = "installed" if available else "not installed"
         results.append(DiagnosticResult(display_name, available, detail))
 
-    paths = get_runtime_paths()
+    store = store or SettingsStore()
     try:
-        paths.create()
-        results.append(DiagnosticResult("Runtime folders", True, str(paths.root)))
-    except OSError as exc:
-        results.append(DiagnosticResult("Runtime folders", False, str(exc)))
+        settings = load_effective_settings(store)
+        source = "persisted" if store.path.is_file() else "defaults"
+        results.append(DiagnosticResult("Settings", True, f"{source}: {store.path}"))
+        for status in inspect_directories(settings.directories):
+            results.append(
+                DiagnosticResult(
+                    status.field,
+                    status.ready,
+                    str(status.path) if status.ready else f"{status.path}: {status.error}",
+                )
+            )
+    except SettingsFileError as exc:
+        settings = None
+        results.append(DiagnosticResult("Settings", False, str(exc)))
 
     ffmpeg = find_ffmpeg()
     ffprobe = find_ffprobe()
@@ -59,7 +77,8 @@ def collect_diagnostics() -> list[DiagnosticResult]:
             results.append(DiagnosticResult("H.264 encoder", False, str(exc)))
 
     try:
-        status = get_whisper_device_status()
+        requested_device = settings.processing.device if settings is not None else None
+        status = get_whisper_device_status(requested_device=requested_device)
         results.append(
             DiagnosticResult(
                 "Whisper device",
@@ -70,7 +89,7 @@ def collect_diagnostics() -> list[DiagnosticResult]:
     except Exception as exc:
         results.append(DiagnosticResult("Whisper device", False, str(exc)))
 
-    cache_dir = get_whisper_cache_dir(paths.root)
+    cache_dir = get_whisper_cache_dir()
     results.append(
         DiagnosticResult(
             "Whisper cache",
@@ -81,7 +100,12 @@ def collect_diagnostics() -> list[DiagnosticResult]:
     )
 
     try:
-        free_bytes = shutil.disk_usage(paths.root).free
+        disk_path = (
+            _nearest_existing_path(settings.directories.output)
+            if settings is not None
+            else Path.cwd()
+        )
+        free_bytes = shutil.disk_usage(disk_path).free
         minimum_free_bytes = 1024**3
         results.append(
             DiagnosticResult(
@@ -111,7 +135,7 @@ def main() -> int:
         print(f"\nNot ready: {len(failures)} required check(s) failed.")
         return 1
 
-    print("\nReady. Place media in ready/ and run: python batch_process.py")
+    print("\nReady. Place media in the configured input directory and run: python batch_process.py")
     return 0
 
 

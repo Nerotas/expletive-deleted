@@ -280,12 +280,18 @@ def get_cuda_memory_mib() -> int | None:
         return None
 
 
-def get_whisper_device_status(model_name: str = REQUIRED_WHISPER_MODEL) -> WhisperDeviceStatus:
+def get_whisper_device_status(
+    model_name: str = REQUIRED_WHISPER_MODEL,
+    requested_device: str | None = None,
+) -> WhisperDeviceStatus:
     """Select a safe CTranslate2 profile for the requested Whisper model."""
     model_name = require_whisper_model(model_name)
     parser = read_project_config()
     configured_device = parser.get("Whisper", "Device", fallback="auto").strip().lower()
-    requested = os.environ.get("CENSOR_WHISPER_DEVICE", configured_device).strip().lower()
+    requested = os.environ.get(
+        "CENSOR_WHISPER_DEVICE",
+        requested_device or configured_device,
+    ).strip().lower()
     requested = requested if requested in {"auto", "cpu", "cuda"} else "auto"
     configured_compute = parser.get("Whisper", "ComputeType", fallback="auto").strip().lower()
     requested_compute = os.environ.get("CENSOR_WHISPER_COMPUTE_TYPE", configured_compute).strip().lower()

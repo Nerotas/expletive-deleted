@@ -11,10 +11,17 @@ from pathlib import Path
 from backend.censor import ProfanityCensor, transcript_cache_is_compatible
 from backend.runtime import (
     REQUIRED_WHISPER_MODEL,
+    RuntimePaths,
     find_ffprobe,
-    get_runtime_paths,
     get_whisper_cache_dir,
     get_whisper_device_status,
+)
+from backend.settings import (
+    DirectoryAccessError,
+    SettingsFileError,
+    SettingsStore,
+    ensure_directories,
+    load_effective_settings,
 )
 
 
@@ -38,10 +45,10 @@ def output_path(input_file: Path, output_dir: Path) -> Path:
     return output_dir / f"{input_file.stem}-censored{extension}"
 
 
-def load_whisper_model(model_name: str):
+def load_whisper_model(model_name: str, requested_device: str = "auto"):
     """Load the Whisper model once for the entire batch."""
     from faster_whisper import WhisperModel
-    status = get_whisper_device_status(model_name)
+    status = get_whisper_device_status(model_name, requested_device)
     device = status.selected
     print(f"[*] Whisper profile: {device} ({status.compute_type}); {status.detail}")
     fw_model_name = ProfanityCensor._MODEL_NAME_MAP.get(model_name, model_name)
@@ -61,7 +68,7 @@ def load_whisper_model(model_name: str):
 def process_file(
     input_file: Path,
     model_name: str,
-    paths,
+    paths: RuntimePaths,
     index: int,
     total: int,
     report_only: bool = False,
@@ -69,6 +76,7 @@ def process_file(
     include_undiscovered: bool = False,
     whisper_model=None,
     censor_method: str = "mute",
+    archive_after_success: bool = False,
 ) -> tuple[str, set[str], bool, int]:
     started = time.perf_counter()
     destination = output_path(input_file, paths.finished)
@@ -124,13 +132,26 @@ def process_file(
         print(f"[FILE {index}/{total}] Elapsed: {format_seconds(time.perf_counter() - started)}")
         return "fail", discovered, used_cached, profane_count
 
-    shutil.move(str(input_file), paths.processed / input_file.name)
-    print(f"[OK] Archived source: {input_file.name}")
+    if archive_after_success:
+        archive_path = paths.processed / input_file.name
+        if archive_path.exists():
+            print(f"[FAILED] Archive destination already exists; source retained: {archive_path}")
+            print(f"[FILE {index}/{total}] Elapsed: {format_seconds(time.perf_counter() - started)}")
+            return "fail", discovered, used_cached, profane_count
+        try:
+            shutil.move(str(input_file), archive_path)
+        except OSError as exc:
+            print(f"[FAILED] Could not archive source; source retained: {exc}")
+            print(f"[FILE {index}/{total}] Elapsed: {format_seconds(time.perf_counter() - started)}")
+            return "fail", discovered, used_cached, profane_count
+        print(f"[OK] Archived source: {input_file.name}")
+    else:
+        print(f"[OK] Source retained: {input_file.name}")
     print(f"[FILE {index}/{total}] Elapsed: {format_seconds(time.perf_counter() - started)}")
     return "ok", discovered, used_cached, profane_count
 
 
-def main() -> int:
+def main(argv: list[str] | None = None, store: SettingsStore | None = None) -> int:
     batch_started = time.perf_counter()
     parser = argparse.ArgumentParser(description="Process media from the ready folder")
     parser.add_argument(
@@ -140,7 +161,21 @@ def main() -> int:
         help="Required for accurate profanity timestamps.",
     )
     parser.add_argument("--list", action="store_true", help="List media without processing it")
-    parser.add_argument("--report-only", action="store_true", help="Report potential policy additions without changing media")
+    processing_mode = parser.add_mutually_exclusive_group()
+    processing_mode.add_argument(
+        "--report-only",
+        dest="processing_mode",
+        action="store_const",
+        const="report_only",
+        help="Transcribe and report without creating censored media",
+    )
+    processing_mode.add_argument(
+        "--censor-media",
+        dest="processing_mode",
+        action="store_const",
+        const="censor",
+        help="Create censored media regardless of the persisted mode",
+    )
     parser.add_argument("--overwrite", action="store_true", help="Replace an existing censored output")
     parser.add_argument(
         "--include-undiscovered",
@@ -149,19 +184,49 @@ def main() -> int:
     )
     parser.add_argument(
         "--censor-method",
-        default="mute",
+        default=None,
         choices=["mute", "karaoke"],
         help="mute: silence profane intervals (default); karaoke: cancel centre-panned audio",
     )
-    args = parser.parse_args()
+    source_handling = parser.add_mutually_exclusive_group()
+    source_handling.add_argument(
+        "--archive-original",
+        dest="archive_after_success",
+        action="store_true",
+        help="Move each original to the archive directory after verified success",
+    )
+    source_handling.add_argument(
+        "--keep-original",
+        dest="archive_after_success",
+        action="store_false",
+        help="Retain originals in the input directory regardless of the persisted setting",
+    )
+    parser.set_defaults(processing_mode=None, archive_after_success=None)
+    args = parser.parse_args(argv)
 
-    if args.report_only and args.include_undiscovered:
+    try:
+        settings = load_effective_settings(store)
+        ensure_directories(settings.directories)
+    except (SettingsFileError, DirectoryAccessError) as exc:
+        print(f"[FAILED] {exc}")
+        return 1
+
+    report_only = (args.processing_mode or settings.processing.mode) == "report_only"
+    censor_method = args.censor_method or (
+        "karaoke" if settings.censoring.stereo_method == "karaoke" else "mute"
+    )
+    archive_after_success = (
+        settings.source.archive_after_success
+        if args.archive_after_success is None
+        else args.archive_after_success
+    )
+
+    if report_only and args.include_undiscovered:
         parser.error("--report-only and --include-undiscovered cannot be used together")
-    if args.report_only and args.overwrite:
+    if report_only and args.overwrite:
         parser.error("--overwrite cannot be used with --report-only")
 
-    paths = get_runtime_paths()
-    paths.create()
+    paths = settings.directories.to_runtime_paths()
     files = sorted(path for path in paths.ready.iterdir() if path.suffix.lower() in MEDIA_EXTENSIONS)
     if args.list:
         print(f"[LIST] Found {len(files)} supported file(s) in {paths.ready}")
@@ -173,7 +238,7 @@ def main() -> int:
         return 0
 
     print("=" * 70)
-    print("Batch Profanity Review" if args.report_only else "Batch Profanity Censoring")
+    print("Batch Profanity Review" if report_only else "Batch Profanity Censoring")
     print("=" * 70)
     print(f"Input folder:      {paths.ready}")
     print(f"Finished folder:   {paths.finished}")
@@ -181,13 +246,14 @@ def main() -> int:
     print(f"Transcripts folder:{paths.transcripts}")
     print(f"Whisper model:     {args.model}")
     print(f"Files queued:      {len(files)}")
-    if args.report_only:
+    if report_only:
         print("Mode: report-only; source files will remain in ready/ and no outputs will be created.")
     else:
         if args.overwrite:
             print("Mode: overwrite existing censored outputs.")
         if args.include_undiscovered:
             print("Mode: censor undiscovered vendor-list matches unless they are excluded.")
+        print(f"Source handling: {'archive after success' if archive_after_success else 'retain original'}")
         print("Note: each file prints a step-by-step runtime estimate before processing.")
 
     # Load the model once and share it across all files to avoid reloading per file.
@@ -200,7 +266,11 @@ def main() -> int:
         )
         for file in files
     )
-    whisper_model = load_whisper_model(args.model) if needs_transcription else None
+    whisper_model = (
+        load_whisper_model(args.model, settings.processing.device)
+        if needs_transcription
+        else None
+    )
     if whisper_model is None:
         print("[*] All transcripts cached; skipping model load.")
 
@@ -221,11 +291,12 @@ def main() -> int:
                 paths,
                 index,
                 len(files),
-                args.report_only,
+                report_only,
                 args.overwrite,
                 args.include_undiscovered,
                 whisper_model=whisper_model,
-                censor_method=args.censor_method,
+                censor_method=censor_method,
+                archive_after_success=archive_after_success,
             )
             all_discovered.update(discovered)
             if status == "ok":
@@ -252,7 +323,7 @@ def main() -> int:
     print(f"  Status:             {'Interrupted after' if interrupted else 'Completed in'} {elapsed}")
     print(f"  Files queued:       {len(files)}")
     print(f"  Processed:          {ok_count + failed}")
-    if not args.report_only:
+    if not report_only:
         print(f"    Transcribed fresh:  {fresh_transcripts}")
         print(f"    Loaded from cache:  {cached_transcripts}")
         print(f"    Censored:           {censored_count}")

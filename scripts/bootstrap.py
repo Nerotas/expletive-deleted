@@ -18,8 +18,14 @@ from backend.runtime import (
     format_bytes,
     get_directory_size,
     get_external_whisper_cache_dir,
-    get_runtime_paths,
     get_whisper_cache_dir,
+)
+from backend.settings import (
+    DirectoryAccessError,
+    SettingsFileError,
+    SettingsStore,
+    ensure_directories,
+    load_effective_settings,
 )
 
 
@@ -93,6 +99,17 @@ def print_venv_whisper_profile() -> None:
         print("Whisper profile: unavailable; it will be detected when processing starts.")
 
 
+def initialize_application_settings(store: SettingsStore | None = None) -> tuple[Path, tuple[Path, ...]]:
+    """Persist defaults when needed and create the effective working directories."""
+    store = store or SettingsStore()
+    persisted_settings = store.load()
+    effective_settings = load_effective_settings(store)
+    statuses = ensure_directories(effective_settings.directories)
+    if not store.path.exists():
+        store.save(persisted_settings)
+    return store.path, tuple(status.path for status in statuses)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -106,10 +123,17 @@ def main() -> int:
         print("Python 3.9 or later is required.")
         return 1
 
-    paths = get_runtime_paths()
-    paths.create()
-    print(f"Created workflow folders in: {paths.root}")
-    whisper_cache_dir = get_whisper_cache_dir(paths.root)
+    try:
+        settings_path, working_directories = initialize_application_settings()
+    except (SettingsFileError, DirectoryAccessError) as exc:
+        print(f"Settings initialization failed: {exc}")
+        return 1
+    print(f"Settings file: {settings_path}")
+    print("Working directories:")
+    for working_directory in working_directories:
+        print(f"- {working_directory}")
+
+    whisper_cache_dir = get_whisper_cache_dir()
     whisper_cache_dir.mkdir(parents=True, exist_ok=True)
     print(f"Whisper cache path: {whisper_cache_dir}")
     print(f"Whisper cache size: {format_bytes(get_directory_size(whisper_cache_dir))}")

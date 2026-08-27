@@ -350,6 +350,23 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(status.selected, "cpu")
         self.assertEqual(status.compute_type, "int8")
 
+    def test_persisted_whisper_device_is_used_without_environment_override(self):
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch("backend.runtime.environment.ctranslate2", None),
+        ):
+            status = get_whisper_device_status(requested_device="cuda")
+        self.assertEqual(status.requested, "cuda")
+        self.assertIn("explicitly requested", status.detail)
+
+    def test_whisper_device_environment_override_takes_precedence(self):
+        with (
+            patch.dict(os.environ, {"CENSOR_WHISPER_DEVICE": "cpu"}, clear=False),
+            patch("backend.runtime.environment.ctranslate2", None),
+        ):
+            status = get_whisper_device_status(requested_device="cuda")
+        self.assertEqual(status.requested, "cpu")
+
     def test_censorship_requires_whisper_large(self):
         self.assertEqual(require_whisper_model("large"), "large")
         with self.assertRaises(ValueError):
