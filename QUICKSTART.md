@@ -1,58 +1,15 @@
 # Quick Start
 
-Phase 7 provides an Electron desktop interface over the local Python application service. It is not a browser-hosted application.
+Profanity Censor has two ways to work:
 
-## First-time setup
+- **Desktop application (recommended):** start the Electron app first and use its setup screen to review, approve, install, and verify required components.
+- **Backend and command line (advanced):** use the Python commands for development, automation, diagnostics, or a headless workflow.
 
-Create the virtual environment and install the tested Python dependencies:
+Normal users should follow the desktop application workflow. It does not require running the backend commands by hand.
 
-```powershell
-python setup.py
-```
+## Desktop application (recommended)
 
-Inspect prerequisites without downloading or installing anything:
-
-```powershell
-.\.venv\Scripts\python.exe manage_dependencies.py status
-.\.venv\Scripts\python.exe manage_dependencies.py plan --component whisper_model
-```
-
-The plan command displays the pinned source, revision, estimated size, command, and approval ID. Download the model only after reviewing that plan:
-
-Profanity Censor requires Whisper `large-v3`. Smaller Whisper models do not provide reliable enough words or timestamps for this censorship workflow and are not supported. The dependency plan and runtime are deliberately pinned to `large-v3`; do not substitute a smaller model.
-
-```powershell
-.\.venv\Scripts\python.exe manage_dependencies.py install --component whisper_model --approve PLAN_ID
-```
-
-Replace `PLAN_ID` with the exact value printed by the plan command. Then verify readiness:
-
-```powershell
-.\.venv\Scripts\python.exe backend_app.py capabilities
-.\.venv\Scripts\python.exe diagnostics.py
-```
-
-## Configure processing
-
-Initialize and inspect the persistent settings:
-
-```powershell
-.\.venv\Scripts\python.exe manage_settings.py init
-.\.venv\Scripts\python.exe backend_app.py settings
-```
-
-Configure any Phase 6 options you want to test:
-
-```powershell
-.\.venv\Scripts\python.exe manage_settings.py set-options --mode report_only
-.\.venv\Scripts\python.exe manage_settings.py set-options --mode censor --stereo-method drop_audio --padding-before-ms 150 --padding-after-ms 150 --surround-output preserve_5_1 --video-mode h264 --keep-original
-```
-
-Other supported values are `karaoke`, `downmix_stereo`, `preserve_source`, and processing devices `auto`, `cpu`, or `cuda`.
-
-## Run locally
-
-Launch the desktop application:
+From the repository root, start the desktop application:
 
 ```powershell
 cd frontend
@@ -60,43 +17,90 @@ npm install
 npm run dev
 ```
 
-The command opens a native Electron window. Vite is used only to build and hot-reload Electron's React renderer during development.
+`npm run dev` opens the native Electron window. Vite is only used to build and hot-reload the Electron renderer; this is not a browser-hosted application.
 
-The Python service commands below remain useful for backend diagnostics and automation.
+### Complete first-run setup in the app
 
-Put media in `%USERPROFILE%\Documents\Profanity Censor\Ready`, then inspect the Queue-equivalent library snapshot:
+The first launch checks the local system for:
+
+- FFmpeg and FFprobe
+- Python speech-recognition dependencies
+- Whisper `large-v3`
+
+If anything is missing, the **Finish local setup** panel shows the affected component. Select **Review download**, inspect the source and expected download, then choose **Approve and install**. The app installs nothing until the user approves that specific plan and verifies readiness afterward.
+
+Whisper `large-v3` is required for reliable word-level censor timing. Smaller models are not supported for this workflow.
+
+### Process media
+
+1. In **Settings**, confirm the working folders and processing preferences. The default input folder is `%USERPROFILE%\Documents\Profanity Censor\Ready`.
+2. Add supported audio or video files to the configured Ready/Input folder.
+3. Return to **Queue**, refresh if needed, then choose **Start batch**.
+4. Review discovered potential profanity and update the local censor or ignore policy in the app when appropriate.
+
+Completed output is written to Finished/Output. Transcripts are reusable, and originals remain in Ready/Input unless **Archive original after success** is enabled.
+
+## Backend and command line (advanced)
+
+Use this workflow only when developing, automating, diagnosing a machine, or operating without the desktop UI.
+
+### Create the local Python environment
+
+From the repository root:
 
 ```powershell
+python setup.py
+```
+
+This creates `.venv`, installs the Python requirements, persists validated settings, and creates the working directories. It does not silently download the Whisper model or install FFmpeg.
+
+### Inspect or install backend dependencies
+
+```powershell
+.\.venv\Scripts\python.exe manage_dependencies.py status
+.\.venv\Scripts\python.exe manage_dependencies.py plan --component ffmpeg
+.\.venv\Scripts\python.exe manage_dependencies.py plan --component whisper_model
+```
+
+Review the exact plan first. To perform an approved installation, replace `PLAN_ID` with the ID returned by `plan`:
+
+```powershell
+.\.venv\Scripts\python.exe manage_dependencies.py install --component ffmpeg --approve PLAN_ID
+.\.venv\Scripts\python.exe manage_dependencies.py install --component whisper_model --approve PLAN_ID
+```
+
+On Windows, FFmpeg uses the approved WinGet package `Gyan.FFmpeg.Shared`. A manual equivalent is:
+
+```powershell
+winget install --id Gyan.FFmpeg.Shared -e
+```
+
+### Diagnose and run backend jobs
+
+```powershell
+.\.venv\Scripts\python.exe diagnostics.py
+.\.venv\Scripts\python.exe backend_app.py capabilities
 .\.venv\Scripts\python.exe backend_app.py library
 ```
 
-Run one file through the structured serial job service:
+Run one file through the application service:
 
 ```powershell
 .\.venv\Scripts\python.exe backend_app.py process "$env:USERPROFILE\Documents\Profanity Censor\Ready\Movie.mkv" --mode report_only
 .\.venv\Scripts\python.exe backend_app.py process "$env:USERPROFILE\Documents\Profanity Censor\Ready\Movie.mkv" --mode censor
 ```
 
-The result includes the final job record and structured stage, progress, detection, completion, or error events. Press `Ctrl+C` to request cancellation; partial output is removed and the source remains untouched.
-
-To process every supported file in `Ready` serially through the compatibility batch command:
+For compatibility batch processing:
 
 ```powershell
 .\.venv\Scripts\python.exe batch_process.py --list
 .\.venv\Scripts\python.exe batch_process.py
 ```
 
-Use `batch_process.py --list` to inspect files before processing. By default, censored media is written to `Finished`, transcripts are written to `Transcripts`, and the original remains in `Ready`. Use `--archive-original` to move originals to `Processed` only after verified success.
-
-Inspect or change directories before processing:
+Use the settings CLI only for automation or diagnostics:
 
 ```powershell
 .\.venv\Scripts\python.exe manage_settings.py show
 .\.venv\Scripts\python.exe manage_settings.py set-directories --input 'D:\Media\Ready' --create
-```
-
-Run the backend regression suite with:
-
-```powershell
 .\.venv\Scripts\python.exe -m unittest discover -s tests
 ```
