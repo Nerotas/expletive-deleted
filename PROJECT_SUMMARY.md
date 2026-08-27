@@ -35,6 +35,7 @@ backend/
   jobs/batch.py          Serial folder batch orchestration
   runtime/environment.py Dependency, hardware, cache, and encoder discovery
   runtime/paths.py       Runtime folder ownership
+  settings/              Validated schema, atomic store, and path checks
 
 resources/               Curated censor and exclusion word lists
 scripts/                 Bootstrap and maintenance commands
@@ -49,18 +50,18 @@ setup.py                 Legacy-compatible bootstrap entry point
 
 The root compatibility files remain intentionally thin. New backend code should import from `backend`, not from those wrappers.
 
-## Runtime Folders
+## Persistent Settings
 
-The current CLI uses repository-relative folders:
+Settings default to `%LOCALAPPDATA%\ProfanityCensor\settings\settings.json`. User working directories default to:
 
 ```text
-ready/       Input media
-finished/    Censored output
-processed/   Sources archived after successful CLI processing
-transcripts/ Reusable transcript artifacts
+Documents\Profanity Censor\Ready
+Documents\Profanity Censor\Finished
+Documents\Profanity Censor\Processed
+Documents\Profanity Censor\Transcripts
 ```
 
-These are temporary CLI defaults. The desktop settings layer will later provide the Windows Documents defaults and user-selected paths described in the master handoff.
+All four paths are independently configurable and validated. The batch keeps source media by default; archival is opt-in and occurs only after verified output.
 
 ## Commands
 
@@ -69,7 +70,8 @@ python setup.py --install-system-dependencies
 .\.venv\Scripts\python.exe batch_process.py --list
 .\.venv\Scripts\python.exe batch_process.py
 .\.venv\Scripts\python.exe batch_process.py --report-only
-.\.venv\Scripts\python.exe -m unittest tests.test_runtime
+.\.venv\Scripts\python.exe manage_settings.py show
+.\.venv\Scripts\python.exe -m unittest discover -s tests
 ```
 
 Package entry points are also available for backend development:
@@ -81,9 +83,9 @@ Package entry points are also available for backend development:
 
 ## Next Architecture Milestones
 
-1. Add persistent validated settings and user-directory defaults.
-2. Formalize jobs, statuses, structured events, and cancellation.
-3. Add dependency and capability service operations.
+1. Formalize jobs, statuses, structured events, and cancellation.
+2. Add dependency and capability service operations.
+3. Complete processing-option coverage and regression fixtures.
 4. Add the local authenticated service boundary.
 5. Build the Electron and React Queue and Settings UI.
 

@@ -13,7 +13,7 @@ It checks Python dependencies, runtime folders, FFmpeg, FFprobe, an executable H
 Run the backend regression suite separately:
 
 ```powershell
-.\.venv\Scripts\python.exe -m unittest tests.test_runtime tests.test_diagnostics
+.\.venv\Scripts\python.exe -m unittest discover -s tests
 ```
 
 ## FFmpeg or FFprobe Is Missing
@@ -79,17 +79,17 @@ $env:CENSOR_WHISPER_CACHE_DIR = 'D:\model-cache\whisper'
 
 ## No Files Appear in the Batch
 
-Confirm the active runtime root and supported files:
+Confirm the configured input directory and supported files:
 
 ```powershell
 .\.venv\Scripts\python.exe batch_process.py --list
 ```
 
-The CLI scans only `ready/` under the active `CENSOR_PROJECT_ROOT`. Supported extensions are `.avi`, `.flv`, `.m4a`, `.mkv`, `.mov`, `.mp3`, `.mp4`, `.wav`, `.webm`, and `.wmv`.
+The CLI scans only the configured input directory. Inspect settings with `manage_settings.py show` and validate all paths with `manage_settings.py validate`. Supported extensions are `.avi`, `.flv`, `.m4a`, `.mkv`, `.mov`, `.mp3`, `.mp4`, `.wav`, `.webm`, and `.wmv`.
 
 ## Output Already Exists
 
-The CLI skips an existing file in `finished/` by default. Reprocess deliberately with:
+The CLI skips an existing file in the configured output directory by default. Reprocess deliberately with:
 
 ```powershell
 .\.venv\Scripts\python.exe batch_process.py --overwrite
@@ -105,7 +105,7 @@ Run report-only mode first:
 .\.venv\Scripts\python.exe batch_process.py --report-only
 ```
 
-Review the transcript under `transcripts/`. Add approved terms to `resources/profanity_censor_words.txt`; add false positives to `resources/profanity_exclusions.txt`.
+Review the transcript under the configured Transcripts directory. Add approved terms to `resources/profanity_censor_words.txt`; add false positives to `resources/profanity_exclusions.txt`.
 
 If a surround transcript predates front-center transcription, the backend automatically rejects that cache and transcribes it again.
 
@@ -129,9 +129,9 @@ An override must be reported by the installed FFmpeg build and must successfully
 
 ## Source Safety
 
-The source is never modified in place. The current batch CLI moves a source from `ready/` to `processed/` only after processing succeeds and the expected output exists.
+The source is never modified in place and remains in the input directory by default. `--archive-original` moves it to the configured archive directory only after processing succeeds and the expected output exists. Existing archive destinations are never overwritten.
 
-Failed, skipped, or report-only jobs remain in `ready/`.
+Failed, skipped, report-only, and non-archiving jobs retain their source.
 
 ## Still Failing
 
@@ -139,7 +139,8 @@ Capture these outputs when reporting an issue:
 
 ```powershell
 .\.venv\Scripts\python.exe diagnostics.py
-.\.venv\Scripts\python.exe -m unittest tests.test_runtime tests.test_diagnostics
+.\.venv\Scripts\python.exe manage_settings.py validate
+.\.venv\Scripts\python.exe -m unittest discover -s tests
 ffmpeg -version
 ffprobe -version
 ```

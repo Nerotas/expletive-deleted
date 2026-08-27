@@ -4,11 +4,11 @@ Batch-process audio and video with faster-whisper, identify profane words from w
 
 ## Workflow
 
-1. Put source media in `ready/`.
+1. Put source media in the configured Ready/Input directory.
 2. Run the batch command.
-3. Whisper transcribes the input and stores a reusable transcript in `transcripts/`.
-4. FFmpeg mutes detected profanity and writes the censored result to `finished/`.
-5. The original source is moved to `processed/` only after the expected output file exists.
+3. Whisper transcribes the input and stores a reusable transcript in the configured Transcripts directory.
+4. FFmpeg mutes detected profanity and writes the censored result to the configured Finished/Output directory.
+5. The original remains in place unless archive-after-success is explicitly enabled.
 
 Outputs are skipped when a file with the expected censored name already exists.
 
@@ -21,6 +21,7 @@ backend/censor/engine.py       transcription, detection, and FFmpeg censoring
 backend/jobs/batch.py          serial folder-batch orchestration
 backend/runtime/environment.py dependency, hardware, cache, and encoder discovery
 backend/runtime/paths.py       runtime directory ownership
+backend/settings/              validated models, persistence, and path checks
 resources/                     curated profanity policy files
 scripts/                       bootstrap, diagnostics, and maintenance commands
 tests/                         backend regression tests
@@ -36,7 +37,7 @@ The root Python commands remain as compatibility entry points. New backend code 
 
 The repository bootstrap installs Python packages in a local `.venv`. It can optionally install FFmpeg through a detected package manager.
 
-The workflow is intended to stay as self-contained as practical: runtime folders, transcripts, and the default Whisper model cache all live under the repository root unless you explicitly override them.
+User media and transcripts default to `Documents\Profanity Censor`. Internal settings use the operating system's application-data location; the current development model cache remains under the repository unless overridden.
 
 ## Setup
 
@@ -46,7 +47,18 @@ From the repository root:
 python setup.py --install-system-dependencies
 ```
 
-The command creates `.venv` plus `ready/`, `finished/`, `processed/`, and `transcripts/`, then installs dependencies from `requirements.txt` into the virtual environment.
+The command creates `.venv`, persists validated settings, creates the four configured working directories, and installs dependencies from `requirements.txt` into the virtual environment.
+
+Windows defaults:
+
+```text
+%USERPROFILE%\Documents\Profanity Censor\Ready
+%USERPROFILE%\Documents\Profanity Censor\Finished
+%USERPROFILE%\Documents\Profanity Censor\Processed
+%USERPROFILE%\Documents\Profanity Censor\Transcripts
+```
+
+Settings are stored at `%LOCALAPPDATA%\ProfanityCensor\settings\settings.json` by default.
 
 Setup also creates a repository-local Whisper cache at `whisper-cache/` by default and prints both the active cache path and current cache size. If Whisper models were previously downloaded to the user cache outside the repo, setup points you to the cache migration helper.
 
@@ -85,14 +97,14 @@ On macOS or Linux:
 A successful check ends with:
 
 ```text
-Ready. Place media in ready/ and run: python batch_process.py
+Ready. Place media in the configured input directory and run: python batch_process.py
 ```
 
 Diagnostics verifies the working folders, Python packages, FFmpeg/FFprobe, selected H.264 encoder, and available disk space.
 
 ## Batch Processing
 
-Place supported media in `ready/`, then run:
+Place supported media in the configured input directory, then run:
 
 ```powershell
 .\.venv\Scripts\python.exe batch_process.py
@@ -106,7 +118,7 @@ List files without changing anything:
 .\.venv\Scripts\python.exe batch_process.py --list
 ```
 
-Review potentially profane words without creating output files or moving any media from `ready/`:
+Review potentially profane words without creating output files or moving source media:
 
 ```powershell
 .\.venv\Scripts\python.exe batch_process.py --report-only
@@ -126,6 +138,9 @@ The default censor run uses [resources/profanity_censor_words.txt](resources/pro
 
 # Combine both for a full reprocess using the broad vocabulary.
 .\.venv\Scripts\python.exe batch_process.py --overwrite --include-undiscovered
+
+# Archive originals only after verified successful output.
+.\.venv\Scripts\python.exe batch_process.py --archive-original
 ```
 
 Use `--report-only` first to review these undiscovered words before enabling broad-vocabulary censoring.
@@ -188,7 +203,7 @@ If a hardware encoder is detected but fails while processing, the workflow retri
 
 Whisper selects a profile automatically on each machine through its CTranslate2 backend. It queries CUDA availability, supported compute types, and NVIDIA GPU memory before each run. CPU-only systems use `int8`; supported GPUs use the best available compute type, such as `float16` or `int8_float32`. Whisper `large-v3` requires at least 8 GB of GPU memory. When the GPU is insufficient, the workflow safely uses CPU `int8` rather than lowering the model quality.
 
-`setup.py` installs the dependencies and prints the default `large` model profile detected through the new virtual environment. The same auto-detection runs again at batch time, so moving the repository to another workstation does not retain machine-specific settings.
+`setup.py` installs dependencies and prints the `large-v3` profile detected through the new virtual environment. The persisted device preference is evaluated against each machine at batch time.
 
 After each completed transcription, the workflow records its throughput in a local ignored `.whisper-timing.json` file. Future preflight estimates use the median of the five most recent matching `large-v3` hardware-profile runs for that workstation. Until a matching run completes, the estimate is explicitly labeled as conservative; the live `[TX]` ETA uses the current file's observed progress.
 
@@ -206,7 +221,18 @@ An encoder override must be listed by `ffmpeg -encoders` or processing fails cle
 
 ## Configuration
 
-An optional local `config.ini` can override runtime preferences; [config.example.ini](config.example.ini) documents the supported values. Runtime folder locations currently default to the repository root; use `CENSOR_PROJECT_ROOT` to run the workflow against another root directory:
+Application settings use a versioned JSON schema and atomic writes. Inspect, initialize, validate, or update working directories without a frontend:
+
+```powershell
+.\.venv\Scripts\python.exe manage_settings.py show
+.\.venv\Scripts\python.exe manage_settings.py init
+.\.venv\Scripts\python.exe manage_settings.py validate
+.\.venv\Scripts\python.exe manage_settings.py set-directories --input 'D:\Media\Ready' --create
+```
+
+Each directory can be set independently with `--input`, `--output`, `--archive`, and `--transcripts`. Duplicate, relative, malformed, inaccessible, and non-directory paths are rejected.
+
+`CENSOR_PROJECT_ROOT` remains a compatibility override for the four legacy repository-style folders. It overrides only directories for the current process; other persisted settings remain active:
 
 ```powershell
 $env:CENSOR_PROJECT_ROOT = 'D:\media-censor-workflow'
@@ -221,6 +247,8 @@ $env:CENSOR_WHISPER_CACHE_DIR = 'D:\model-cache\whisper'
 ```
 
 Under `[Whisper]`, `Device = auto` and `ComputeType = auto` are the portable defaults. They are evaluated on each machine. `CENSOR_WHISPER_DEVICE` and `CENSOR_WHISPER_COMPUTE_TYPE` take precedence for a single run or a locally managed workstation policy.
+
+Processing defaults currently applied by batch are mode, device, stereo censor method, and source archival. CLI flags such as `--report-only`, `--censor-media`, `--censor-method`, `--archive-original`, and `--keep-original` override them for one run.
 
 The workflow uses the curated inclusion list in [resources/profanity_censor_words.txt](resources/profanity_censor_words.txt), not `better-profanity`'s much broader built-in dictionary. Add only words that should produce censored audio, one per line. Blank lines and text after `#` are ignored. The optional `CensorWordsFile` setting under `[Profanity]` can replace the default.
 
@@ -243,14 +271,14 @@ To inspect, migrate, or clean Whisper model caches:
 
 ## Tests
 
-Run the runtime unit tests without FFmpeg, media files, or GPU hardware:
+Run the complete backend test suite without processing real media:
 
 ```powershell
-.\.venv\Scripts\python.exe -m unittest tests.test_runtime
+.\.venv\Scripts\python.exe -m unittest discover -s tests
 ```
 
 ## Notes
 
-- The first transcription downloads the requested Whisper model. `large` is substantially slower and larger than `base`.
+- The first transcription downloads `large-v3` when it is not already cached.
 - Review censored output before distributing it. Whisper timestamps and profanity detection can require tuning for difficult audio.
-- `ready/`, `finished/`, `processed/`, `transcripts/`, `whisper-cache/`, `.venv/`, and Python bytecode caches are intentionally excluded from Git.
+- Repository-relative `ready/`, `finished/`, `processed/`, and `transcripts/` remain ignored for `CENSOR_PROJECT_ROOT` compatibility.
