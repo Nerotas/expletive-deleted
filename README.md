@@ -1,16 +1,20 @@
 # Profanity Censor
 
-Batch-process audio and video with faster-whisper, identify profane words from word-level timestamps, and mute those audio intervals with FFmpeg. The workflow is designed to be portable across Windows, macOS, Linux, and WSL, with hardware encoding selected when available.
+Profanity Censor transcribes audio and video locally with faster-whisper, identifies configured profanity from word-level timestamps, and censors those intervals with FFmpeg. Phase 5 and 6 provide a runnable Python application service and CLI; the Electron interface begins in Phase 7.
+
+Windows is the current application target. The processing engine remains portable, but macOS and Linux packaging are future work.
+
+See [QUICKSTART.md](QUICKSTART.md) for the condensed command sequence and [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for common setup failures.
 
 ## Workflow
 
 1. Put source media in the configured Ready/Input directory.
-2. Run the batch command.
+2. Run a report-only or censor job through the local application service.
 3. Whisper transcribes the input and stores a reusable transcript in the configured Transcripts directory.
-4. FFmpeg mutes detected profanity and writes the censored result to the configured Finished/Output directory.
+4. FFmpeg applies the selected censor method and writes the result to the configured Finished/Output directory.
 5. The original remains in place unless archive-after-success is explicitly enabled.
 
-Outputs are skipped when a file with the expected censored name already exists.
+Outputs are never overwritten silently. Application-service jobs fail clearly on a conflict; compatibility batch runs skip the file unless overwrite is explicitly enabled.
 
 ## Repository Layout
 
@@ -18,13 +22,15 @@ The working Python implementation now lives under `backend/`:
 
 ```text
 backend/censor/engine.py       transcription, detection, and FFmpeg censoring
-backend/jobs/batch.py          serial folder-batch orchestration
+backend/jobs/                  serial job manager, events, records, and batch compatibility
 backend/runtime/environment.py dependency, hardware, cache, and encoder discovery
 backend/runtime/paths.py       runtime directory ownership
 backend/settings/              validated models, persistence, and path checks
+backend/service/               settings, library, capabilities, and application boundary
 resources/                     curated profanity policy files
 scripts/                       bootstrap, diagnostics, and maintenance commands
 tests/                         backend regression tests
+backend_app.py                 local Phase 5+6 application-service entry point
 ```
 
 The root Python commands remain as compatibility entry points. New backend code should import package modules directly.
@@ -35,19 +41,39 @@ The root Python commands remain as compatibility entry points. New backend code 
 - FFmpeg and FFprobe
 - Disk space for source media, output media, and Whisper model downloads
 
-The repository bootstrap installs Python packages in a local `.venv`. It can optionally install FFmpeg through a detected package manager.
+The repository bootstrap installs Python packages in a local `.venv`. FFmpeg and the Whisper model follow the reviewed dependency-plan workflow described below.
 
 User media and transcripts default to `Documents\Profanity Censor`. Internal settings use the operating system's application-data location; the current development model cache remains under the repository unless overridden.
 
-## Setup
+## Prepare the Application
 
 From the repository root:
 
 ```powershell
-python setup.py --install-system-dependencies
+python setup.py
 ```
 
 The command creates `.venv`, persists validated settings, creates the four configured working directories, and installs dependencies from `requirements.txt` into the virtual environment.
+
+Inspect application prerequisites without installing or downloading anything:
+
+```powershell
+.\.venv\Scripts\python.exe manage_dependencies.py status
+```
+
+Missing components are installed only through an inspectable plan. For example, review the pinned `large-v3` model source, revision, estimated download size, and command:
+
+```powershell
+.\.venv\Scripts\python.exe manage_dependencies.py plan --component whisper_model
+```
+
+After reviewing the plan, replace `PLAN_ID` with the exact approval ID it prints:
+
+```powershell
+.\.venv\Scripts\python.exe manage_dependencies.py install --component whisper_model --approve PLAN_ID
+```
+
+Use the same `plan` then `install --approve` flow with `--component ffmpeg` or `--component python` when either is reported missing. Nothing is retrieved silently.
 
 Windows defaults:
 
@@ -62,20 +88,11 @@ Settings are stored at `%LOCALAPPDATA%\ProfanityCensor\settings\settings.json` b
 
 Setup also creates a repository-local Whisper cache at `whisper-cache/` by default and prints both the active cache path and current cache size. If Whisper models were previously downloaded to the user cache outside the repo, setup points you to the cache migration helper.
 
-When FFmpeg is missing, `--install-system-dependencies` uses a supported package manager when present:
+When FFmpeg is missing, the approved Windows dependency plan uses WinGet. It can also be installed manually:
 
 ```powershell
 # Windows: winget, including the WindowsApps alias when it is not on PATH
 winget install --id Gyan.FFmpeg.Shared -e
-
-# Windows: Chocolatey fallback
-choco install ffmpeg -y
-
-# macOS: Homebrew
-brew install ffmpeg
-
-# Ubuntu/Debian: run manually because sudo is not automated
-sudo apt install ffmpeg
 ```
 
 On Windows, start a new PowerShell session after an FFmpeg install if commands are not yet available from `PATH`. The runtime also recognizes winget-managed FFmpeg aliases directly.
@@ -86,6 +103,7 @@ Run this non-destructive diagnostic check:
 
 ```powershell
 .\.venv\Scripts\python.exe diagnostics.py
+.\.venv\Scripts\python.exe backend_app.py capabilities
 ```
 
 On macOS or Linux:
@@ -94,15 +112,68 @@ On macOS or Linux:
 .venv/bin/python diagnostics.py
 ```
 
-A successful check ends with:
+A ready machine reports FFmpeg, FFprobe, Python dependencies, and `model_large_v3` as available. Diagnostics also verifies working folders, the selected H.264 encoder, and disk space.
 
-```text
-Ready. Place media in the configured input directory and run: python batch_process.py
+## Configure the Application
+
+Inspect the effective settings:
+
+```powershell
+.\.venv\Scripts\python.exe backend_app.py settings
 ```
 
-Diagnostics verifies the working folders, Python packages, FFmpeg/FFprobe, selected H.264 encoder, and available disk space.
+Configure all Phase 6 processing preferences through validated commands rather than editing JSON:
 
-## Batch Processing
+```powershell
+# Safe first pass: transcribe and report without creating media output.
+.\.venv\Scripts\python.exe manage_settings.py set-options --mode report_only
+
+# Example censor configuration.
+.\.venv\Scripts\python.exe manage_settings.py set-options --mode censor --device auto --stereo-method drop_audio --padding-before-ms 150 --padding-after-ms 150 --surround-output preserve_5_1 --video-mode h264 --keep-original
+```
+
+Supported alternatives include `karaoke`, `downmix_stereo`, `preserve_source`, and devices `cpu` or `cuda`. Archiving is off by default; `--archive-after-success` moves a source to `Processed` only after verified success.
+
+Change any working directory independently when needed:
+
+```powershell
+.\.venv\Scripts\python.exe manage_settings.py set-directories --input 'D:\Media\Ready' --output 'D:\Media\Finished' --create
+```
+
+## Use the Local Application
+
+Place a supported file in the configured `Ready` directory and inspect the Queue-equivalent library snapshot:
+
+```powershell
+.\.venv\Scripts\python.exe backend_app.py library
+```
+
+Start with report-only processing:
+
+```powershell
+.\.venv\Scripts\python.exe backend_app.py process "$env:USERPROFILE\Documents\Profanity Censor\Ready\Movie.mkv" --mode report_only
+```
+
+After reviewing the transcript and detections, create censored output:
+
+```powershell
+.\.venv\Scripts\python.exe backend_app.py process "$env:USERPROFILE\Documents\Profanity Censor\Ready\Movie.mkv" --mode censor
+```
+
+The command returns the final job record and structured stage, progress, detection, completion, or error events. Jobs run serially. Press `Ctrl+C` to request cancellation; incomplete output is removed and the source remains untouched.
+
+Artifacts are written to:
+
+```text
+Ready        source media, retained by default
+Transcripts  reusable transcript and detection data
+Finished     completed censored media
+Processed    originals archived only after successful output when enabled
+```
+
+If the expected output already exists, the application-service job fails clearly instead of overwriting it. The compatibility batch command skips it unless `--overwrite` is explicitly supplied.
+
+## Compatibility Batch Processing
 
 Place supported media in the configured input directory, then run:
 
@@ -157,7 +228,7 @@ Instead of a hard silence, the karaoke method subtracts the right channel from t
 
 The technique relies on dialogue being centre-panned. Its effectiveness varies by mix: some audio will be attenuated rather than fully removed. If the source audio is mono, the method has no effect and the workflow automatically falls back to mute with a warning.
 
-Recognized `5.1`, `5.1(side)`, `7.1`, `7.1(wide)`, and `7.1(wide-side)` sources are handled automatically, regardless of `--censor-method`. Whisper transcribes only the discrete front-center channel. During each flagged interval, FFmpeg drops that channel while preserving the other surround channels, then downmixes the result to two-channel stereo during the final transcode. Existing surround transcript caches created from a full mix are regenerated once and tagged for safe reuse.
+Recognized `5.1`, `5.1(side)`, `7.1`, `7.1(wide)`, and `7.1(wide-side)` sources are handled automatically, regardless of stereo censor method. Whisper transcribes only the discrete front-center channel. During each flagged interval, FFmpeg drops that channel while preserving the other surround channels. The configured output either preserves surround or downmixes the censored result to stereo; censorship always occurs before downmixing. Existing surround transcript caches created from a full mix are regenerated once and tagged for safe reuse.
 
 Windows also has a convenience wrapper:
 
@@ -248,7 +319,7 @@ $env:CENSOR_WHISPER_CACHE_DIR = 'D:\model-cache\whisper'
 
 Under `[Whisper]`, `Device = auto` and `ComputeType = auto` are the portable defaults. They are evaluated on each machine. `CENSOR_WHISPER_DEVICE` and `CENSOR_WHISPER_COMPUTE_TYPE` take precedence for a single run or a locally managed workstation policy.
 
-Processing defaults currently applied by batch are mode, device, stereo censor method, and source archival. CLI flags such as `--report-only`, `--censor-media`, `--censor-method`, `--archive-original`, and `--keep-original` override them for one run.
+The application service and batch workflow apply processing mode, device, stereo censor method, before/after padding, surround output, video output, and source archival settings. Batch CLI flags such as `--report-only`, `--censor-media`, `--censor-method`, `--archive-original`, and `--keep-original` override their matching settings for one run.
 
 The workflow uses the curated inclusion list in [resources/profanity_censor_words.txt](resources/profanity_censor_words.txt), not `better-profanity`'s much broader built-in dictionary. Add only words that should produce censored audio, one per line. Blank lines and text after `#` are ignored. The optional `CensorWordsFile` setting under `[Profanity]` can replace the default.
 
@@ -279,6 +350,6 @@ Run the complete backend test suite without processing real media:
 
 ## Notes
 
-- The first transcription downloads `large-v3` when it is not already cached.
+- Processing never downloads `large-v3` implicitly. Review and approve its dependency plan before the first transcription.
 - Review censored output before distributing it. Whisper timestamps and profanity detection can require tuning for difficult audio.
 - Repository-relative `ready/`, `finished/`, `processed/`, and `transcripts/` remain ignored for `CENSOR_PROJECT_ROOT` compatibility.
