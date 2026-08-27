@@ -1,6 +1,7 @@
 # Workflow Folders (batch processing)
 /processed
 /ready
+/finished
 /transcoded
 /transcripts
 
@@ -81,6 +82,4 @@ config.ini
 # Build/Output Cache
 output.log
 error-output.txt
-diagnostics.py
 /staging
-/docs
