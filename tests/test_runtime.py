@@ -414,8 +414,12 @@ class RuntimeTests(unittest.TestCase):
 
             with patch.dict(os.environ, {"LOCALAPPDATA": temporary_directory}, clear=False):
                 with patch("backend.runtime.environment.shutil.which", return_value=None):
-                    self.assertEqual(find_ffmpeg(), str(package_root / "ffmpeg.exe"))
-                    self.assertEqual(find_ffprobe(), str(package_root / "ffprobe.exe"))
+                    with patch(
+                        "backend.runtime.environment.subprocess.run",
+                        return_value=MagicMock(returncode=0, stdout="ffmpeg version 9.0.1", stderr=""),
+                    ):
+                        self.assertEqual(find_ffmpeg(), str(package_root / "ffmpeg.exe"))
+                        self.assertEqual(find_ffprobe(), str(package_root / "ffprobe.exe"))
 
     def test_ensure_executable_directory_on_path_prepends_once(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

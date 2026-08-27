@@ -266,12 +266,30 @@ def format_bytes(total_bytes: int) -> str:
 
 
 def _find_executable(name: str, environment_variable: str) -> str | None:
+    """Find an executable only when it can actually return its version.
+
+    Windows command aliases can be present on disk but fail to launch a usable
+    program in a child process, so existence alone is not sufficient here.
+    """
+    def usable(candidate: Path | str | None) -> str | None:
+        if not candidate or not Path(candidate).is_file():
+            return None
+        candidate_path = str(candidate)
+        try:
+            result = subprocess.run(
+                [candidate_path, "-version"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+        return candidate_path if result.returncode == 0 and (result.stdout or result.stderr).strip() else None
+
     configured_path = os.environ.get(environment_variable)
     if configured_path:
-        candidate = Path(configured_path).expanduser()
-        if candidate.is_file():
-            return str(candidate)
-        return None
+        return usable(Path(configured_path).expanduser())
     if os.name == "nt":
         local_app_data = os.environ.get("LOCALAPPDATA")
         if local_app_data:
@@ -282,34 +300,41 @@ def _find_executable(name: str, environment_variable: str) -> str | None:
                     key=lambda candidate: str(candidate).casefold(),
                     reverse=True,
                 )
-                if candidates:
-                    return str(candidates[0])
+                for candidate in candidates:
+                    if resolved := usable(candidate):
+                        return resolved
 
             winget_alias = Path(local_app_data) / "Microsoft" / "WinGet" / "Links" / f"{name}.exe"
-            if winget_alias.is_file():
-                return str(winget_alias)
+            if resolved := usable(winget_alias):
+                return resolved
 
     path_executable = shutil.which(name)
-    if path_executable:
-        return path_executable
+    if resolved := usable(path_executable):
+        return resolved
 
     if os.name == "nt":
         local_app_data = os.environ.get("LOCALAPPDATA")
         if local_app_data:
             windows_apps_alias = Path(local_app_data) / "Microsoft" / "WindowsApps" / f"{name}.exe"
-            if windows_apps_alias.is_file():
-                return str(windows_apps_alias)
+            if resolved := usable(windows_apps_alias):
+                return resolved
     return None
 
 
 def find_ffmpeg() -> str | None:
-    """Find FFmpeg from CENSOR_FFMPEG or PATH."""
-    return _find_executable("ffmpeg", "CENSOR_FFMPEG") or get_managed_ffmpeg_paths()[0]
+    """Find configured or app-managed FFmpeg before falling back to the system."""
+    configured = os.environ.get("CENSOR_FFMPEG")
+    if configured:
+        return _find_executable("ffmpeg", "CENSOR_FFMPEG")
+    return get_managed_ffmpeg_paths()[0] or _find_executable("ffmpeg", "CENSOR_FFMPEG")
 
 
 def find_ffprobe() -> str | None:
-    """Find FFprobe from CENSOR_FFPROBE or PATH."""
-    return _find_executable("ffprobe", "CENSOR_FFPROBE") or get_managed_ffmpeg_paths()[1]
+    """Find configured or app-managed FFprobe before falling back to the system."""
+    configured = os.environ.get("CENSOR_FFPROBE")
+    if configured:
+        return _find_executable("ffprobe", "CENSOR_FFPROBE")
+    return get_managed_ffmpeg_paths()[1] or _find_executable("ffprobe", "CENSOR_FFPROBE")
 
 
 def ensure_executable_directory_on_path(executable_path: str | None) -> None:

@@ -4,6 +4,7 @@
 /finished
 /transcoded
 /transcripts
+/tmp
 
 # Python Environment
 .venv/
@@ -83,6 +84,7 @@ config.ini
 # FFmpeg Temp (if any)
 *.wav
 *.tmp.mp4
+ffmpeg-runtime.json
 
 # Audio & Video Media
 *.aac

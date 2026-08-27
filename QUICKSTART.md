@@ -2,14 +2,20 @@
 
 Profanity Censor has two ways to work:
 
-- **Desktop application (recommended):** start the Electron app first and use its setup screen to review, approve, install, and verify required components.
+- **Desktop application (recommended):** start Electron only. It starts the private Python processing bridge automatically and stops it when the app closes; use its setup screen to review, approve, install, and verify required components.
 - **Backend and command line (advanced):** use the Python commands for development, automation, diagnostics, or a headless workflow.
 
-Normal users should follow the desktop application workflow. It does not require running the backend commands by hand.
+Normal users should follow the desktop application workflow. Do not start `backend_app.py` or `scripts/desktop_bridge.py` in a second terminal when using the desktop app.
 
 ## Desktop application (recommended)
 
-From the repository root, start the desktop application:
+For a source checkout, create the local Python environment once from the repository root:
+
+```powershell
+python setup.py
+```
+
+Then start the desktop application:
 
 ```powershell
 cd frontend
@@ -17,7 +23,7 @@ npm install
 npm run dev
 ```
 
-`npm run dev` opens the native Electron window. Vite is only used to build and hot-reload the Electron renderer; this is not a browser-hosted application.
+`npm run dev` opens the native Electron window and launches the local Python bridge as its child process. Vite is only used to build and hot-reload the Electron renderer; this is not a browser-hosted application. You start one command, not two.
 
 ### Complete first-run setup in the app
 
@@ -27,7 +33,7 @@ The first launch checks the local system for:
 - Python speech-recognition dependencies
 - Whisper `large-v3`
 
-If anything is missing, the **Finish local setup** panel shows the affected component. Select **Review download**, inspect the source and expected download, then choose **Approve and install**. The app installs nothing until the user approves that specific plan and verifies readiness afterward.
+If anything is missing, the **Finish local setup** panel shows the affected component. Select **Install** and the app installs and verifies it. The underlying dependency plan remains internal so the same tested, pinned components are used by the desktop app and CLI.
 
 Whisper `large-v3` is required for reliable word-level censor timing. Smaller models are not supported for this workflow.
 

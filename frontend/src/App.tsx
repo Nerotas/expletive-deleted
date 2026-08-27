@@ -26,7 +26,7 @@ type Settings = {
   source: { archive_after_success: boolean }
   runtime: { ffmpeg_path: string | null; ffprobe_path: string | null; whisper_cache: string | null }
 }
-type InstallPlan = { plan_id: string; actions: Array<{ id: string; description: string; source_name: string; source_url: string; estimated_download_bytes: number | null }> }
+type InstallPlan = { plan_id: string }
 
 const invoke = <T,>(method: Parameters<typeof window.profanityCensor.invoke>[0], params?: Record<string, unknown>) => window.profanityCensor.invoke<T>(method, params)
 const fileName = (path: string) => path.split(/[\\/]/).pop() ?? path
@@ -46,7 +46,6 @@ function App() {
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [installPlan, setInstallPlan] = useState<InstallPlan | null>(null)
 
   const refresh = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true)
@@ -92,11 +91,12 @@ function App() {
     const active = jobs.find((job) => !['completed', 'failed', 'cancelled', 'transcribed'].includes(job.status)); if (!active) return
     await run(async () => { await invoke<Job>('jobs.cancel', { job_id: active.id }); setNotice('Cancellation requested') })
   }
-  const reviewPlan = async (components: string[]) => run(async () => setInstallPlan(await invoke<InstallPlan>('dependencies.plan', { components })))
-  const approveModelPlan = async () => {
-    if (!installPlan) return
-    await run(async () => { await invoke('dependencies.install', { plan_id: installPlan.plan_id }); setInstallPlan(null); setCapabilities(await invoke<Capabilities>('capabilities.get')); setNotice('Installation complete and verified') })
-  }
+  const installRequired = async (components: string[]) => run(async () => {
+    const plan = await invoke<InstallPlan>('dependencies.plan', { components })
+    await invoke('dependencies.install', { plan_id: plan.plan_id })
+    setCapabilities(await invoke<Capabilities>('capabilities.get'))
+    setNotice('Installation complete and verified')
+  })
   const chooseDirectory = async (key: keyof Settings['directories']) => {
     if (!settings) return
     const selected = await window.profanityCensor.selectDirectory(settings.directories[key])
@@ -123,8 +123,7 @@ function App() {
     <main>
       {error && <div className="alert error"><AlertCircle size={18} /><span>{error}</span><button onClick={() => setError(null)}>Dismiss</button></div>}
       {notice && <div className="alert success"><Check size={18} /><span>{notice}</span><button onClick={() => setNotice(null)}>Dismiss</button></div>}
-      {!loading && capabilities && !capabilities.ready && <section className="setup-band"><div><span className="eyebrow">Required component</span><h2>Finish local setup</h2><p>Processing stays on this computer. Review each source before anything is downloaded.</p></div><div className="setup-items"><SetupItem label="FFmpeg + FFprobe" ready={capabilities.ffmpeg && capabilities.ffprobe} action={!(capabilities.ffmpeg && capabilities.ffprobe) ? () => reviewPlan(['ffmpeg']) : undefined} /><SetupItem label="Speech recognition" ready={capabilities.whisper} action={!capabilities.whisper ? () => reviewPlan(['python']) : undefined} /><SetupItem label="Whisper large-v3" ready={capabilities.model_large_v3} action={!capabilities.model_large_v3 ? () => reviewPlan(['whisper_model']) : undefined} /></div></section>}
-      {installPlan && <InstallDialog plan={installPlan} busy={busy} onCancel={() => setInstallPlan(null)} onApprove={approveModelPlan} />}
+      {!loading && capabilities && !capabilities.ready && <section className="setup-band"><div><span className="eyebrow">Required component</span><h2>Finish local setup</h2><p>Processing stays on this computer. Install missing components here, then the app verifies them automatically.</p></div><div className="setup-items"><SetupItem label="FFmpeg + FFprobe" ready={capabilities.ffmpeg && capabilities.ffprobe} action={!(capabilities.ffmpeg && capabilities.ffprobe) ? () => installRequired(['ffmpeg']) : undefined} /><SetupItem label="Speech recognition" ready={capabilities.whisper} action={!capabilities.whisper ? () => installRequired(['python']) : undefined} /><SetupItem label="Whisper large-v3" ready={capabilities.model_large_v3} action={!capabilities.model_large_v3 ? () => installRequired(['whisper_model']) : undefined} /></div></section>}
       {page === 'queue' ? <section className="page queue-page">
         <PageHeading title="Queue" subtitle={`${library.length} supported ${library.length === 1 ? 'file' : 'files'} in Ready`}><button className="icon-button" title="Refresh queue" onClick={() => void refresh()}><RefreshCw size={18} /></button>{activeJob && <button className="button danger" onClick={cancelActive}><CircleStop size={17} />Cancel</button>}<button className="button primary" disabled={busy || !capabilities?.ready || library.every((item) => item.status === 'finished')} onClick={startBatch}><Play size={17} />Start batch</button></PageHeading>
         <div className="queue-summary"><Metric label="Ready" value={mergedRows.filter(({ item, job }) => !job && item.status === 'ready').length} tone="neutral" /><Metric label="Active" value={activeJob ? 1 : 0} tone="active" /><Metric label="Transcribed" value={mergedRows.filter(({ item, job }) => (job?.status ?? item.status) === 'transcribed').length} tone="warning" /><Metric label="Finished" value={mergedRows.filter(({ item, job }) => ['finished', 'completed'].includes(job?.status ?? item.status)).length} tone="success" /></div>
@@ -137,8 +136,7 @@ function App() {
 }
 
 function PageHeading({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) { return <div className="page-heading"><div><span className="eyebrow">Workspace</span><h1>{title}</h1><p>{subtitle}</p></div><div className="heading-actions">{children}</div></div> }
-function SetupItem({ label, ready, action }: { label: string; ready: boolean; action?: () => void }) { return <div className="setup-item">{ready ? <Check size={17} /> : <AlertCircle size={17} />}<span>{label}</span><strong>{ready ? 'Ready' : 'Missing'}</strong>{action && <button onClick={action}>Review download</button>}</div> }
-function InstallDialog({ plan, busy, onCancel, onApprove }: { plan: InstallPlan; busy: boolean; onCancel: () => void; onApprove: () => void }) { return <div className="modal-backdrop"><section className="modal" role="dialog" aria-modal="true" aria-labelledby="install-title"><span className="eyebrow">Review required</span><h2 id="install-title">Install required component</h2><p>Review every download and command before approving this plan.</p><dl>{plan.actions.map((action) => <div key={action.id}><dt>{action.description}</dt><dd>{action.source_name}{action.estimated_download_bytes ? ` · ${(action.estimated_download_bytes / 1024 ** 3).toFixed(1)} GB estimated` : ''}</dd></div>)}<div><dt>Approval ID</dt><dd><code>{plan.plan_id}</code></dd></div></dl><div className="modal-actions"><button className="button secondary" disabled={busy} onClick={onCancel}>Cancel</button><button className="button primary" disabled={busy} onClick={onApprove}>{busy ? <LoaderCircle className="spin" size={17} /> : <ShieldCheck size={17} />}{busy ? 'Installing and verifying' : 'Approve and install'}</button></div></section></div> }
+function SetupItem({ label, ready, action }: { label: string; ready: boolean; action?: () => void }) { return <div className="setup-item">{ready ? <Check size={17} /> : <AlertCircle size={17} />}<span>{label}</span><strong>{ready ? 'Ready' : 'Missing'}</strong>{action && <button onClick={action}>Install</button>}</div> }
 function Metric({ label, value, tone }: { label: string; value: number; tone: string }) { return <div className={`metric ${tone}`}><span>{label}</span><strong>{value}</strong></div> }
 function StatusBadge({ status }: { status: LibraryStatus | JobStatus }) { return <span className={`status-badge status-${status}`}>{['transcribing', 'censoring', 'verifying'].includes(status) && <LoaderCircle className="spin" size={13} />}{statusLabel(status)}</span> }
 

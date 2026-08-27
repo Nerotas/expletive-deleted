@@ -12,8 +12,6 @@ from pathlib import Path
 from threading import Event
 from typing import Callable, List, Dict
 
-from faster_whisper import WhisperModel
-from better_profanity import profanity
 from backend.runtime import (
     available_encoders,
     find_ffmpeg,
@@ -30,6 +28,13 @@ from backend.runtime import (
     select_working_video_encoder,
     require_whisper_model,
 )
+
+
+def _profanity_dictionary():
+    """Load the optional detection library only when detection is requested."""
+    from better_profanity import profanity
+
+    return profanity
 
 
 def probe_audio_stream(ffprobe_bin: str, input_file: str) -> tuple[int, str]:
@@ -89,6 +94,7 @@ def find_review_candidates(
     exclude_words: set[str],
 ) -> List[Dict]:
     """Find vendor-list matches that a user has not yet classified as censor or ignore."""
+    profanity = _profanity_dictionary()
     candidates = []
     profanity.load_censor_words()
     try:
@@ -262,9 +268,10 @@ class ProfanityCensor:
             self.encoders,
             os.environ.get("CENSOR_VIDEO_ENCODER"),
         )
+        self.profanity = _profanity_dictionary()
         self.censor_words_file = get_profanity_censor_words_file()
         self.censor_words = load_profanity_censor_words(self.censor_words_file)
-        profanity.load_censor_words(list(self.censor_words))
+        self.profanity.load_censor_words(list(self.censor_words))
         self.exclusions_file = get_profanity_exclusions_file()
         self.exclude_words = load_profanity_exclusions(self.exclusions_file)
         self.review_candidates: list[dict] = []
@@ -379,6 +386,8 @@ class ProfanityCensor:
         return get_whisper_device_status(self.model_name).selected
 
     def _load_whisper_model(self):
+        from faster_whisper import WhisperModel
+
         status = get_whisper_device_status(self.model_name)
         preferred_device = status.selected
         print(f"[*] Whisper profile: {preferred_device} ({status.compute_type}); {status.detail}")
@@ -607,7 +616,7 @@ class ProfanityCensor:
 
         profane_words = []
         if include_undiscovered:
-            profanity.load_censor_words()
+            self.profanity.load_censor_words()
 
         try:
             for word_obj in words_data['words']:
@@ -617,7 +626,7 @@ class ProfanityCensor:
                 if word_lower in self.exclude_words:
                     continue
 
-                if profanity.contains_profanity(word_lower):
+                if self.profanity.contains_profanity(word_lower):
                     detection = {
                         'word': word,
                         'start': word_obj['start'],
@@ -627,7 +636,7 @@ class ProfanityCensor:
                     self._emit_detection(word, detection['start'], detection['end'])
         finally:
             if include_undiscovered:
-                profanity.load_censor_words(list(self.censor_words))
+                self.profanity.load_censor_words(list(self.censor_words))
 
         self.profane_count = len(profane_words)
         print(f"[+] Found {len(profane_words)} profane word(s)")
