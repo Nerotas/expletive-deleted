@@ -9,7 +9,7 @@ Normal users should follow the desktop application workflow. Do not start `backe
 
 ## Desktop application (recommended)
 
-The desktop source build is tested with Node.js 22 LTS (22.12 or later, but before 23). Confirm it before installing frontend packages:
+The desktop source build requires Node.js 22.12 or later. Confirm it before installing frontend packages:
 
 ```powershell
 node --version
