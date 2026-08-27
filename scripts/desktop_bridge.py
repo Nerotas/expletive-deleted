@@ -142,6 +142,7 @@ class DesktopBridge:
         exclusions_path = get_profanity_exclusions_file()
         words = sorted(load_profanity_censor_words(words_path))
         exclusions = sorted(load_profanity_exclusions(exclusions_path))
+        discovered = self._discovered_words(set(words), set(exclusions))
         return {
             "words_path": str(words_path),
             "words_count": len(words),
@@ -149,7 +150,34 @@ class DesktopBridge:
             "exclusions_path": str(exclusions_path),
             "exclusions_count": len(exclusions),
             "exclusions": exclusions,
+            "discovered_count": len(discovered),
+            "discovered": discovered,
         }
+
+    def _discovered_words(self, censor_words: set[str], exclude_words: set[str]) -> list[str]:
+        transcripts_directory = getattr(
+            getattr(getattr(self.service, "settings", None), "directories", None),
+            "transcripts",
+            None,
+        )
+        if not isinstance(transcripts_directory, (str, Path)):
+            return []
+
+        discovered: set[str] = set()
+        try:
+            transcript_files = Path(transcripts_directory).glob("*-transcript.json")
+            for transcript in transcript_files:
+                try:
+                    words_data = json.loads(transcript.read_text(encoding="utf-8"))
+                    discovered.update(
+                        candidate["word"]
+                        for candidate in find_review_candidates(words_data, censor_words, exclude_words)
+                    )
+                except (OSError, TypeError, ValueError, ImportError):
+                    continue
+        except OSError:
+            return []
+        return sorted(discovered)
 
 
 def serve(

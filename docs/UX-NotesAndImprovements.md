@@ -23,7 +23,11 @@ The beige colors are okay, but I much prefer a light blue scheme to give the app
 Future options: horror theme, comedy theme, etc.
 
 ## Icon
-We need a unique icon/favicon.ico, but we can start with the Prohibited Sign (🛇, U+1F6C7). Ultimately, it would be nice to use symbols ($%!) behind it to indicate the app's primary function.
+
+Complete. The application now has dedicated icon assets in `frontend/src/assets`:
+
+- `profanity-censor-icon.ico` for the Windows desktop application.
+- `profanity-censor-icon.svg` for scalable UI and favicon use.
 
 ## About
 
