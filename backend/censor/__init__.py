@@ -2,6 +2,7 @@
 
 from .engine import (
     ProfanityCensor,
+    find_review_candidates,
     has_discrete_center_channel,
     is_5_1_stream,
     is_7_1_stream,
@@ -12,6 +13,7 @@ from .engine import (
 
 __all__ = [
     "ProfanityCensor",
+    "find_review_candidates",
     "has_discrete_center_channel",
     "is_5_1_stream",
     "is_7_1_stream",

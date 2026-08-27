@@ -1,6 +1,8 @@
 import io
 import json
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from scripts.desktop_bridge import DesktopBridge, serve
@@ -38,6 +40,29 @@ class DesktopBridgeTests(unittest.TestCase):
         self.assertTrue(response["ok"])
         self.assertEqual(response["result"][0]["status"], "ready")
         service.close.assert_called_once()
+
+    def test_review_list_reads_a_saved_transcript_and_excludes_classified_words(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            source = root / "movie.mkv"
+            transcript = root / "movie-transcript.json"
+            transcript.write_text(
+                json.dumps({"words": [{"word": "weirdo", "start": 3.0, "end": 3.4}]}),
+                encoding="utf-8",
+            )
+            service = MagicMock()
+            service.settings.directories.transcripts = root
+            bridge = DesktopBridge(service)
+
+            with (
+                patch("scripts.desktop_bridge.get_profanity_censor_words_file", return_value=root / "words.txt"),
+                patch("scripts.desktop_bridge.get_profanity_exclusions_file", return_value=root / "exclusions.txt"),
+                patch("scripts.desktop_bridge.load_profanity_censor_words", return_value={"fuck"}),
+                patch("scripts.desktop_bridge.load_profanity_exclusions", return_value=set()),
+            ):
+                result = bridge.handle("reviews.list", {"source": str(source)})
+
+        self.assertEqual(result["candidates"], [{"word": "weirdo", "start": 3.0, "end": 3.4}])
 
     def test_protocol_returns_structured_error(self):
         service = MagicMock()

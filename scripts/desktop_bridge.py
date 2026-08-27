@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, TextIO
 
 from backend.runtime import (
+    add_word_to_list,
     build_install_plan,
     execute_install_plan,
     get_profanity_censor_words_file,
@@ -18,7 +19,10 @@ from backend.runtime import (
     get_whisper_cache_dir,
     load_profanity_censor_words,
     load_profanity_exclusions,
+    remove_word_from_list,
 )
+from backend.censor import find_review_candidates
+from backend.jobs.media import transcript_path
 from backend.service import BackendService
 
 
@@ -36,14 +40,42 @@ class DesktopBridge:
         if method == "capabilities.get":
             return self.service.get_capabilities()
         if method == "dictionary.get":
-            words_path = get_profanity_censor_words_file()
-            exclusions_path = get_profanity_exclusions_file()
-            return {
-                "words_path": str(words_path),
-                "words_count": len(load_profanity_censor_words(words_path)),
-                "exclusions_path": str(exclusions_path),
-                "exclusions_count": len(load_profanity_exclusions(exclusions_path)),
-            }
+            return self._dictionary()
+        if method == "dictionary.add":
+            target = params.get("target")
+            word = params.get("word")
+            if target not in ("censor", "exclude") or not isinstance(word, str):
+                raise ValueError("Dictionary updates require a censor/exclude target and a word")
+            path, description = self._dictionary_target(target)
+            _, added = add_word_to_list(path, word, description)
+            result = self._dictionary()
+            result["changed"] = added
+            return result
+        if method == "dictionary.remove":
+            target = params.get("target")
+            word = params.get("word")
+            if target not in ("censor", "exclude") or not isinstance(word, str):
+                raise ValueError("Dictionary updates require a censor/exclude target and a word")
+            path, description = self._dictionary_target(target)
+            _, removed = remove_word_from_list(path, word, description)
+            result = self._dictionary()
+            result["changed"] = removed
+            return result
+        if method == "reviews.list":
+            source = Path(params["source"]).expanduser().resolve()
+            transcript = transcript_path(source, self.service.settings.directories.transcripts)
+            if not transcript.is_file():
+                raise ValueError("No transcript is available for this file. Run Report only first.")
+            try:
+                words_data = json.loads(transcript.read_text(encoding="utf-8"))
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"Transcript could not be read: {transcript}") from exc
+            candidates = find_review_candidates(
+                words_data,
+                load_profanity_censor_words(get_profanity_censor_words_file()),
+                load_profanity_exclusions(get_profanity_exclusions_file()),
+            )
+            return {"source": str(source), "candidates": candidates}
         if method == "dependencies.plan":
             plan = build_install_plan(
                 list(params["components"]),
@@ -98,6 +130,26 @@ class DesktopBridge:
 
     def close(self) -> None:
         self.service.close()
+
+    @staticmethod
+    def _dictionary_target(target: str) -> tuple[Path, str]:
+        if target == "censor":
+            return get_profanity_censor_words_file(), "Profanity censor words"
+        return get_profanity_exclusions_file(), "Profanity exclusions"
+
+    def _dictionary(self) -> dict[str, object]:
+        words_path = get_profanity_censor_words_file()
+        exclusions_path = get_profanity_exclusions_file()
+        words = sorted(load_profanity_censor_words(words_path))
+        exclusions = sorted(load_profanity_exclusions(exclusions_path))
+        return {
+            "words_path": str(words_path),
+            "words_count": len(words),
+            "words": words,
+            "exclusions_path": str(exclusions_path),
+            "exclusions_count": len(exclusions),
+            "exclusions": exclusions,
+        }
 
 
 def serve(

@@ -188,6 +188,47 @@ def load_profanity_censor_words(censor_words_file: Path) -> set[str]:
     return load_word_list(censor_words_file, "Profanity censor words")
 
 
+def normalize_policy_word(value: str) -> str:
+    """Validate one user-entered policy word or phrase for safe file storage."""
+    normalized = " ".join(value.split()).lower()
+    if not normalized:
+        raise ValueError("A profanity word or phrase is required")
+    if len(normalized) > 100:
+        raise ValueError("A profanity word or phrase must be 100 characters or fewer")
+    if "#" in normalized or any(ord(character) < 32 for character in normalized):
+        raise ValueError("A profanity word or phrase cannot contain comments or control characters")
+    return normalized
+
+
+def add_word_to_list(word_list_file: Path, value: str, description: str) -> tuple[set[str], bool]:
+    """Append a normalized entry while preserving the user's existing comments and order."""
+    word = normalize_policy_word(value)
+    words = load_word_list(word_list_file, description)
+    if word in words:
+        return words, False
+    with word_list_file.open("a", encoding="utf-8", newline="\n") as destination:
+        if word_list_file.stat().st_size:
+            destination.write("\n")
+        destination.write(f"{word}\n")
+    return words | {word}, True
+
+
+def remove_word_from_list(word_list_file: Path, value: str, description: str) -> tuple[set[str], bool]:
+    """Remove matching policy entries without rewriting unrelated comments or entries."""
+    word = normalize_policy_word(value)
+    with word_list_file.open(encoding="utf-8-sig", newline="") as source:
+        original_lines = source.read().splitlines(keepends=True)
+    retained_lines = [
+        line for line in original_lines
+        if line.partition("#")[0].strip().lower() != word
+    ]
+    removed = len(retained_lines) != len(original_lines)
+    if removed:
+        with word_list_file.open("w", encoding="utf-8", newline="") as destination:
+            destination.write("".join(retained_lines))
+    return load_word_list(word_list_file, description), removed
+
+
 def get_external_whisper_cache_dir() -> Path:
     default_cache_root = Path(os.getenv("XDG_CACHE_HOME", Path.home() / ".cache")).expanduser()
     return (default_cache_root / "whisper").resolve()

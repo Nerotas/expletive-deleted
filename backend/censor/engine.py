@@ -84,6 +84,33 @@ def transcript_cache_is_compatible(
         return False
 
 
+def find_review_candidates(
+    words_data: Dict,
+    censor_words: set[str],
+    exclude_words: set[str],
+) -> List[Dict]:
+    """Find vendor-list matches that a user has not yet classified as censor or ignore."""
+    candidates = []
+    profanity.load_censor_words()
+    try:
+        for word_obj in words_data.get("words", []):
+            word = str(word_obj.get("word", "")).strip(".,!?;:\"' \t")
+            word_lower = word.lower()
+            if not word or word_lower in censor_words or word_lower in exclude_words:
+                continue
+            if profanity.contains_profanity(word_lower):
+                candidates.append(
+                    {
+                        "word": word_lower,
+                        "start": word_obj.get("start"),
+                        "end": word_obj.get("end"),
+                    }
+                )
+    finally:
+        profanity.load_censor_words(list(censor_words))
+    return candidates
+
+
 def _parse_ffmpeg_time(value: str) -> float:
     """Convert FFmpeg's HH:MM:SS.microseconds progress value to seconds."""
     try:
@@ -614,25 +641,7 @@ class ProfanityCensor:
 
     def find_review_candidates(self, words_data: Dict) -> List[Dict]:
         """Find broad-vocabulary matches not covered by the current policy."""
-        candidates = []
-        profanity.load_censor_words()
-        try:
-            for word_obj in words_data["words"]:
-                word = word_obj["word"].strip(".,!?;:\"' \t")
-                word_lower = word.lower()
-                if not word or word_lower in self.censor_words or word_lower in self.exclude_words:
-                    continue
-                if profanity.contains_profanity(word_lower):
-                    candidates.append(
-                        {
-                            "word": word_lower,
-                            "start": word_obj["start"],
-                            "end": word_obj["end"],
-                        }
-                    )
-        finally:
-            profanity.load_censor_words(list(self.censor_words))
-        return candidates
+        return find_review_candidates(words_data, self.censor_words, self.exclude_words)
 
     def report_potential_profanity(self, words_data: Dict) -> List[Dict]:
         """Print broad-vocabulary matches for policy review without censoring media."""

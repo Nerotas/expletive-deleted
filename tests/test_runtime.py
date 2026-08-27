@@ -17,6 +17,7 @@ from better_profanity import profanity
 from backend.runtime.environment import (
     PROJECT_ROOT,
     available_encoders,
+    add_word_to_list,
     ensure_executable_directory_on_path,
     find_ffmpeg,
     find_ffprobe,
@@ -29,6 +30,7 @@ from backend.runtime.environment import (
     get_runtime_paths,
     load_profanity_censor_words,
     load_profanity_exclusions,
+    remove_word_from_list,
     select_video_encoder,
     select_working_video_encoder,
     require_whisper_model,
@@ -36,6 +38,22 @@ from backend.runtime.environment import (
 
 
 class RuntimeTests(unittest.TestCase):
+    def test_user_policy_edits_preserve_comments_and_validate_entries(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            policy = Path(temporary_directory) / "policy.txt"
+            policy.write_text("# Existing policy\nFirst word\n# Keep this\n", encoding="utf-8")
+
+            words, added = add_word_to_list(policy, "  New   Word  ", "Test policy")
+            after_removal, removed = remove_word_from_list(policy, "first word", "Test policy")
+
+            self.assertTrue(added)
+            self.assertTrue(removed)
+            self.assertEqual(words, {"first word", "new word"})
+            self.assertEqual(after_removal, {"new word"})
+            self.assertIn("# Existing policy", policy.read_text(encoding="utf-8"))
+            with self.assertRaisesRegex(ValueError, "comments"):
+                add_word_to_list(policy, "not # a word", "Test policy")
+
     def test_ffmpeg_progress_process_terminates_on_cancellation(self):
         process = MagicMock()
         process.stdout = iter(["progress=continue\n"])
