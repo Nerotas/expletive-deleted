@@ -47,6 +47,60 @@ def _updated_directories(settings: AppSettings, args: argparse.Namespace) -> App
     return updated
 
 
+def _updated_options(settings: AppSettings, args: argparse.Namespace) -> AppSettings:
+    supplied = {
+        "mode": args.mode,
+        "device": args.device,
+        "stereo_method": args.stereo_method,
+        "padding_before_ms": args.padding_before_ms,
+        "padding_after_ms": args.padding_after_ms,
+        "surround_output": args.surround_output,
+        "video_mode": args.video_mode,
+        "archive_after_success": args.archive_after_success,
+    }
+    if all(value is None for value in supplied.values()):
+        raise SettingsValidationError(["at least one processing option is required"])
+
+    updated = replace(
+        settings,
+        processing=replace(
+            settings.processing,
+            **{
+                name: value
+                for name, value in supplied.items()
+                if name in {"mode", "device"} and value is not None
+            },
+        ),
+        censoring=replace(
+            settings.censoring,
+            **{
+                name: value
+                for name, value in supplied.items()
+                if name in {"stereo_method", "padding_before_ms", "padding_after_ms"}
+                and value is not None
+            },
+        ),
+        audio=replace(
+            settings.audio,
+            **({"surround_output": args.surround_output} if args.surround_output else {}),
+        ),
+        video=replace(
+            settings.video,
+            **({"mode": args.video_mode} if args.video_mode else {}),
+        ),
+        source=replace(
+            settings.source,
+            **(
+                {"archive_after_success": args.archive_after_success}
+                if args.archive_after_success is not None
+                else {}
+            ),
+        ),
+    )
+    updated.validate()
+    return updated
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -67,6 +121,29 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Create and verify all configured directories before saving",
     )
+    set_options = subparsers.add_parser(
+        "set-options",
+        help="Update Phase 6 processing options",
+    )
+    set_options.add_argument("--mode", choices=["report_only", "censor"])
+    set_options.add_argument("--device", choices=["auto", "cpu", "cuda"])
+    set_options.add_argument("--stereo-method", choices=["drop_audio", "karaoke"])
+    set_options.add_argument("--padding-before-ms", type=int)
+    set_options.add_argument("--padding-after-ms", type=int)
+    set_options.add_argument("--surround-output", choices=["preserve_5_1", "downmix_stereo"])
+    set_options.add_argument("--video-mode", choices=["h264", "preserve_source"])
+    archive = set_options.add_mutually_exclusive_group()
+    archive.add_argument(
+        "--archive-after-success",
+        dest="archive_after_success",
+        action="store_true",
+    )
+    archive.add_argument(
+        "--keep-original",
+        dest="archive_after_success",
+        action="store_false",
+    )
+    set_options.set_defaults(archive_after_success=None)
     return parser
 
 
@@ -97,6 +174,11 @@ def main(argv: list[str] | None = None, store: SettingsStore | None = None) -> i
             updated = _updated_directories(settings, args)
             if args.create:
                 ensure_directories(updated.directories)
+            store.save(updated)
+            print(f"Settings updated: {store.path}")
+            return 0
+        if args.command == "set-options":
+            updated = _updated_options(settings, args)
             store.save(updated)
             print(f"Settings updated: {store.path}")
             return 0

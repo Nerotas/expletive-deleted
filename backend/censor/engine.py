@@ -8,7 +8,9 @@ import subprocess
 import tempfile
 import time
 from collections import defaultdict
-from typing import List, Dict
+from pathlib import Path
+from threading import Event
+from typing import Callable, List, Dict
 
 from faster_whisper import WhisperModel
 from better_profanity import profanity
@@ -91,7 +93,16 @@ def _parse_ffmpeg_time(value: str) -> float:
         return 0.0
 
 
-def run_ffmpeg_with_progress(command: list[str], duration: float | None) -> subprocess.CompletedProcess:
+class ProcessingCancelled(RuntimeError):
+    """Raised when an active media job is cancelled."""
+
+
+def run_ffmpeg_with_progress(
+    command: list[str],
+    duration: float | None,
+    progress_callback: Callable[[dict[str, object]], None] | None = None,
+    cancellation: Event | None = None,
+) -> subprocess.CompletedProcess:
     """Run FFmpeg and render its machine-readable progress stream."""
     progress_command = command[:1] + [
         "-hide_banner", "-loglevel", "error", "-nostats",
@@ -114,6 +125,14 @@ def run_ffmpeg_with_progress(command: list[str], duration: float | None) -> subp
         progress_values: dict[str, str] = {}
         if process.stdout is not None:
             for line in process.stdout:
+                if cancellation is not None and cancellation.is_set():
+                    process.terminate()
+                    try:
+                        process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.wait()
+                    raise ProcessingCancelled("Media processing was cancelled")
                 key, separator, value = line.strip().partition("=")
                 if not separator:
                     continue
@@ -147,6 +166,17 @@ def run_ffmpeg_with_progress(command: list[str], duration: float | None) -> subp
                 )
                 sys.stdout.write(status)
                 sys.stdout.flush()
+                if progress_callback is not None:
+                    progress_callback(
+                        {
+                            "percent": float(percent),
+                            "eta_seconds": remaining / speed if speed > 0 else None,
+                            "fps": float(progress_values["fps"])
+                            if progress_values.get("fps", "").replace(".", "", 1).isdigit()
+                            else None,
+                            "message": f"FFmpeg speed {speed_text}",
+                        }
+                    )
                 rendered = True
                 last_percent = percent
 
@@ -167,16 +197,34 @@ class ProfanityCensor:
 
     def __init__(self, input_file: str, output_file: str, model_name: str = "large",
                  transcripts_dir: str = None, whisper_model=None,
-                 censor_method: str = "mute"):
+                 censor_method: str = "mute", padding_before_ms: int = 150,
+                 padding_after_ms: int = 150, surround_output: str = "preserve_5_1",
+                 video_mode: str = "h264",
+                 progress_callback: Callable[[dict[str, object]], None] | None = None,
+                 cancellation: Event | None = None, ffmpeg_bin: str | None = None,
+                 ffprobe_bin: str | None = None, whisper_cache_dir: Path | None = None):
         self.input_file = input_file
         self.output_file = output_file
         self.model_name = require_whisper_model(model_name)
         self.transcripts_dir = transcripts_dir
-        self.whisper_cache_dir = get_whisper_cache_dir()
+        self.whisper_cache_dir = (whisper_cache_dir or get_whisper_cache_dir()).resolve()
         self._shared_model = whisper_model  # pre-loaded (WhisperModel, device) tuple or None
         self.censor_method = censor_method if censor_method in ("mute", "karaoke") else "mute"
-        self.ffmpeg_bin = find_ffmpeg()
-        self.ffprobe_bin = find_ffprobe()
+        if any(isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 10_000
+               for value in (padding_before_ms, padding_after_ms)):
+            raise ValueError("Censor padding must be an integer from 0 through 10000 milliseconds")
+        if surround_output not in ("preserve_5_1", "downmix_stereo"):
+            raise ValueError("Unsupported surround output mode")
+        if video_mode not in ("h264", "preserve_source"):
+            raise ValueError("Unsupported video output mode")
+        self.padding_before_ms = padding_before_ms
+        self.padding_after_ms = padding_after_ms
+        self.surround_output = surround_output
+        self.video_mode = video_mode
+        self.progress_callback = progress_callback
+        self.cancellation = cancellation or Event()
+        self.ffmpeg_bin = ffmpeg_bin or find_ffmpeg()
+        self.ffprobe_bin = ffprobe_bin or find_ffprobe()
         if not self.ffmpeg_bin or not self.ffprobe_bin:
             raise RuntimeError(
                 "FFmpeg and FFprobe must be available on PATH or configured with "
@@ -200,6 +248,45 @@ class ProfanityCensor:
         self.profane_count: int = 0
         print(f"[*] Loaded {len(self.censor_words)} profanity censor word(s): {self.censor_words_file}")
         print(f"[*] Loaded {len(self.exclude_words)} profanity exclusion(s): {self.exclusions_file}")
+
+    def _check_cancelled(self) -> None:
+        cancellation = getattr(self, "cancellation", None)
+        if cancellation is not None and cancellation.is_set():
+            raise ProcessingCancelled("Media processing was cancelled")
+
+    def _emit_progress(
+        self,
+        stage: str,
+        percent: float | None = None,
+        eta_seconds: float | None = None,
+        fps: float | None = None,
+        message: str | None = None,
+    ) -> None:
+        progress_callback = getattr(self, "progress_callback", None)
+        if progress_callback is not None:
+            progress_callback(
+                {
+                    "event": "progress",
+                    "stage": stage,
+                    "percent": percent,
+                    "eta_seconds": eta_seconds,
+                    "fps": fps,
+                    "message": message,
+                }
+            )
+
+    def _emit_detection(self, word: str, start: float, end: float) -> None:
+        progress_callback = getattr(self, "progress_callback", None)
+        if progress_callback is not None:
+            progress_callback(
+                {
+                    "event": "detection",
+                    "stage": "transcribing",
+                    "word": word,
+                    "start": start,
+                    "end": end,
+                }
+            )
 
     @staticmethod
     def _format_seconds(seconds: float) -> str:
@@ -409,8 +496,10 @@ class ProfanityCensor:
             initial_status = "[Whisper] [------------------------]   0% | speed N/A | elapsed 00:00 | eta --:--"
             sys.stdout.write(f"\r{initial_status:<110}")
             sys.stdout.flush()
+            self._emit_progress("transcribing", 0.0, message="Transcription started")
 
             for segment in segments_gen:
+                self._check_cancelled()
                 full_text_parts.append(segment.text)
                 if segment.words:
                     for w in segment.words:
@@ -446,6 +535,12 @@ class ProfanityCensor:
                         )
                         sys.stdout.write(f"\r{status:<110}")
                         sys.stdout.flush()
+                        self._emit_progress(
+                            "transcribing",
+                            float(progress),
+                            remaining if rate > 0 else None,
+                            message=f"Whisper speed {speed}",
+                        )
                         last_percent = progress
 
             elapsed = time.perf_counter() - tx_started
@@ -455,6 +550,7 @@ class ProfanityCensor:
             )
             sys.stdout.write(f"\r{completed_status:<110}\n")
             sys.stdout.flush()
+            self._emit_progress("transcribing", 100.0, 0.0, message="Transcription completed")
             print(f"[+] Transcription complete: {len(words_with_timestamps)} words")
             record_transcription_timing(duration, elapsed, self.model_name)
 
@@ -498,11 +594,13 @@ class ProfanityCensor:
                     continue
 
                 if profanity.contains_profanity(word_lower):
-                    profane_words.append({
+                    detection = {
                         'word': word,
                         'start': word_obj['start'],
                         'end': word_obj['end'],
-                    })
+                    }
+                    profane_words.append(detection)
+                    self._emit_detection(word, detection['start'], detection['end'])
         finally:
             if include_undiscovered:
                 profanity.load_censor_words(list(self.censor_words))
@@ -559,9 +657,11 @@ class ProfanityCensor:
     def _build_interval_expr(self, profane_segments: List[Dict]) -> str:
         """Build the FFmpeg timeline expression for all censor intervals."""
         parts = []
+        padding_before = getattr(self, "padding_before_ms", 150) / 1000
+        padding_after = getattr(self, "padding_after_ms", 150) / 1000
         for segment in profane_segments:
-            start = max(0, segment['start'] - 0.15)
-            end = segment['end'] + 0.15
+            start = max(0, segment['start'] - padding_before)
+            end = segment['end'] + padding_after
             parts.append(f"between(t,{start},{end})")
         return "+".join(parts)
 
@@ -618,13 +718,24 @@ class ProfanityCensor:
         """Apply audio muting to video using ffmpeg."""
         os.makedirs(os.path.dirname(os.path.abspath(self.output_file)), exist_ok=True)
         source_has_center_channel = self.has_discrete_center_audio()
-        if not profane_segments and not source_has_center_channel:
+        audio_only = self.is_audio_only()
+        video_mode = getattr(self, "video_mode", "h264")
+        surround_output = getattr(self, "surround_output", "preserve_5_1")
+        source_video_codec = "" if audio_only else self.get_video_codec()
+        can_copy_clean = (
+            not audio_only
+            and (not source_has_center_channel or surround_output == "preserve_5_1")
+            and (video_mode == "preserve_source" or source_video_codec == "h264")
+        )
+        if not profane_segments and can_copy_clean:
             print("[*] No profanity detected. Copying file...")
             try:
                 result = run_ffmpeg_with_progress(
                     [self.ffmpeg_bin, '-i', self.input_file,
                      '-c', 'copy', '-y', self.output_file],
                     self.get_media_duration_seconds(),
+                    lambda progress: self._emit_progress("censoring", **progress),
+                    getattr(self, "cancellation", None),
                 )
                 if result.returncode != 0:
                     error_lines = [line for line in result.stderr.splitlines() if line.strip()]
@@ -640,8 +751,10 @@ class ProfanityCensor:
         if profane_segments:
             method = "surround center-channel ducking" if source_has_center_channel else self.censor_method
             print(f"[*] Applying censoring (method: {method})...")
-        else:
+        elif source_has_center_channel and surround_output == "downmix_stereo":
             print("[*] No profanity detected. Downmixing surround audio to stereo...")
+        else:
+            print("[*] No profanity detected. Applying requested output settings...")
 
         # Supported surround layouts always use their center channel; stereo karaoke remains opt-in.
         use_filter_complex = False
@@ -656,8 +769,7 @@ class ProfanityCensor:
             audio_filter = None
 
         try:
-            audio_only = self.is_audio_only()
-            video_codec = '' if audio_only else self.get_video_codec()
+            video_codec = source_video_codec
 
             def _build_cmd(video_enc: str) -> list:
                 base = [self.ffmpeg_bin, '-i', self.input_file]
@@ -675,7 +787,10 @@ class ProfanityCensor:
                     base += ['-c:a', 'libmp3lame', '-q:a', '4']
                 else:
                     base += ['-c:v', video_enc, '-c:a', 'aac']
-                if source_has_center_channel:
+                if (
+                    source_has_center_channel
+                    and getattr(self, "surround_output", "preserve_5_1") == "downmix_stereo"
+                ):
                     base += ['-ac', '2']
                 base += ['-y', self.output_file]
                 return base
@@ -685,7 +800,10 @@ class ProfanityCensor:
                     print("[*] Karaoke mode (audio-only)")
                 cmd = _build_cmd('')
             else:
-                if video_codec == 'h264':
+                if video_mode == 'preserve_source':
+                    print("[*] Preserving source video stream...")
+                    cmd = _build_cmd('copy')
+                elif video_codec == 'h264':
                     print("[*] Video is already H.264, copying stream...")
                     cmd = _build_cmd('copy')
                 else:
@@ -699,12 +817,18 @@ class ProfanityCensor:
             print(f"[*] {label} filter: {preview}...")
 
             duration = self.get_media_duration_seconds()
-            result = run_ffmpeg_with_progress(cmd, duration)
+            result = run_ffmpeg_with_progress(
+                cmd,
+                duration,
+                lambda progress: self._emit_progress("censoring", **progress),
+                getattr(self, "cancellation", None),
+            )
 
             # A detected hardware encoder may still fail at runtime (for example, no GPU device).
             if (
                 result.returncode != 0
                 and not audio_only
+                and getattr(self, "video_mode", "h264") == 'h264'
                 and video_codec != 'h264'
                 and self.video_encoder != 'libx264'
                 and 'libx264' in self.encoders
@@ -716,7 +840,12 @@ class ProfanityCensor:
                     "using software fallback..."
                 )
                 cmd = _build_cmd('libx264')
-                result = run_ffmpeg_with_progress(cmd, duration)
+                result = run_ffmpeg_with_progress(
+                    cmd,
+                    duration,
+                    lambda progress: self._emit_progress("censoring", **progress),
+                    getattr(self, "cancellation", None),
+                )
 
             if result.returncode == 0:
                 print(f"[+] Video censored: {self.output_file}")
@@ -758,9 +887,11 @@ class ProfanityCensor:
             print(f"[*] Estimated total runtime: ~{self._format_seconds(shown_total)}")
 
         try:
+            self._check_cancelled()
             stage_started = time.perf_counter()
             # Transcribe the original file directly (gets accurate timestamps)
             words_data = self.transcribe_with_timestamps()
+            self._check_cancelled()
             print(
                 f"[+] Stage 1 complete in {self._format_seconds(time.perf_counter() - stage_started)}"
             )
@@ -771,6 +902,7 @@ class ProfanityCensor:
             if include_undiscovered:
                 self.report_potential_profanity(words_data)
             profane_segments = self.detect_profanity(words_data, include_undiscovered)
+            self._check_cancelled()
             print(
                 f"[+] Stage 2 complete in {self._format_seconds(time.perf_counter() - stage_started)}"
             )
@@ -783,6 +915,7 @@ class ProfanityCensor:
 
             stage_started = time.perf_counter()
             # Censor video
+            self._emit_progress("censoring", 0.0, message="Censoring started")
             success = self.censor_video(profane_segments)
             print(
                 f"[+] Stage 3 complete in {self._format_seconds(time.perf_counter() - stage_started)}"
@@ -817,6 +950,18 @@ def main():
         choices=["mute", "karaoke"],
         help="mute: silence profane intervals (default); karaoke: cancel centre-panned audio",
     )
+    parser.add_argument("--padding-before-ms", type=int, default=150)
+    parser.add_argument("--padding-after-ms", type=int, default=150)
+    parser.add_argument(
+        "--surround-output",
+        choices=["preserve_5_1", "downmix_stereo"],
+        default="preserve_5_1",
+    )
+    parser.add_argument(
+        "--video-mode",
+        choices=["h264", "preserve_source"],
+        default="h264",
+    )
     args = parser.parse_args()
 
     input_file = args.input_file
@@ -844,8 +989,17 @@ def main():
         print("Mode:   censoring configured and undiscovered vendor-list words")
     print()
 
-    censor = ProfanityCensor(input_file, output_file, required_model, transcripts_dir,
-                             censor_method=args.censor_method)
+    censor = ProfanityCensor(
+        input_file,
+        output_file,
+        required_model,
+        transcripts_dir,
+        censor_method=args.censor_method,
+        padding_before_ms=args.padding_before_ms,
+        padding_after_ms=args.padding_after_ms,
+        surround_output=args.surround_output,
+        video_mode=args.video_mode,
+    )
     success = censor.process(
         report_only=args.report_only,
         include_undiscovered=args.include_undiscovered,

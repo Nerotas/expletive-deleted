@@ -3,11 +3,30 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from backend.jobs.batch import output_path, process_file
+from backend.jobs.batch import load_whisper_model, output_path, process_file
 from backend.runtime import RuntimePaths, get_runtime_paths
 
 
 class BatchLifecycleTests(unittest.TestCase):
+    def test_model_load_uses_verified_local_path(self):
+        status = MagicMock(selected="cpu", compute_type="int8", detail="ready")
+        model = MagicMock()
+
+        with (
+            patch("backend.jobs.batch.get_whisper_device_status", return_value=status),
+            patch("backend.jobs.batch.require_whisper_model_path", return_value=Path("C:/models/large-v3")),
+            patch("faster_whisper.WhisperModel", return_value=model) as whisper_model,
+        ):
+            loaded = load_whisper_model("large-v3")
+
+        self.assertEqual(loaded, (model, "cpu"))
+        whisper_model.assert_called_once_with(
+            str(Path("C:/models/large-v3")),
+            device="cpu",
+            compute_type="int8",
+            local_files_only=True,
+        )
+
     def create_source(self, root: str) -> tuple[RuntimePaths, Path]:
         paths = get_runtime_paths(Path(root))
         paths.create()

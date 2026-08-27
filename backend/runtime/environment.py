@@ -354,7 +354,7 @@ def available_encoders(ffmpeg_bin: str) -> set[str]:
     encoders = set()
     for line in (result.stdout + result.stderr).splitlines():
         fields = line.split()
-        if len(fields) >= 2 and fields[0].startswith("V"):
+        if len(fields) >= 2 and fields[0].startswith("V") and fields[1] != "=":
             encoders.add(fields[1])
     return encoders
 

@@ -25,11 +25,7 @@ from backend.settings import (
     load_effective_settings,
 )
 
-
-MEDIA_EXTENSIONS = {
-    ".avi", ".flv", ".m4a", ".mkv", ".mov", ".mp3", ".mp4", ".wav", ".webm", ".wmv",
-}
-AUDIO_EXTENSIONS = {".m4a", ".mp3", ".wav"}
+from .media import MEDIA_EXTENSIONS, output_path, transcript_path
 
 
 def format_seconds(seconds: float) -> str:
@@ -41,20 +37,19 @@ def format_seconds(seconds: float) -> str:
     return f"{minutes:02d}:{secs:02d}"
 
 
-def output_path(input_file: Path, output_dir: Path) -> Path:
-    extension = ".mp3" if input_file.suffix.lower() in AUDIO_EXTENSIONS else ".mkv"
-    return output_dir / f"{input_file.stem}-censored{extension}"
-
-
-def load_whisper_model(model_name: str, requested_device: str = "auto"):
+def load_whisper_model(
+    model_name: str,
+    requested_device: str = "auto",
+    cache_dir: Path | None = None,
+):
     """Load the Whisper model once for the entire batch."""
     from faster_whisper import WhisperModel
     status = get_whisper_device_status(model_name, requested_device)
     device = status.selected
     print(f"[*] Whisper profile: {device} ({status.compute_type}); {status.detail}")
-    model_path = require_whisper_model_path(get_whisper_cache_dir())
+    model_path = require_whisper_model_path(cache_dir or get_whisper_cache_dir())
     compute_type = status.compute_type
-    print(f"[*] Loading Whisper {fw_model_name} on {device} ({compute_type})...")
+    print(f"[*] Loading Whisper {model_name} on {device} ({compute_type})...")
     load_started = time.perf_counter()
     model = WhisperModel(
         str(model_path),
@@ -78,6 +73,13 @@ def process_file(
     whisper_model=None,
     censor_method: str = "mute",
     archive_after_success: bool = False,
+    padding_before_ms: int = 150,
+    padding_after_ms: int = 150,
+    surround_output: str = "preserve_5_1",
+    video_mode: str = "h264",
+    ffmpeg_bin: str | None = None,
+    ffprobe_bin: str | None = None,
+    whisper_cache_dir: Path | None = None,
 ) -> tuple[str, set[str], bool, int]:
     started = time.perf_counter()
     destination = output_path(input_file, paths.finished)
@@ -108,6 +110,13 @@ def process_file(
             str(paths.transcripts),
             whisper_model=whisper_model,
             censor_method=censor_method,
+            padding_before_ms=padding_before_ms,
+            padding_after_ms=padding_after_ms,
+            surround_output=surround_output,
+            video_mode=video_mode,
+            ffmpeg_bin=ffmpeg_bin,
+            ffprobe_bin=ffprobe_bin,
+            whisper_cache_dir=whisper_cache_dir,
         )
         success = censor.process(report_only=report_only, include_undiscovered=include_undiscovered)
         discovered = {c["word"] for c in censor.review_candidates}
@@ -258,17 +267,25 @@ def main(argv: list[str] | None = None, store: SettingsStore | None = None) -> i
         print("Note: each file prints a step-by-step runtime estimate before processing.")
 
     # Load the model once and share it across all files to avoid reloading per file.
-    ffprobe_bin = find_ffprobe()
+    ffprobe_bin = (
+        str(settings.runtime.ffprobe_path)
+        if settings.runtime.ffprobe_path
+        else find_ffprobe()
+    )
     needs_transcription = ffprobe_bin is None or any(
         not transcript_cache_is_compatible(
             str(file),
-            str(paths.transcripts / f"{file.stem}-transcript.json"),
+            str(transcript_path(file, paths.transcripts)),
             ffprobe_bin,
         )
         for file in files
     )
     whisper_model = (
-        load_whisper_model(args.model, settings.processing.device)
+        load_whisper_model(
+            args.model,
+            settings.processing.device,
+            settings.runtime.whisper_cache,
+        )
         if needs_transcription
         else None
     )
@@ -298,6 +315,13 @@ def main(argv: list[str] | None = None, store: SettingsStore | None = None) -> i
                 whisper_model=whisper_model,
                 censor_method=censor_method,
                 archive_after_success=archive_after_success,
+                padding_before_ms=settings.censoring.padding_before_ms,
+                padding_after_ms=settings.censoring.padding_after_ms,
+                surround_output=settings.audio.surround_output,
+                video_mode=settings.video.mode,
+                ffmpeg_bin=str(settings.runtime.ffmpeg_path) if settings.runtime.ffmpeg_path else None,
+                ffprobe_bin=ffprobe_bin,
+                whisper_cache_dir=settings.runtime.whisper_cache,
             )
             all_discovered.update(discovered)
             if status == "ok":

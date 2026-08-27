@@ -4,9 +4,11 @@ import io
 import tempfile
 import unittest
 from pathlib import Path
+from threading import Event
 from unittest.mock import MagicMock, patch
 
 from backend.censor.engine import (
+    ProcessingCancelled,
     ProfanityCensor,
     run_ffmpeg_with_progress,
     transcript_cache_is_compatible,
@@ -14,6 +16,7 @@ from backend.censor.engine import (
 from better_profanity import profanity
 from backend.runtime.environment import (
     PROJECT_ROOT,
+    available_encoders,
     ensure_executable_directory_on_path,
     find_ffmpeg,
     find_ffprobe,
@@ -33,6 +36,36 @@ from backend.runtime.environment import (
 
 
 class RuntimeTests(unittest.TestCase):
+    def test_ffmpeg_progress_process_terminates_on_cancellation(self):
+        process = MagicMock()
+        process.stdout = iter(["progress=continue\n"])
+        process.wait.return_value = 1
+        cancellation = Event()
+        cancellation.set()
+
+        with (
+            patch("backend.censor.engine.subprocess.Popen", return_value=process),
+            self.assertRaisesRegex(ProcessingCancelled, "cancelled"),
+        ):
+            run_ffmpeg_with_progress(
+                ["ffmpeg", "-i", "input.mkv", "output.mkv"],
+                10.0,
+                cancellation=cancellation,
+            )
+
+        process.terminate.assert_called_once()
+
+    def test_encoder_inventory_excludes_ffmpeg_legend(self):
+        completed = MagicMock(
+            returncode=0,
+            stdout=" V..... = Video\n V....D libx264 H.264\n A....D aac AAC\n",
+            stderr="",
+        )
+        with patch("backend.runtime.environment.subprocess.run", return_value=completed):
+            encoders = available_encoders("ffmpeg")
+
+        self.assertEqual(encoders, {"libx264"})
+
     def test_legacy_censor_module_aliases_packaged_engine(self):
         self.assertIs(
             importlib.import_module("censor_profanity"),
@@ -103,6 +136,8 @@ class RuntimeTests(unittest.TestCase):
         censor.ffmpeg_bin = "ffmpeg"
         censor.has_discrete_center_audio = MagicMock(return_value=False)
         censor.get_media_duration_seconds = MagicMock(return_value=90.0)
+        censor.is_audio_only = MagicMock(return_value=False)
+        censor.get_video_codec = MagicMock(return_value="h264")
         completed = MagicMock(returncode=0, stderr="")
 
         with patch("backend.censor.engine.run_ffmpeg_with_progress", return_value=completed) as run:
@@ -111,6 +146,28 @@ class RuntimeTests(unittest.TestCase):
         self.assertTrue(success)
         self.assertEqual(run.call_args.args[1], 90.0)
         self.assertIn("copy", run.call_args.args[0])
+
+    def test_clean_hevc_source_is_encoded_when_h264_is_requested(self):
+        censor = object.__new__(ProfanityCensor)
+        censor.input_file = "input.mkv"
+        censor.output_file = "output.mkv"
+        censor.ffmpeg_bin = "ffmpeg"
+        censor.censor_method = "mute"
+        censor.video_mode = "h264"
+        censor.video_encoder = "libx264"
+        censor.encoders = {"libx264"}
+        censor.has_discrete_center_audio = MagicMock(return_value=False)
+        censor.get_media_duration_seconds = MagicMock(return_value=90.0)
+        censor.is_audio_only = MagicMock(return_value=False)
+        censor.get_video_codec = MagicMock(return_value="hevc")
+        completed = MagicMock(returncode=0, stderr="")
+
+        with patch("backend.censor.engine.run_ffmpeg_with_progress", return_value=completed) as run:
+            success = censor.censor_video([])
+
+        self.assertTrue(success)
+        command = run.call_args.args[0]
+        self.assertEqual(command[command.index("-c:v") + 1], "libx264")
 
     def test_5_1_layout_detection_requires_six_channels(self):
         censor = object.__new__(ProfanityCensor)
@@ -136,6 +193,15 @@ class RuntimeTests(unittest.TestCase):
 
         self.assertIn("pan=5.1|c0=c0|c1=c1|c2=0*c2|c3=c3|c4=c4|c5=c5", graph)
         self.assertIn("between(t,0.85,2.15)", graph)
+
+    def test_configured_padding_is_applied_to_intervals(self):
+        censor = object.__new__(ProfanityCensor)
+        censor.padding_before_ms = 200
+        censor.padding_after_ms = 75
+
+        expression = censor._build_interval_expr([{"start": 1.0, "end": 2.0}])
+
+        self.assertEqual(expression, "between(t,0.8,2.075)")
 
     def test_7_1_filter_drops_only_front_center(self):
         censor = object.__new__(ProfanityCensor)
@@ -198,7 +264,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("speed 3.00x", output.getvalue())
         self.assertIn("[Whisper] [########################] 100%", output.getvalue())
 
-    def test_5_1_censor_forces_stereo_output(self):
+    def create_surround_censor(self):
         censor = object.__new__(ProfanityCensor)
         censor.input_file = "input.mkv"
         censor.output_file = "output.mkv"
@@ -210,6 +276,12 @@ class RuntimeTests(unittest.TestCase):
         censor.get_audio_stream_info = MagicMock(return_value=(6, "5.1"))
         censor.is_audio_only = MagicMock(return_value=False)
         censor.get_video_codec = MagicMock(return_value="h264")
+        censor.get_media_duration_seconds = MagicMock(return_value=60.0)
+        return censor
+
+    def test_5_1_downmix_occurs_after_center_channel_censorship(self):
+        censor = self.create_surround_censor()
+        censor.surround_output = "downmix_stereo"
 
         completed = MagicMock(returncode=0, stderr="")
         with patch("backend.censor.engine.run_ffmpeg_with_progress", return_value=completed) as run:
@@ -219,6 +291,32 @@ class RuntimeTests(unittest.TestCase):
         command = run.call_args.args[0]
         self.assertIn("-filter_complex", command)
         self.assertEqual(command[command.index("-ac") + 1], "2")
+        self.assertLess(command.index("-filter_complex"), command.index("-ac"))
+
+    def test_5_1_output_preserves_surround_layout_when_requested(self):
+        censor = self.create_surround_censor()
+        censor.surround_output = "preserve_5_1"
+
+        completed = MagicMock(returncode=0, stderr="")
+        with patch("backend.censor.engine.run_ffmpeg_with_progress", return_value=completed) as run:
+            success = censor.censor_video([{"start": 1.0, "end": 2.0}])
+
+        self.assertTrue(success)
+        self.assertNotIn("-ac", run.call_args.args[0])
+
+    def test_preserve_source_video_uses_stream_copy(self):
+        censor = self.create_surround_censor()
+        censor.has_discrete_center_audio.return_value = False
+        censor.get_video_codec.return_value = "hevc"
+        censor.video_mode = "preserve_source"
+
+        completed = MagicMock(returncode=0, stderr="")
+        with patch("backend.censor.engine.run_ffmpeg_with_progress", return_value=completed) as run:
+            success = censor.censor_video([{"start": 1.0, "end": 2.0}])
+
+        self.assertTrue(success)
+        command = run.call_args.args[0]
+        self.assertEqual(command[command.index("-c:v") + 1], "copy")
 
     def test_5_1_cache_requires_center_channel_transcript(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

@@ -10,6 +10,41 @@ from scripts.manage_settings import main
 
 
 class ManageSettingsTests(unittest.TestCase):
+    def test_set_options_updates_phase_6_preferences(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            store = SettingsStore(root / "settings.json", AppSettings.defaults(root / "home"))
+
+            exit_code = main(
+                [
+                    "set-options",
+                    "--mode",
+                    "report_only",
+                    "--stereo-method",
+                    "karaoke",
+                    "--padding-before-ms",
+                    "200",
+                    "--padding-after-ms",
+                    "75",
+                    "--surround-output",
+                    "downmix_stereo",
+                    "--video-mode",
+                    "preserve_source",
+                    "--archive-after-success",
+                ],
+                store,
+            )
+            settings = store.load()
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(settings.processing.mode, "report_only")
+        self.assertEqual(settings.censoring.stereo_method, "karaoke")
+        self.assertEqual(settings.censoring.padding_before_ms, 200)
+        self.assertEqual(settings.censoring.padding_after_ms, 75)
+        self.assertEqual(settings.audio.surround_output, "downmix_stereo")
+        self.assertEqual(settings.video.mode, "preserve_source")
+        self.assertTrue(settings.source.archive_after_success)
+
     def create_store(self, root: Path) -> SettingsStore:
         return SettingsStore(root / "app-data" / "settings.json", AppSettings.defaults(root / "home"))
 
