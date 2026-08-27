@@ -1,0 +1,1 @@
+"""Python backend for the Profanity Censor application."""
