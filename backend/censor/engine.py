@@ -25,6 +25,7 @@ from backend.runtime import (
     load_profanity_censor_words,
     load_profanity_exclusions,
     record_transcription_timing,
+    require_whisper_model_path,
     select_working_video_encoder,
     require_whisper_model,
 )
@@ -270,12 +271,12 @@ class ProfanityCensor:
         status = get_whisper_device_status(self.model_name)
         preferred_device = status.selected
         print(f"[*] Whisper profile: {preferred_device} ({status.compute_type}); {status.detail}")
-        fw_model_name = self._MODEL_NAME_MAP.get(self.model_name, self.model_name)
+        model_path = require_whisper_model_path(self.whisper_cache_dir)
         model = WhisperModel(
-            fw_model_name,
+            str(model_path),
             device=preferred_device,
             compute_type=status.compute_type,
-            download_root=str(self.whisper_cache_dir),
+            local_files_only=True,
         )
         return model, preferred_device
 

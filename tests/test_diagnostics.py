@@ -2,8 +2,9 @@ import io
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
+from backend.runtime import DependencyInventory, DependencyStatus
 from backend.settings import AppSettings, SettingsStore, ensure_directories
 from scripts.diagnostics import DiagnosticResult, collect_diagnostics, main
 
@@ -15,11 +16,30 @@ class DiagnosticsTests(unittest.TestCase):
             settings = AppSettings.defaults(root)
             ensure_directories(settings.directories)
             store = SettingsStore(root / "settings.json", settings)
+            ready = DependencyStatus(
+                id="ready",
+                name="ready",
+                state="ready",
+                required_version=None,
+                installed_version="1",
+                path=root / "tool.exe",
+                detail="ready",
+                install_supported=True,
+            )
+            inventory = DependencyInventory(
+                ffmpeg=DependencyStatus(**{**ready.__dict__, "id": "ffmpeg"}),
+                ffprobe=DependencyStatus(**{**ready.__dict__, "id": "ffprobe"}),
+                python=(DependencyStatus(**{**ready.__dict__, "id": "python:faster-whisper"}),),
+                whisper_model=DependencyStatus(
+                    **{**ready.__dict__, "id": "whisper:large-v3", "path": root / "model"}
+                ),
+            )
 
             with (
-                patch("scripts.diagnostics.find_ffmpeg", return_value=None),
-                patch("scripts.diagnostics.find_ffprobe", return_value=None),
-                patch("scripts.diagnostics.get_whisper_device_status"),
+                patch("scripts.diagnostics.inspect_dependencies", return_value=inventory),
+                patch("scripts.diagnostics.available_encoders", return_value={"libx264"}),
+                patch("scripts.diagnostics.select_working_video_encoder", return_value="libx264"),
+                patch("scripts.diagnostics.get_whisper_device_status", return_value=MagicMock(selected="cpu", compute_type="int8", detail="ready")),
             ):
                 results = collect_diagnostics(store)
 

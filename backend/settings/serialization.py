@@ -14,6 +14,7 @@ from .models import (
     ProcessingDevice,
     ProcessingMode,
     ProcessingSettings,
+    RuntimeSettings,
     SettingsValidationError,
     SourceSettings,
     StereoCensorMethod,
@@ -34,6 +35,7 @@ _TOP_LEVEL_KEYS = {
     "video",
     "whisper",
     "source",
+    "runtime",
 }
 
 
@@ -76,6 +78,15 @@ def _boolean(group: Mapping[str, Any], name: str, default: bool, field_name: str
     return value
 
 
+def _optional_path(group: Mapping[str, Any], name: str, default: Path | None, field_name: str) -> Path | None:
+    value = group.get(name, str(default) if default is not None else None)
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise SettingsValidationError([f"{field_name} must be an absolute path or null"])
+    return Path(value.strip())
+
+
 def settings_from_dict(data: object, defaults: AppSettings | None = None) -> AppSettings:
     """Parse and validate settings loaded from JSON-compatible data."""
     mapping = _mapping(data, "settings")
@@ -103,6 +114,7 @@ def settings_from_dict(data: object, defaults: AppSettings | None = None) -> App
     video = _group(mapping, "video", {"mode"})
     whisper = _group(mapping, "whisper", {"model"})
     source = _group(mapping, "source", {"archive_after_success"})
+    runtime = _group(mapping, "runtime", {"ffmpeg_path", "ffprobe_path", "whisper_cache"})
 
     parsed = AppSettings(
         directories=DirectorySettings(
@@ -182,6 +194,26 @@ def settings_from_dict(data: object, defaults: AppSettings | None = None) -> App
                 "source.archive_after_success",
             )
         ),
+        runtime=RuntimeSettings(
+            ffmpeg_path=_optional_path(
+                runtime,
+                "ffmpeg_path",
+                base.runtime.ffmpeg_path,
+                "runtime.ffmpeg_path",
+            ),
+            ffprobe_path=_optional_path(
+                runtime,
+                "ffprobe_path",
+                base.runtime.ffprobe_path,
+                "runtime.ffprobe_path",
+            ),
+            whisper_cache=_optional_path(
+                runtime,
+                "whisper_cache",
+                base.runtime.whisper_cache,
+                "runtime.whisper_cache",
+            ),
+        ),
     )
     parsed.validate()
     return parsed
@@ -211,4 +243,9 @@ def settings_to_dict(settings: AppSettings) -> dict[str, object]:
         "video": {"mode": settings.video.mode},
         "whisper": {"model": settings.whisper.model},
         "source": {"archive_after_success": settings.source.archive_after_success},
+        "runtime": {
+            "ffmpeg_path": str(settings.runtime.ffmpeg_path) if settings.runtime.ffmpeg_path else None,
+            "ffprobe_path": str(settings.runtime.ffprobe_path) if settings.runtime.ffprobe_path else None,
+            "whisper_cache": str(settings.runtime.whisper_cache) if settings.runtime.whisper_cache else None,
+        },
     }

@@ -15,6 +15,7 @@ from backend.runtime import (
     find_ffprobe,
     get_whisper_cache_dir,
     get_whisper_device_status,
+    require_whisper_model_path,
 )
 from backend.settings import (
     DirectoryAccessError,
@@ -51,15 +52,15 @@ def load_whisper_model(model_name: str, requested_device: str = "auto"):
     status = get_whisper_device_status(model_name, requested_device)
     device = status.selected
     print(f"[*] Whisper profile: {device} ({status.compute_type}); {status.detail}")
-    fw_model_name = ProfanityCensor._MODEL_NAME_MAP.get(model_name, model_name)
+    model_path = require_whisper_model_path(get_whisper_cache_dir())
     compute_type = status.compute_type
     print(f"[*] Loading Whisper {fw_model_name} on {device} ({compute_type})...")
     load_started = time.perf_counter()
     model = WhisperModel(
-        fw_model_name,
+        str(model_path),
         device=device,
         compute_type=compute_type,
-        download_root=str(get_whisper_cache_dir()),
+        local_files_only=True,
     )
     print(f"[*] Model loaded in {format_seconds(time.perf_counter() - load_started)}")
     return model, device

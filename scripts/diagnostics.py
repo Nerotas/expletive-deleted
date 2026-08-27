@@ -3,18 +3,16 @@
 
 from __future__ import annotations
 
-import importlib.util
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
 from backend.runtime import (
     available_encoders,
-    find_ffmpeg,
-    find_ffprobe,
     format_bytes,
     get_whisper_cache_dir,
     get_whisper_device_status,
+    inspect_dependencies,
     select_working_video_encoder,
 )
 from backend.settings import SettingsFileError, SettingsStore, inspect_directories, load_effective_settings
@@ -37,15 +35,10 @@ def _nearest_existing_path(path: Path) -> Path:
 
 def collect_diagnostics(store: SettingsStore | None = None) -> list[DiagnosticResult]:
     results: list[DiagnosticResult] = []
-
-    for import_name, display_name in (
-        ("faster_whisper", "faster-whisper"),
-        ("better_profanity", "better-profanity"),
-        ("numpy", "NumPy"),
-    ):
-        available = importlib.util.find_spec(import_name) is not None
-        detail = "installed" if available else "not installed"
-        results.append(DiagnosticResult(display_name, available, detail))
+    cache_dir = get_whisper_cache_dir()
+    inventory = inspect_dependencies(cache_dir)
+    for status in inventory.python:
+        results.append(DiagnosticResult(status.name, status.ready, status.detail))
 
     store = store or SettingsStore()
     try:
@@ -64,10 +57,9 @@ def collect_diagnostics(store: SettingsStore | None = None) -> list[DiagnosticRe
         settings = None
         results.append(DiagnosticResult("Settings", False, str(exc)))
 
-    ffmpeg = find_ffmpeg()
-    ffprobe = find_ffprobe()
-    results.append(DiagnosticResult("FFmpeg", ffmpeg is not None, ffmpeg or "not found"))
-    results.append(DiagnosticResult("FFprobe", ffprobe is not None, ffprobe or "not found"))
+    ffmpeg = str(inventory.ffmpeg.path) if inventory.ffmpeg.path else None
+    results.append(DiagnosticResult("FFmpeg", inventory.ffmpeg.ready, inventory.ffmpeg.detail))
+    results.append(DiagnosticResult("FFprobe", inventory.ffprobe.ready, inventory.ffprobe.detail))
 
     if ffmpeg:
         try:
@@ -89,13 +81,11 @@ def collect_diagnostics(store: SettingsStore | None = None) -> list[DiagnosticRe
     except Exception as exc:
         results.append(DiagnosticResult("Whisper device", False, str(exc)))
 
-    cache_dir = get_whisper_cache_dir()
     results.append(
         DiagnosticResult(
-            "Whisper cache",
-            cache_dir.is_dir(),
-            str(cache_dir),
-            required=False,
+            inventory.whisper_model.name,
+            inventory.whisper_model.ready,
+            inventory.whisper_model.detail,
         )
     )
 

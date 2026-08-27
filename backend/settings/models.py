@@ -123,6 +123,13 @@ class SourceSettings:
 
 
 @dataclass(frozen=True)
+class RuntimeSettings:
+    ffmpeg_path: Path | None = None
+    ffprobe_path: Path | None = None
+    whisper_cache: Path | None = None
+
+
+@dataclass(frozen=True)
 class AppSettings:
     directories: DirectorySettings = field(default_factory=DirectorySettings.defaults)
     processing: ProcessingSettings = field(default_factory=ProcessingSettings)
@@ -131,6 +138,7 @@ class AppSettings:
     video: VideoSettings = field(default_factory=VideoSettings)
     whisper: WhisperSettings = field(default_factory=WhisperSettings)
     source: SourceSettings = field(default_factory=SourceSettings)
+    runtime: RuntimeSettings = field(default_factory=RuntimeSettings)
 
     @classmethod
     def defaults(cls, home: Path | None = None) -> AppSettings:
@@ -153,6 +161,7 @@ class AppSettings:
             ("video", self.video, VideoSettings),
             ("whisper", self.whisper, WhisperSettings),
             ("source", self.source, SourceSettings),
+            ("runtime", self.runtime, RuntimeSettings),
         )
         invalid_groups = [name for name, value, expected in expected_groups if not isinstance(value, expected)]
         issues.extend(f"{name} has an invalid settings object" for name in invalid_groups)
@@ -180,6 +189,16 @@ class AppSettings:
 
         if not isinstance(self.source.archive_after_success, bool):
             issues.append("source.archive_after_success must be a boolean")
+
+        for name, value in (
+            ("runtime.ffmpeg_path", self.runtime.ffmpeg_path),
+            ("runtime.ffprobe_path", self.runtime.ffprobe_path),
+            ("runtime.whisper_cache", self.runtime.whisper_cache),
+        ):
+            if value is not None and not isinstance(value, Path):
+                issues.append(f"{name} must be a path or null")
+            elif isinstance(value, Path) and not value.is_absolute():
+                issues.append(f"{name} must be an absolute path")
 
         if issues:
             raise SettingsValidationError(issues)

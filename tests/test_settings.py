@@ -77,6 +77,29 @@ class SettingsModelTests(unittest.TestCase):
         with self.assertRaisesRegex(SettingsValidationError, "directories.input must be a path"):
             invalid.validate()
 
+    def test_runtime_paths_are_optional_and_round_trip(self):
+        settings = AppSettings.defaults()
+        runtime = replace(
+            settings.runtime,
+            ffmpeg_path=Path("C:\\tools\\ffmpeg.exe"),
+            ffprobe_path=Path("C:\\tools\\ffprobe.exe"),
+            whisper_cache=Path("C:\\models"),
+        )
+        configured = replace(settings, runtime=runtime)
+
+        restored = settings_from_dict(settings_to_dict(configured))
+
+        self.assertEqual(restored.runtime, runtime)
+
+    def test_old_schema_one_document_without_runtime_group_still_loads(self):
+        payload = settings_to_dict(AppSettings.defaults())
+        del payload["runtime"]
+
+        restored = settings_from_dict(payload)
+
+        self.assertIsNone(restored.runtime.ffmpeg_path)
+        self.assertIsNone(restored.runtime.whisper_cache)
+
     def test_settings_round_trip_all_schema_groups(self):
         settings = AppSettings.defaults()
 

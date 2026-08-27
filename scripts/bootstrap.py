@@ -12,9 +12,12 @@ import sys
 from pathlib import Path
 
 from backend.runtime import (
+    DependencyPlanError,
     PROJECT_ROOT,
+    build_install_plan,
     find_ffmpeg,
     find_ffprobe,
+    find_winget,
     format_bytes,
     get_directory_size,
     get_external_whisper_cache_dir,
@@ -34,27 +37,13 @@ VENV_PYTHON = PROJECT_ROOT / ".venv" / (
 )
 
 
-def find_winget() -> str | None:
-    """Find winget even when its WindowsApps alias is absent from PATH."""
-    winget = shutil.which("winget")
-    if winget:
-        return winget
-    local_app_data = os.environ.get("LOCALAPPDATA")
-    if not local_app_data:
-        return None
-    alias = Path(local_app_data) / "Microsoft" / "WindowsApps" / "winget.exe"
-    return str(alias) if alias.is_file() else None
-
-
 def system_install_command() -> list[str] | None:
     """Return the supported FFmpeg installation command for this platform."""
     if platform.system() == "Windows":
-        if winget := find_winget():
-            return [winget, "install", "--id", "Gyan.FFmpeg.Shared", "-e"]
-        if choco := shutil.which("choco"):
-            return [choco, "install", "ffmpeg", "-y"]
-    elif platform.system() == "Darwin" and shutil.which("brew"):
-        return ["brew", "install", "ffmpeg"]
+        try:
+            return list(build_install_plan(["ffmpeg"]).actions[0].command)
+        except DependencyPlanError:
+            return None
     return None
 
 
@@ -62,12 +51,8 @@ def ffmpeg_guidance() -> str:
     if platform.system() == "Windows":
         if find_winget():
             return "Install FFmpeg with: winget install --id Gyan.FFmpeg.Shared -e"
-        if shutil.which("choco"):
-            return "Install FFmpeg with: choco install ffmpeg -y"
-        return "Install FFmpeg with: winget install --id Gyan.FFmpeg.Shared -e"
-    if platform.system() == "Darwin":
-        return "Install FFmpeg with: brew install ffmpeg"
-    return "Install FFmpeg with your package manager, for example: sudo apt install ffmpeg"
+        return "Review an install plan with: python manage_dependencies.py plan --component ffmpeg"
+    return "Automatic FFmpeg installation is currently supported on Windows only."
 
 
 def run(command: list[str]) -> int:
@@ -152,8 +137,6 @@ def main() -> int:
         if run([sys.executable, "-m", "venv", str(PROJECT_ROOT / ".venv")]) != 0:
             return 1
 
-    if run([str(VENV_PYTHON), "-m", "pip", "install", "--upgrade", "pip"]) != 0:
-        return 1
     if run([str(VENV_PYTHON), "-m", "pip", "install", "-r", "requirements.txt"]) != 0:
         return 1
 
