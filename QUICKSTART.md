@@ -6,4 +6,10 @@
 4. Put media files in `ready/`.
 5. Run `.\.venv\Scripts\python.exe batch_process.py`. Censorship processing always uses Whisper `large-v3`.
 
-Use `batch_process.py --list` to inspect files before processing. Censored media is written to `transcoded/`; completed source files are moved to `processed/`; reusable Whisper transcripts are stored in `transcripts/`.
+Use `batch_process.py --list` to inspect files before processing. Censored media is written to `finished/`; completed source files are moved to `processed/`; reusable Whisper transcripts are stored in `transcripts/`.
+
+Run the backend regression suite with:
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest tests.test_runtime
+```

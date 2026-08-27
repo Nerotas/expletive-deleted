@@ -1,4 +1,4 @@
-# Profanity Censoring Workflow
+# Profanity Censor
 
 Batch-process audio and video with faster-whisper, identify profane words from word-level timestamps, and mute those audio intervals with FFmpeg. The workflow is designed to be portable across Windows, macOS, Linux, and WSL, with hardware encoding selected when available.
 
@@ -7,10 +7,26 @@ Batch-process audio and video with faster-whisper, identify profane words from w
 1. Put source media in `ready/`.
 2. Run the batch command.
 3. Whisper transcribes the input and stores a reusable transcript in `transcripts/`.
-4. FFmpeg mutes detected profanity and writes the censored result to `transcoded/`.
+4. FFmpeg mutes detected profanity and writes the censored result to `finished/`.
 5. The original source is moved to `processed/` only after the expected output file exists.
 
 Outputs are skipped when a file with the expected censored name already exists.
+
+## Repository Layout
+
+The working Python implementation now lives under `backend/`:
+
+```text
+backend/censor/engine.py       transcription, detection, and FFmpeg censoring
+backend/jobs/batch.py          serial folder-batch orchestration
+backend/runtime/environment.py dependency, hardware, cache, and encoder discovery
+backend/runtime/paths.py       runtime directory ownership
+resources/                     curated profanity policy files
+scripts/                       bootstrap, diagnostics, and maintenance commands
+tests/                         backend regression tests
+```
+
+The root Python commands remain as compatibility entry points. New backend code should import package modules directly.
 
 ## Requirements
 
@@ -30,7 +46,7 @@ From the repository root:
 python setup.py --install-system-dependencies
 ```
 
-The command creates `.venv` plus `ready/`, `transcoded/`, `processed/`, and `transcripts/`, then installs dependencies from `requirements.txt` into the virtual environment.
+The command creates `.venv` plus `ready/`, `finished/`, `processed/`, and `transcripts/`, then installs dependencies from `requirements.txt` into the virtual environment.
 
 Setup also creates a repository-local Whisper cache at `whisper-cache/` by default and prints both the active cache path and current cache size. If Whisper models were previously downloaded to the user cache outside the repo, setup points you to the cache migration helper.
 
@@ -96,16 +112,16 @@ Review potentially profane words without creating output files or moving any med
 .\.venv\Scripts\python.exe batch_process.py --report-only
 ```
 
-The report lists words detected by the broader `better-profanity` vocabulary that are not in your curated censor list or exclusions file, with occurrence counts and timestamps. Add reviewed words to [profanity_censor_words.txt](profanity_censor_words.txt) to censor them in future runs, or [profanity_exclusions.txt](profanity_exclusions.txt) to permanently ignore them.
+The report lists words detected by the broader `better-profanity` vocabulary that are not in your curated censor list or exclusions file, with occurrence counts and timestamps. Add reviewed words to [resources/profanity_censor_words.txt](resources/profanity_censor_words.txt) to censor them in future runs, or [resources/profanity_exclusions.txt](resources/profanity_exclusions.txt) to permanently ignore them.
 
-The default censor run uses [profanity_censor_words.txt](profanity_censor_words.txt) as the source of truth and skips inputs with an existing output. Use these deliberate opt-in controls when needed:
+The default censor run uses [resources/profanity_censor_words.txt](resources/profanity_censor_words.txt) as the source of truth and skips inputs with an existing output. Use these deliberate opt-in controls when needed:
 
 ```powershell
 # Replace an existing censored output for files still in ready/.
 .\.venv\Scripts\python.exe batch_process.py --overwrite
 
 # Censor and report words found only in better-profanity's broad vocabulary,
-# unless they are present in profanity_exclusions.txt.
+# unless they are present in resources/profanity_exclusions.txt.
 .\.venv\Scripts\python.exe batch_process.py --include-undiscovered
 
 # Combine both for a full reprocess using the broad vocabulary.
@@ -119,7 +135,7 @@ Use `--report-only` first to review these undiscovered words before enabling bro
 For mono and stereo sources, the workflow silences audio during each profane interval by default (`--censor-method mute`). An alternative **karaoke** method is also available for stereo sources:
 
 ```powershell
-.\venv\Scripts\python.exe batch_process.py --censor-method karaoke
+.\.venv\Scripts\python.exe batch_process.py --censor-method karaoke
 ```
 
 Instead of a hard silence, the karaoke method subtracts the right channel from the left (and vice-versa) during each flagged interval. Audio that is panned equally in both channels - typically centre-panned dialogue and vocals - cancels out. The stereo difference signal - music, ambient sound, and off-centre effects - is preserved, so the gap is less jarring than a clean mute.
@@ -152,11 +168,13 @@ Arguments are:
 ```text
 censor_profanity.py INPUT OUTPUT [large] [TRANSCRIPTS_DIR]
 ```
+
 Pass `--censor-method karaoke` to use centre-channel cancellation instead of hard muting:
 
 ```powershell
-.\venv\Scripts\python.exe censor_profanity.py input.mkv output.mkv --censor-method karaoke
+.\.venv\Scripts\python.exe censor_profanity.py input.mkv output.mkv --censor-method karaoke
 ```
+
 ## Acceleration
 
 The runtime detects FFmpeg encoders and chooses the first available option in this order:
@@ -188,14 +206,14 @@ An encoder override must be listed by `ffmpeg -encoders` or processing fails cle
 
 ## Configuration
 
-[config.ini](config.ini) records the project-relative folder layout and the preferred `large` model. Runtime folder locations currently default to the repository root; use `CENSOR_PROJECT_ROOT` to run the workflow against another root directory:
+An optional local `config.ini` can override runtime preferences; [config.example.ini](config.example.ini) documents the supported values. Runtime folder locations currently default to the repository root; use `CENSOR_PROJECT_ROOT` to run the workflow against another root directory:
 
 ```powershell
 $env:CENSOR_PROJECT_ROOT = 'D:\media-censor-workflow'
 .\.venv\Scripts\python.exe batch_process.py --list
 ```
 
-Whisper model downloads also default to a project-relative cache folder configured in [config.ini](config.ini). Override it only when you intentionally want models stored outside the repo:
+Whisper model downloads default to the project-relative `whisper-cache/` folder. Override it only when you intentionally want models stored outside the repo:
 
 ```powershell
 $env:CENSOR_WHISPER_CACHE_DIR = 'D:\model-cache\whisper'
@@ -204,9 +222,9 @@ $env:CENSOR_WHISPER_CACHE_DIR = 'D:\model-cache\whisper'
 
 Under `[Whisper]`, `Device = auto` and `ComputeType = auto` are the portable defaults. They are evaluated on each machine. `CENSOR_WHISPER_DEVICE` and `CENSOR_WHISPER_COMPUTE_TYPE` take precedence for a single run or a locally managed workstation policy.
 
-The workflow uses the curated inclusion list in [profanity_censor_words.txt](profanity_censor_words.txt), not `better-profanity`'s much broader built-in dictionary. Add only words that should produce censored audio, one per line. Blank lines and text after `#` are ignored. The default is configured by `CensorWordsFile` under `[Profanity]` in [config.ini](config.ini).
+The workflow uses the curated inclusion list in [resources/profanity_censor_words.txt](resources/profanity_censor_words.txt), not `better-profanity`'s much broader built-in dictionary. Add only words that should produce censored audio, one per line. Blank lines and text after `#` are ignored. The optional `CensorWordsFile` setting under `[Profanity]` can replace the default.
 
-Use [profanity_exclusions.txt](profanity_exclusions.txt) only as a final override for a configured word that should not be censored. To inject a different source list for one run without modifying the project configuration:
+Use [resources/profanity_exclusions.txt](resources/profanity_exclusions.txt) only as a final override for a configured word that should not be censored. To inject a different source list for one run without modifying the project configuration:
 
 ```powershell
 $env:CENSOR_CENSOR_WORDS_FILE = 'D:\media-policies\strict-censor-words.txt'
@@ -228,11 +246,11 @@ To inspect, migrate, or clean Whisper model caches:
 Run the runtime unit tests without FFmpeg, media files, or GPU hardware:
 
 ```powershell
-.\.venv\Scripts\python.exe -m unittest test_runtime.py
+.\.venv\Scripts\python.exe -m unittest tests.test_runtime
 ```
 
 ## Notes
 
 - The first transcription downloads the requested Whisper model. `large` is substantially slower and larger than `base`.
 - Review censored output before distributing it. Whisper timestamps and profanity detection can require tuning for difficult audio.
-- `ready/`, `transcoded/`, `processed/`, `transcripts/`, `whisper-cache/`, `.venv/`, and Python bytecode caches are intentionally excluded from Git.
+- `ready/`, `finished/`, `processed/`, `transcripts/`, `whisper-cache/`, `.venv/`, and Python bytecode caches are intentionally excluded from Git.
