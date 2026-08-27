@@ -11,6 +11,8 @@ The "processed" folder was originally meant as a workflow status to indicate tha
 
 Once a file is done being transcoded, we need a button to archive it for cleanliness. This is a QOL feature that allows users to keep their queue clean. We can add a setting to allow users to automatically handle archiving, but it should default to off.
 
+To review and fix: Are we recursively checking input folders? That seems useful. It would allow users to organize a directory. We should probably enable it by default, but give the option to turn it off.
+
 ## Whisper Model
 
 Complete. `large-v3` remains the default and recommended model. Users can select `medium`, `small`, `base`, or `tiny`, with a prominent warning that smaller models reduce transcription and timestamp accuracy.
@@ -20,9 +22,9 @@ Complete. `large-v3` remains the default and recommended model. Users can select
 Complete. Users can choose faster-whisper (the default, faster option) or the original OpenAI Whisper implementation (the accuracy-first, slower option). Setup installs and verifies the selected library and model, and transcript caches are tied to that profile.
 
 ## Color Scheme
-The beige colors are okay, but I much prefer a light blue scheme to give the app more personality. The presumed audience is movie-savvy or otherwise a media enthusiast. Blue/orange is a common action-cinema color scheme that we can draw from.
+The beige colors are okay, but I much prefer a light blue scheme to give the app more personality. The presumed audience is movie-savvy or otherwise a media enthusiast. Blue/orange is a common action-cinema color scheme that we can draw from. We can use this for a "light mode" and use standard dark color schemes for a "night mode"
 
-Future options: horror theme, comedy theme, etc.
+~~Future options: horror theme, comedy theme, etc.~~
 
 ## Icon
 
