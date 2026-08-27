@@ -512,11 +512,26 @@ def inspect_whisper_model(cache_dir: Path | None = None) -> DependencyStatus:
     )
 
 
-def inspect_dependencies(cache_dir: Path | None = None) -> DependencyInventory:
+def inspect_dependencies(
+    cache_dir: Path | None = None,
+    *,
+    ffmpeg_bin: str | Path | None = None,
+    ffprobe_bin: str | Path | None = None,
+) -> DependencyInventory:
     """Return dependency state without installing or downloading anything."""
     return DependencyInventory(
-        ffmpeg=inspect_executable("ffmpeg", "FFmpeg", find_ffmpeg(), FFMPEG_VERSION),
-        ffprobe=inspect_executable("ffprobe", "FFprobe", find_ffprobe(), FFMPEG_VERSION),
+        ffmpeg=inspect_executable(
+            "ffmpeg",
+            "FFmpeg",
+            str(ffmpeg_bin) if ffmpeg_bin else find_ffmpeg(),
+            FFMPEG_VERSION,
+        ),
+        ffprobe=inspect_executable(
+            "ffprobe",
+            "FFprobe",
+            str(ffprobe_bin) if ffprobe_bin else find_ffprobe(),
+            FFMPEG_VERSION,
+        ),
         python=inspect_python_dependencies(),
         whisper_model=inspect_whisper_model(cache_dir),
     )
