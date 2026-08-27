@@ -1,6 +1,6 @@
 # Quick Start
 
-Phase 5 and 6 provide a local Python application service and CLI. The Electron interface begins in Phase 7.
+Phase 7 provides an Electron desktop interface over the local Python application service. It is not a browser-hosted application.
 
 ## First-time setup
 
@@ -51,6 +51,18 @@ Configure any Phase 6 options you want to test:
 Other supported values are `karaoke`, `downmix_stereo`, `preserve_source`, and processing devices `auto`, `cpu`, or `cuda`.
 
 ## Run locally
+
+Launch the desktop application:
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+The command opens a native Electron window. Vite is used only to build and hot-reload Electron's React renderer during development.
+
+The Python service commands below remain useful for backend diagnostics and automation.
 
 Put media in `%USERPROFILE%\Documents\Profanity Censor\Ready`, then inspect the Queue-equivalent library snapshot:
 

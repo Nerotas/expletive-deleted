@@ -19,6 +19,33 @@ build/
 .pytest_cache/
 *.egg
 
+# Electron + React Frontend
+/frontend/node_modules/
+/frontend/dist/
+/frontend/dist-electron/
+/frontend/release/
+/frontend/out/
+/frontend/.vite/
+/frontend/.electron-vite/
+/frontend/coverage/
+/frontend/test-results/
+/frontend/*.local
+/frontend/.env.*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+electron-debug.log*
+*.tsbuildinfo
+
+# Windows Application Packaging
+*.exe.blockmap
+*.appx
+*.msix
+*.msixbundle
+*.nupkg
+latest*.yml
+
 # Whisper AI Cache (models auto-downloaded)
 .cache/
 .whisper/

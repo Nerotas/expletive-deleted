@@ -1,6 +1,6 @@
 # Profanity Censor
 
-Profanity Censor transcribes audio and video locally with faster-whisper, identifies configured profanity from word-level timestamps, and censors those intervals with FFmpeg. Phase 5 and 6 provide a runnable Python application service and CLI; the Electron interface begins in Phase 7.
+Profanity Censor transcribes audio and video locally with faster-whisper, identifies configured profanity from word-level timestamps, and censors those intervals with FFmpeg. The Phase 7 Electron desktop interface controls the local Python application service; this is not a browser-hosted application.
 
 Windows is the current application target. The processing engine remains portable, but macOS and Linux packaging are future work.
 
@@ -141,6 +141,16 @@ Change any working directory independently when needed:
 ```
 
 ## Use the Local Application
+
+Launch the native desktop application from the repository root:
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Vite is used only as Electron's renderer build and hot-reload tool. Normal users interact with the Electron window, not a browser URL.
 
 Place a supported file in the configured `Ready` directory and inspect the Queue-equivalent library snapshot:
 
