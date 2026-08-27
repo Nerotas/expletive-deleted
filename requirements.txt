@@ -1,3 +1,6 @@
-faster-whisper
-better-profanity
-numpy
+faster-whisper==1.2.1
+better-profanity==0.7.0
+numpy==2.5.2
+ctranslate2==4.8.1
+av==18.1.0
+huggingface-hub==1.28.0

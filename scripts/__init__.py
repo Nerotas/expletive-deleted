@@ -1,0 +1,1 @@
+"""Bootstrap and maintenance commands for Profanity Censor."""

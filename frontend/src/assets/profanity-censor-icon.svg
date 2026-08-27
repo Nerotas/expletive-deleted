@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Profanity Censor icon</title>
+  <desc id="desc">Dollar, percent, and exclamation symbols behind a prohibition sign.</desc>
+
+  <g fill="none" stroke="#242424" stroke-width="28" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M168 164
+             C132 140 104 159 104 190
+             C104 223 132 232 164 240
+             C197 248 220 260 220 291
+             C220 328 184 346 148 333
+             C126 326 111 315 99 302"/>
+    <path d="M160 132 V365"/>
+
+    <circle cx="275" cy="197" r="28"/>
+    <circle cx="340" cy="305" r="28"/>
+    <path d="M344 163 L270 339"/>
+
+    <path d="M411 158 L406 286"/>
+    <circle cx="404" cy="340" r="14" fill="#242424" stroke="none"/>
+  </g>
+
+  <g fill="none" stroke="#D92929" stroke-width="46" stroke-linecap="round">
+    <circle cx="256" cy="256" r="190"/>
+    <path d="M123 123 L389 389"/>
+  </g>
+</svg>
