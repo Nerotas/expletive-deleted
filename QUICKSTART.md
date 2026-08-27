@@ -19,6 +19,8 @@ Inspect prerequisites without downloading or installing anything:
 
 The plan command displays the pinned source, revision, estimated size, command, and approval ID. Download the model only after reviewing that plan:
 
+Profanity Censor requires Whisper `large-v3`. Smaller Whisper models do not provide reliable enough words or timestamps for this censorship workflow and are not supported. The dependency plan and runtime are deliberately pinned to `large-v3`; do not substitute a smaller model.
+
 ```powershell
 .\.venv\Scripts\python.exe manage_dependencies.py install --component whisper_model --approve PLAN_ID
 ```
