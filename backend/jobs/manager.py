@@ -213,7 +213,8 @@ class JobManager:
             if cancellation.is_set():
                 raise InterruptedError("Job cancelled")
             if not success:
-                raise RuntimeError("Processing engine reported failure")
+                detail = getattr(censor, "last_error", None)
+                raise RuntimeError(detail or "Processing engine reported failure")
 
             with self._lock:
                 if self._jobs[job_id].mode == "report_only":
