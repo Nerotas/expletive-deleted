@@ -76,6 +76,7 @@ temp_*
 
 # Local Configuration (may contain paths)
 config.ini
+settings.ini
 .env
 .env.local
 /cookies.txt

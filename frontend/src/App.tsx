@@ -47,6 +47,7 @@ function App() {
   const [page, setPage] = useState<Page>('queue')
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null)
   const [settings, setSettings] = useState<Settings | null>(null)
+  const [settingsDirty, setSettingsDirty] = useState(false)
   const [library, setLibrary] = useState<LibraryItem[]>([])
   const [jobs, setJobs] = useState<Job[]>([])
   const [jobEvents, setJobEvents] = useState<Record<string, JobEvent>>({})
@@ -63,7 +64,7 @@ function App() {
       const [nextSettings, nextLibrary, nextJobs] = await Promise.all([
         invoke<Settings>('settings.get'), invoke<LibraryItem[]>('library.list'), invoke<Job[]>('jobs.list'),
       ])
-      startTransition(() => { setSettings(nextSettings); setLibrary(nextLibrary); setJobs(nextJobs) })
+      startTransition(() => { if (!settingsDirty) setSettings(nextSettings); setLibrary(nextLibrary); setJobs(nextJobs) })
       const eventGroups = await Promise.all(nextJobs.map((job) => invoke<JobEvent[]>('jobs.events', { job_id: job.id })))
       setJobEvents(Object.fromEntries(eventGroups.flatMap((events) => events.length ? [[events.at(-1)!.job_id, events.at(-1)!]] : [])))
       if (!quiet) {
@@ -74,7 +75,7 @@ function App() {
       setError(null)
     } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)) }
     finally { if (!quiet) setLoading(false) }
-  }, [])
+  }, [settingsDirty])
 
   useEffect(() => {
     const initial = window.setTimeout(() => void refresh(), 0)
@@ -97,7 +98,7 @@ function App() {
 
   const saveSettings = async () => {
     if (!settings) return
-    await run(async () => { const updated = await invoke<Settings>('settings.update', { settings }); setSettings(updated); setCapabilities(await invoke<Capabilities>('capabilities.get')); setNotice('Settings saved') })
+    await run(async () => { const updated = await invoke<Settings>('settings.update', { settings }); setSettings(updated); setSettingsDirty(false); setCapabilities(await invoke<Capabilities>('capabilities.get')); setNotice('Settings saved') })
   }
   const startBatch = async () => {
     const pending = library.filter((item) => item.status !== 'finished')
@@ -116,7 +117,7 @@ function App() {
   const chooseDirectory = async (key: keyof Settings['directories']) => {
     if (!settings) return
     const selected = await desktopApi().selectDirectory(settings.directories[key])
-    if (selected) setSettings({ ...settings, directories: { ...settings.directories, [key]: selected } })
+    if (selected) { setSettings({ ...settings, directories: { ...settings.directories, [key]: selected } }); setSettingsDirty(true) }
   }
   const retryJob = async (job: Job) => run(async () => { await invoke<Job>('jobs.submit', { source: job.source, mode: job.mode }); setNotice(`${fileName(job.source)} queued again`) })
   const updateDictionary = async (target: 'censor' | 'exclude', word: string, action: 'add' | 'remove' = 'add') => run(async () => {
@@ -149,7 +150,7 @@ function App() {
         <div className="queue-summary"><Metric label="Ready" value={mergedRows.filter(({ item, job }) => !job && item.status === 'ready').length} tone="neutral" /><Metric label="Active" value={activeJob ? 1 : 0} tone="active" /><Metric label="Transcribed" value={mergedRows.filter(({ item, job }) => (job?.status ?? item.status) === 'transcribed').length} tone="warning" /><Metric label="Finished" value={mergedRows.filter(({ item, job }) => ['finished', 'completed'].includes(job?.status ?? item.status)).length} tone="success" /></div>
         <div className="table-frame"><table><thead><tr><th>File</th><th>Status</th><th>Progress</th><th>Details</th></tr></thead><tbody>{mergedRows.map(({ item, job }) => { const status = job?.status ?? item.status; const percent = job?.progress_percent; const event = job ? jobEvents[job.id] : undefined; const detail = event?.fps ? `${Math.round(event.fps)} FPS${event.eta_seconds != null ? ` · ${formatEta(event.eta_seconds)} left` : ''}` : event?.eta_seconds != null ? `${formatEta(event.eta_seconds)} left` : job?.error?.detail ?? (status === 'transcribed' ? 'Report available' : ['completed', 'finished'].includes(status) ? 'Output verified' : activeJob?.id === job?.id ? 'Processing locally' : 'Waiting'); const canArchive = item.status === 'transcribed' || item.status === 'finished'; return <tr key={item.source}><td><div className="file-cell"><span className="file-icon">{fileName(item.source).split('.').pop()?.toUpperCase()}</span><div><strong>{fileName(item.source)}</strong><small>{item.source}</small></div></div></td><td><StatusBadge status={status} /></td><td>{percent != null ? <div className="progress-wrap"><div className="progress-track"><span style={{ width: `${percent}%` }} /></div><span>{Math.round(percent)}%</span></div> : <span className="muted">—</span>}</td><td className="details-cell"><span>{detail}</span>{item.transcript && <button onClick={() => void openReview(item.source)}>Review words</button>}{canArchive && <button disabled={busy || Boolean(activeJob)} onClick={() => void archiveSource(item.source)}><ArchiveIcon size={13} />Archive source</button>}{job?.status === 'failed' && job.error?.retryable && <button onClick={() => retryJob(job)}>Retry</button>}</td></tr> })}{!loading && mergedRows.length === 0 && <tr><td colSpan={4}><div className="empty-state"><FolderOpen size={28} /><strong>No media in Ready</strong><span>Add a supported audio or video file to the configured input folder.</span></div></td></tr>}</tbody></table>{loading && <div className="loading-row"><LoaderCircle className="spin" size={20} />Reading local library</div>}</div>
         <div className="path-bar"><FolderOpen size={16} /><span>{settings?.directories.input}</span><button onClick={() => setPage('settings')}>Change folder</button></div>
-      </section> : page === 'dictionary' ? <DictionaryPage dictionary={dictionary} busy={busy} updateDictionary={updateDictionary} /> : settings ? <SettingsPage settings={settings} setSettings={setSettings} chooseDirectory={chooseDirectory} save={saveSettings} busy={busy} capabilities={capabilities} /> : <div className="loading-row"><LoaderCircle className="spin" size={20} />Loading settings</div>}
+      </section> : page === 'dictionary' ? <DictionaryPage dictionary={dictionary} busy={busy} updateDictionary={updateDictionary} /> : settings ? <SettingsPage settings={settings} setSettings={(nextSettings) => { setSettings(nextSettings); setSettingsDirty(true) }} chooseDirectory={chooseDirectory} save={saveSettings} busy={busy} capabilities={capabilities} /> : <div className="loading-row"><LoaderCircle className="spin" size={20} />Loading settings</div>}
     </main>
     {review && <ReviewDialog review={review} busy={busy} onClose={() => setReview(null)} onClassify={(word, target) => void updateDictionary(target, word)} />}
   </div>

@@ -43,7 +43,7 @@ The root Python commands remain as compatibility entry points. New backend code 
 
 The repository bootstrap installs Python packages in a local `.venv`. FFmpeg and the Whisper model follow the reviewed dependency-plan workflow described below.
 
-User media and transcripts default to `Documents\Profanity Censor`. Internal settings use the operating system's application-data location; the current development model cache remains under the repository unless overridden.
+User media and transcripts default to `Documents\Profanity Censor`. Internal settings use the operating system's application-data location in an automatically created `settings.ini`; the current development model cache remains under the repository unless overridden.
 
 ## Prepare the Application
 
@@ -84,7 +84,7 @@ Windows defaults:
 %USERPROFILE%\Documents\Profanity Censor\Transcripts
 ```
 
-Settings are stored at `%LOCALAPPDATA%\ProfanityCensor\settings\settings.json` by default.
+Settings are stored at `%LOCALAPPDATA%\ProfanityCensor\settings.ini` by default. The generated, machine-specific file is ignored by Git; [`config.example.ini`](config.example.ini) documents its schema.
 
 Setup also creates a repository-local Whisper cache at `whisper-cache/` by default and prints both the active cache path and current cache size. If Whisper models were previously downloaded to the user cache outside the repo, setup points you to the cache migration helper.
 
@@ -115,7 +115,7 @@ Inspect the effective settings:
 .\.venv\Scripts\python.exe backend_app.py settings
 ```
 
-Configure all Phase 6 processing preferences through validated commands rather than editing JSON:
+Configure all processing preferences through the Settings page or validated commands; the same changes are saved to `settings.ini`:
 
 ```powershell
 # Safe first pass: transcribe and report without creating media output.
