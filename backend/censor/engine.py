@@ -290,6 +290,7 @@ class ProfanityCensor:
         self.review_candidates: list[dict] = []
         self.used_cached_transcript: bool = False
         self.profane_count: int = 0
+        self.last_error: str | None = None
         print(f"[*] Loaded {len(self.censor_words)} profanity censor word(s): {self.censor_words_file}")
         print(f"[*] Loaded {len(self.exclude_words)} profanity exclusion(s): {self.exclusions_file}")
 
@@ -767,11 +768,13 @@ class ProfanityCensor:
                 if result.returncode != 0:
                     error_lines = [line for line in result.stderr.splitlines() if line.strip()]
                     error_detail = error_lines[-1] if error_lines else "unknown FFmpeg error"
+                    self.last_error = f"FFmpeg failed to copy the file: {error_detail}"
                     print(f"[-] Failed to copy file: {error_detail}")
                     return False
                 print(f"[+] File copied: {self.output_file}")
                 return True
             except OSError as e:
+                self.last_error = f"Failed to copy file: {e}"
                 print(f"[-] Failed to copy file: {e}")
                 return False
 
@@ -878,10 +881,14 @@ class ProfanityCensor:
                 print(f"[+] Video censored: {self.output_file}")
                 return True
             else:
+                error_lines = [line for line in result.stderr.splitlines() if line.strip()]
+                error_detail = error_lines[-1] if error_lines else result.stderr[:500]
+                self.last_error = f"FFmpeg failed: {error_detail}"
                 print(f"[-] FFmpeg failed: {result.stderr[:200]}")
                 return False
 
         except Exception as e:
+            self.last_error = f"Error during censoring: {e}"
             print(f"[-] Error during censoring: {e}")
             return False
 
@@ -952,6 +959,7 @@ class ProfanityCensor:
             return success
 
         except Exception as e:
+            self.last_error = str(e)
             print(f"[-] Processing failed: {e}")
             print(f"[*] Total elapsed before failure: {self._format_seconds(time.perf_counter() - started)}")
             return False
