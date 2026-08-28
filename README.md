@@ -295,7 +295,7 @@ An encoder override must be listed by `ffmpeg -encoders` or processing fails cle
 
 ## Configuration
 
-Application settings use a versioned JSON schema and atomic writes. Inspect, initialize, validate, or update working directories without a frontend:
+Application settings use a versioned `settings.ini` schema and atomic writes. Inspect, initialize, validate, or update working directories without a frontend:
 
 ```powershell
 .\.venv\Scripts\python.exe manage_settings.py show

@@ -1,0 +1,242 @@
+import { AlertCircle, FolderOpen, RotateCcw, Save } from 'lucide-react'
+import { NumberInput } from '../../components/ui/NumberInput'
+import { PageHeading } from '../../components/ui/PageHeading'
+import { SegmentedControl } from '../../components/ui/SegmentedControl'
+import type { Capabilities, Settings, WhisperLibrary, WhisperModel } from '../../types/domain'
+import { Field, SettingsSection } from './SettingsControls'
+import type { SettingsController } from './useSettingsController'
+import './settings.css'
+
+type SettingsPageProps = {
+  controller: SettingsController
+  capabilities: Capabilities | null
+}
+
+const DIRECTORY_LABELS: Record<keyof Settings['directories'], string> = {
+  input: 'Ready / Input',
+  output: 'Finished / Output',
+  archive: 'Processed / Archive',
+  transcripts: 'Transcripts',
+}
+
+export function SettingsPage({ controller, capabilities }: SettingsPageProps) {
+  const settings = controller.draft
+  if (!settings) return <div className="loading-row">Loading settings</div>
+
+  const setGroup = <K extends keyof Settings>(group: K, value: Settings[K]) => {
+    controller.updateGroup(group, value)
+  }
+
+  return (
+    <section className="page settings-page">
+      <PageHeading title="Settings" subtitle="Persistent preferences for local processing">
+        <button
+          className="button secondary"
+          disabled={controller.busy || !controller.dirty}
+          onClick={controller.discard}
+        >
+          <RotateCcw size={17} />Discard
+        </button>
+        <button
+          className="button primary"
+          disabled={controller.busy || !controller.dirty}
+          onClick={() => void controller.save()}
+        >
+          <Save size={17} />Save changes
+        </button>
+      </PageHeading>
+
+      <div className="settings-layout">
+        <SettingsSection title="Directories" description="User-owned working folders">
+          {(Object.keys(settings.directories) as Array<keyof Settings['directories']>).map((key) => (
+            <label className="path-field" key={key}>
+              <span>{DIRECTORY_LABELS[key]}</span>
+              <div>
+                <input
+                  value={settings.directories[key]}
+                  onChange={(event) => setGroup('directories', {
+                    ...settings.directories,
+                    [key]: event.target.value,
+                  })}
+                />
+                <button
+                  className="icon-button"
+                  title={`Choose ${key} directory`}
+                  onClick={() => void controller.chooseDirectory(key)}
+                >
+                  <FolderOpen size={17} />
+                </button>
+              </div>
+            </label>
+          ))}
+        </SettingsSection>
+
+        <SettingsSection title="Processing" description="Choose the workflow and compute device">
+          <Field label="Mode">
+            <SegmentedControl
+              label="Processing mode"
+              value={settings.processing.mode}
+              options={[["report_only", 'Report only'], ['censor', 'Censor media']]}
+              onChange={(mode) => setGroup('processing', { ...settings.processing, mode })}
+            />
+          </Field>
+          <Field label="Device">
+            <select
+              aria-label="Device"
+              value={settings.processing.device}
+              onChange={(event) => setGroup('processing', {
+                ...settings.processing,
+                device: event.target.value as Settings['processing']['device'],
+              })}
+            >
+              <option value="auto">Automatic ({capabilities?.whisper_device ?? 'detecting'})</option>
+              <option value="cpu">CPU</option>
+              <option value="cuda">CUDA</option>
+            </select>
+          </Field>
+        </SettingsSection>
+
+        <SettingsSection title="Censoring" description="Audio treatment and interval timing">
+          <Field label="Stereo method">
+            <SegmentedControl
+              label="Stereo method"
+              value={settings.censoring.stereo_method}
+              options={[["drop_audio", 'Drop audio'], ['karaoke', 'Karaoke']]}
+              onChange={(stereo_method) => setGroup('censoring', {
+                ...settings.censoring,
+                stereo_method,
+              })}
+            />
+          </Field>
+          <div className="field-pair">
+            <Field label="Before word">
+              <NumberInput
+                label="Before word"
+                value={settings.censoring.padding_before_ms}
+                onChange={(padding_before_ms) => setGroup('censoring', {
+                  ...settings.censoring,
+                  padding_before_ms,
+                })}
+              />
+            </Field>
+            <Field label="After word">
+              <NumberInput
+                label="After word"
+                value={settings.censoring.padding_after_ms}
+                onChange={(padding_after_ms) => setGroup('censoring', {
+                  ...settings.censoring,
+                  padding_after_ms,
+                })}
+              />
+            </Field>
+          </div>
+        </SettingsSection>
+
+        <SettingsSection title="Output" description="Audio layout, video handling, and source safety">
+          <Field label="Surround audio">
+            <SegmentedControl
+              label="Surround audio"
+              value={settings.audio.surround_output}
+              options={[["preserve_5_1", 'Preserve 5.1'], ['downmix_stereo', 'Downmix to stereo']]}
+              onChange={(surround_output) => setGroup('audio', { surround_output })}
+            />
+          </Field>
+          <Field label="Video">
+            <SegmentedControl
+              label="Video output"
+              value={settings.video.mode}
+              options={[["h264", 'H.264'], ['preserve_source', 'Preserve source']]}
+              onChange={(mode) => setGroup('video', { mode })}
+            />
+          </Field>
+          <label className="toggle-row">
+            <div>
+              <strong>Scan subdirectories</strong>
+              <span>Include supported media inside folders under Ready.</span>
+            </div>
+            <input
+              type="checkbox"
+              checked={settings.source.scan_subdirectories}
+              onChange={(event) => setGroup('source', {
+                ...settings.source,
+                scan_subdirectories: event.target.checked,
+              })}
+            />
+          </label>
+          <label className="toggle-row">
+            <div>
+              <strong>Archive original after success</strong>
+              <span>Off by default. Never moves source files after failure or cancellation.</span>
+            </div>
+            <input
+              type="checkbox"
+              checked={settings.source.archive_after_success}
+              onChange={(event) => setGroup('source', {
+                ...settings.source,
+                archive_after_success: event.target.checked,
+              })}
+            />
+          </label>
+        </SettingsSection>
+
+        <SettingsSection title="Whisper" description="Choose the accuracy and speed profile for transcription">
+          <Field label="Library">
+            <select
+              aria-label="Library"
+              value={settings.whisper.library}
+              onChange={(event) => setGroup('whisper', {
+                ...settings.whisper,
+                library: event.target.value as WhisperLibrary,
+              })}
+            >
+              <option value="faster-whisper">faster-whisper — recommended, much faster</option>
+              <option value="openai-whisper">OpenAI Whisper — accuracy-first, much slower</option>
+            </select>
+          </Field>
+          <Field label="Model">
+            <select
+              aria-label="Model"
+              value={settings.whisper.model}
+              onChange={(event) => setGroup('whisper', {
+                ...settings.whisper,
+                model: event.target.value as WhisperModel,
+              })}
+            >
+              <option value="large-v3">large-v3 — recommended, highest accuracy</option>
+              <option value="medium">medium — faster, lower accuracy</option>
+              <option value="small">small — substantially lower accuracy</option>
+              <option value="base">base — major accuracy tradeoff</option>
+              <option value="tiny">tiny — fastest, lowest accuracy</option>
+            </select>
+          </Field>
+          <div className={`whisper-notice ${settings.whisper.model === 'large-v3' ? 'recommended' : 'warning'}`}>
+            <AlertCircle size={17} />
+            <div>
+              <strong>
+                {settings.whisper.model === 'large-v3'
+                  ? 'Recommended for reliable censoring'
+                  : `${settings.whisper.model} trades accuracy for speed`}
+              </strong>
+              <span>
+                {settings.whisper.model === 'large-v3'
+                  ? 'large-v3 remains the default because it produces the most consistent word detection and timestamps.'
+                  : 'Quality and timestamp accuracy drop noticeably with smaller models. Review transcripts and discovered words carefully.'}
+              </span>
+            </div>
+          </div>
+          <small className="whisper-library-note">
+            Changing the library or model requires its local component download. Existing
+            transcripts from another profile will be regenerated.
+          </small>
+        </SettingsSection>
+
+        <SettingsSection title="About" description="Desktop application identity">
+          <div className="about-setting">
+            <strong>Profanity Censor 0.1.0</strong>
+            <span>Electron desktop · local processing · Windows</span>
+          </div>
+        </SettingsSection>
+      </div>
+    </section>
+  )
+}
