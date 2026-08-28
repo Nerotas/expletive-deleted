@@ -42,6 +42,37 @@ try {
   await mkdir(results, { recursive: true })
   await window.getByRole('heading', { name: 'Settings', exact: true }).waitFor()
   await window.screenshot({ path: path.join(results, 'desktop-settings.png'), fullPage: true })
+
+  const previousTheme = await window.evaluate(() => document.documentElement.dataset.theme)
+  await window.evaluate(() => { document.documentElement.dataset.theme = 'dark' })
+  const activeNavigationContrast = await window.getByRole('link', { name: 'Settings' }).evaluate(
+    (element) => {
+      const parseRgb = (value) => value.match(/\d+(?:\.\d+)?/g)?.slice(0, 3).map(Number) ?? []
+      const luminance = (rgb) => {
+        const channels = rgb.map((channel) => {
+          const normalized = channel / 255
+          return normalized <= 0.04045
+            ? normalized / 12.92
+            : ((normalized + 0.055) / 1.055) ** 2.4
+        })
+        return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
+      }
+      const styles = getComputedStyle(element)
+      const foreground = luminance(parseRgb(styles.color))
+      const background = luminance(parseRgb(styles.backgroundColor))
+      return (Math.max(foreground, background) + 0.05)
+        / (Math.min(foreground, background) + 0.05)
+    },
+  )
+  if (activeNavigationContrast < 4.5) {
+    throw new Error(`Dark active navigation contrast is ${activeNavigationContrast.toFixed(2)}:1`)
+  }
+  await window.screenshot({ path: path.join(results, 'desktop-settings-dark.png'), fullPage: true })
+  await window.evaluate((theme) => {
+    if (theme) document.documentElement.dataset.theme = theme
+    else delete document.documentElement.dataset.theme
+  }, previousTheme)
+
   await window.getByRole('link', { name: 'Queue', exact: true }).click()
   await window.getByRole('heading', { name: 'Queue', exact: true }).waitFor()
 
