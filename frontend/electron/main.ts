@@ -8,6 +8,7 @@ type BridgeResponse = { id: number; ok: true; result: unknown } | { id: number; 
 let window: BrowserWindow | undefined
 let bridge: ChildProcessWithoutNullStreams | undefined
 let requestId = 0
+let bridgeFailure: string | undefined
 const pending = new Map<number, { resolve: (value: unknown) => void; reject: (reason: Error) => void }>()
 
 function rejectPending(message: string): void {
@@ -16,11 +17,19 @@ function rejectPending(message: string): void {
 }
 
 function startBridge(): void {
-  const root = path.resolve(app.getAppPath(), '..')
+  let root: string
+  try {
+    root = findProjectRoot()
+  } catch (error) {
+    bridgeFailure = error instanceof Error ? error.message : String(error)
+    return
+  }
   const venvPython = path.join(root, '.venv', 'Scripts', process.platform === 'win32' ? 'python.exe' : 'python')
-  bridge = spawn(existsSync(venvPython) ? venvPython : 'python', ['scripts/desktop_bridge.py'], {
+  bridge = spawn(existsSync(venvPython) ? venvPython : 'python', ['-m', 'scripts.desktop_bridge'], {
     cwd: root, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true,
   })
+  let stderr = ''
+  bridge.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString() })
   let buffer = ''
   bridge.stdout.on('data', (chunk: Buffer) => {
     buffer += chunk.toString()
@@ -37,12 +46,30 @@ function startBridge(): void {
       } catch { /* ignore malformed private protocol output */ }
     }
   })
-  bridge.on('error', (error) => rejectPending(`Could not start the local processing service: ${error.message}`))
-  bridge.on('exit', (code) => { bridge = undefined; rejectPending(`The local processing service stopped unexpectedly${code === null ? '' : ` (exit code ${code})`}.`) })
+  bridge.on('error', (error) => {
+    bridgeFailure = `Could not start the local processing service: ${error.message}`
+    rejectPending(bridgeFailure)
+  })
+  bridge.on('exit', (code) => {
+    bridge = undefined
+    bridgeFailure = stderr.trim() || `The local processing service stopped unexpectedly${code === null ? '' : ` (exit code ${code})`}.`
+    rejectPending(bridgeFailure)
+  })
+}
+
+function findProjectRoot(): string {
+  for (const start of [app.getAppPath(), process.cwd(), __dirname]) {
+    for (let candidate = path.resolve(start); ; candidate = path.dirname(candidate)) {
+      if (existsSync(path.join(candidate, 'scripts', 'desktop_bridge.py'))) return candidate
+      const parent = path.dirname(candidate)
+      if (parent === candidate) break
+    }
+  }
+  throw new Error('Could not find scripts/desktop_bridge.py. Start the desktop app from the repository checkout.')
 }
 
 function invoke(method: string, params?: Record<string, unknown>): Promise<unknown> {
-  if (!bridge?.stdin.writable) return Promise.reject(new Error('The local processing service is unavailable. Restart the desktop application.'))
+  if (!bridge?.stdin.writable) return Promise.reject(new Error(bridgeFailure ?? 'The local processing service is unavailable. Restart the desktop application.'))
   const id = ++requestId
   return new Promise((resolve, reject) => {
     pending.set(id, { resolve, reject })
