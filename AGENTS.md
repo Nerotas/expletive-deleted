@@ -37,17 +37,20 @@ When priorities compete, use this order:
 
 ## Required dependencies and first-run setup
 
-The processing workflow requires Python dependencies, FFmpeg/FFprobe, and the supported Whisper model. Users remain responsible for approving and providing these third-party components, but the application must make that responsibility easy to satisfy.
+The processing workflow requires Python, required Python packages, FFmpeg/FFprobe, and the supported Whisper model. These third-party components are not distributed with the application. The customer is responsible for obtaining and installing them on their system.
 
-- Detect missing or incompatible components automatically.
-- Explain what each component does, why it is required, approximate download/disk impact when known, and what action will occur.
-- Offer an obvious in-app path to obtain, install, and verify supported components.
-- Require explicit approval before downloads or installation. Do not retrieve large models or modify the system silently.
-- Use reviewed, pinned, and inspectable dependency plans. Keep the desktop and CLI dependency workflows backed by the same implementation.
-- Prefer application-managed dependencies that do not require users to edit `PATH` or understand package managers.
-- Make failures retryable and actionable. Preserve completed downloads and valid existing installations whenever possible.
-- Do not report the system as ready until FFmpeg, FFprobe, required Python packages, and the supported Whisper model have been verified.
-- Do not redistribute third-party binaries or models in a new way without checking their licensing and distribution requirements.
+The desktop application must make this setup process as easy as practical without bundling or redistributing those components.
+
+- Detect missing, incompatible, or unverified components automatically.
+- Explain what each component does, why it is required, approximate download/disk impact when known, and what action the user needs to take.
+- Provide clear in-app guidance for obtaining supported versions from approved sources.
+- Where appropriate, the application may open an official download location or provide exact installation instructions, but the user must remain in control of the download and installation.
+- Do not silently download, install, bundle, redistribute, or modify third-party components.
+- Verify components after installation and clearly show what remains missing or incompatible.
+- Make failures retryable and actionable. Preserve valid existing installations and completed model downloads whenever possible.
+- Do not report the system as ready until Python, required Python packages, FFmpeg, FFprobe, and the supported Whisper model have been verified.
+- Keep dependency detection, validation, and setup guidance shared between the desktop and CLI workflows where practical.
+- Do not change the dependency distribution model without an explicit product decision and a licensing review.
 
 The current accuracy baseline is `faster-whisper` with `large-v3`. A change to supported models or the accuracy contract is a product/backend decision, not a renderer-only change.
 
@@ -132,3 +135,19 @@ npm run smoke
 ## Definition of done
 
 A change is done when it improves or preserves the parent-facing workflow, respects media and privacy safeguards, keeps required dependencies understandable and obtainable, follows the architecture boundaries above, includes appropriate tests, passes relevant validation, and leaves documentation accurate.
+
+## Git and repository safety
+
+Coding agents may inspect the repository, modify files in the working tree, run tests, and report proposed changes without additional permission.
+
+Repository history and remote repositories require explicit user authorization.
+
+- Do not create a Git commit unless the user explicitly asks for a commit.
+- Do not push commits or branches to any remote unless the user explicitly asks for a push.
+- Permission to modify files does not imply permission to commit.
+- Permission to commit does not imply permission to push.
+- Do not create or push tags without explicit permission.
+- Do not amend commits, rebase branches, reset history, force-push, delete branches, or perform other history-rewriting/destructive Git operations without explicit permission for that specific operation.
+- Do not discard, overwrite, clean, stash, or otherwise remove unrelated worktree changes unless explicitly instructed.
+- Before an authorized commit, report the files being committed and the validation performed.
+- Before an authorized push, report the branch and remote that will receive the changes.
