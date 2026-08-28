@@ -18,6 +18,20 @@ export type LibraryItem = {
   output: string | null
 }
 
+export type ArchiveItem = {
+  source: string
+  relative_path: string
+  size_bytes: number
+  archived_at: string
+}
+
+export type ImportResult = {
+  source: string
+  destination?: string
+  status: 'added' | 'already_exists' | 'unsupported' | 'unavailable' | 'failed'
+  detail?: string
+}
+
 export type JobError = {
   code: string
   message: string
@@ -115,4 +129,3 @@ export type Settings = {
 }
 
 export type InstallPlan = { plan_id: string }
-

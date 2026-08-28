@@ -1,9 +1,11 @@
 import type {
   Capabilities,
+  ArchiveItem,
   DictionaryAction,
   DictionaryInfo,
   DictionaryTarget,
   InstallPlan,
+  ImportResult,
   Job,
   JobEvent,
   LibraryItem,
@@ -36,13 +38,17 @@ export const desktopClient = {
     invoke<unknown>('dependencies.install', { plan_id: planId }),
   listLibrary: () => invoke<LibraryItem[]>('library.list'),
   archiveSource: (source: string) => invoke<unknown>('library.archive', { source }),
+  importSources: (sources: string[]) => invoke<ImportResult[]>('library.import', { sources }),
+  listArchive: () => invoke<ArchiveItem[]>('archive.list'),
+  purgeArchiveSource: (source: string) => invoke<unknown>('archive.purge', { source }),
+  purgeArchive: () => invoke<unknown>('archive.purge'),
   listJobs: () => invoke<Job[]>('jobs.list'),
   submitJob: (source: string, mode: Job['mode']) =>
     invoke<Job>('jobs.submit', { source, mode }),
   listJobEvents: (jobId: string) => invoke<JobEvent[]>('jobs.events', { job_id: jobId }),
   cancelJob: (jobId: string) => invoke<Job>('jobs.cancel', { job_id: jobId }),
   selectDirectory: (defaultPath?: string) => bridge().selectDirectory(defaultPath),
+  getDroppedFilePath: (file: File) => bridge().getPathForFile(file),
 }
 
 export type DesktopClient = typeof desktopClient
-

@@ -41,6 +41,23 @@ class DesktopBridgeTests(unittest.TestCase):
         self.assertEqual(response["result"][0]["status"], "ready")
         service.close.assert_called_once()
 
+    def test_archive_and_import_methods_use_the_narrow_service_operations(self):
+        service = MagicMock()
+        archive_item = MagicMock()
+        archive_item.to_dict.return_value = {"source": "C:/media/Processed/movie.mkv"}
+        service.get_archive.return_value = (archive_item,)
+        bridge = DesktopBridge(service)
+
+        imported = bridge.handle("library.import", {"sources": ["C:/media/movie.mkv"]})
+        archived = bridge.handle("archive.list")
+        purged = bridge.handle("archive.purge", {"source": "C:/media/Processed/movie.mkv"})
+
+        service.import_sources.assert_called_once_with([Path("C:/media/movie.mkv")])
+        service.purge_archive_source.assert_called_once_with(Path("C:/media/Processed/movie.mkv"))
+        self.assertEqual(imported, service.import_sources.return_value)
+        self.assertEqual(archived, [{"source": "C:/media/Processed/movie.mkv"}])
+        self.assertEqual(purged, service.purge_archive_source.return_value)
+
     def test_review_list_reads_a_saved_transcript_and_excludes_classified_words(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+from uuid import uuid4
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Callable
@@ -19,7 +20,7 @@ from backend.settings import (
 )
 
 from .capabilities import get_capabilities
-from .library import LibraryItem, scan_library
+from .library import ArchiveItem, LibraryItem, scan_archive, scan_library
 
 
 class ServiceBusyError(RuntimeError):
@@ -28,6 +29,10 @@ class ServiceBusyError(RuntimeError):
 
 class ArchiveSourceError(ValueError):
     """Raised when a Queue source cannot be archived safely."""
+
+
+class ImportSourceError(ValueError):
+    """Raised when a file cannot be safely copied into Ready."""
 
 
 class BackendService:
@@ -71,6 +76,9 @@ class BackendService:
             else None,
         )
 
+    def get_archive(self) -> tuple[ArchiveItem, ...]:
+        return scan_archive(self.settings)
+
     def get_capabilities(self) -> dict[str, object]:
         return get_capabilities(self.settings)
 
@@ -108,6 +116,80 @@ class BackendService:
         except OSError as exc:
             raise ArchiveSourceError(f"Could not archive source: {exc}") from exc
         return {"source": str(source), "archived_to": str(destination)}
+
+    def import_sources(self, sources: list[Path]) -> list[dict[str, object]]:
+        """Copy explicitly selected media to Ready without overwriting originals or targets."""
+        self._ensure_no_active_jobs("Files cannot be added while a job is active")
+        ready = self.settings.directories.input.resolve()
+        results: list[dict[str, object]] = []
+        planned: set[Path] = set()
+        for raw_source in sources:
+            source = raw_source.expanduser().resolve()
+            destination = ready / source.name
+            if not source.is_file() or raw_source.is_symlink():
+                results.append({"source": str(raw_source), "status": "unavailable", "detail": "File is unavailable or is a symbolic link"})
+            elif source.suffix.lower() not in MEDIA_EXTENSIONS:
+                results.append({"source": str(source), "status": "unsupported", "detail": "This file type is not supported"})
+            elif destination.exists() or destination in planned:
+                results.append({"source": str(source), "status": "already_exists", "detail": f"A file named {source.name} is already in Ready"})
+            else:
+                planned.add(destination)
+                temporary = destination.with_name(f".{destination.name}.{uuid4().hex}.partial")
+                try:
+                    shutil.copy2(source, temporary)
+                    temporary.replace(destination)
+                    results.append({"source": str(source), "status": "added", "destination": str(destination)})
+                except OSError as exc:
+                    temporary.unlink(missing_ok=True)
+                    results.append({"source": str(source), "status": "failed", "detail": f"Could not copy file: {exc}"})
+        return results
+
+    def purge_archive_source(self, source: Path) -> dict[str, object]:
+        """Permanently delete one archived original after an explicit UI confirmation."""
+        self._ensure_no_active_jobs("Archived files cannot be deleted while a job is active")
+        source = source.expanduser().resolve()
+        archive_root = self.settings.directories.archive.resolve()
+        try:
+            relative_media_path(source, archive_root)
+        except ValueError as exc:
+            raise ArchiveSourceError(str(exc)) from exc
+        if not source.is_file() or source.is_symlink() or source.suffix.lower() not in MEDIA_EXTENSIONS:
+            raise ArchiveSourceError(f"Archive file is unavailable or unsupported: {source}")
+        size_bytes = source.stat().st_size
+        try:
+            source.unlink()
+            self._remove_empty_archive_parents(source.parent, archive_root)
+        except OSError as exc:
+            raise ArchiveSourceError(f"Could not delete archive file: {exc}") from exc
+        return {"source": str(source), "deleted_bytes": size_bytes}
+
+    def purge_archive(self) -> dict[str, object]:
+        """Permanently delete every supported original in Processed after confirmation."""
+        self._ensure_no_active_jobs("Archived files cannot be deleted while a job is active")
+        deleted_bytes = 0
+        deleted_count = 0
+        for item in self.get_archive():
+            result = self.purge_archive_source(item.source)
+            deleted_count += 1
+            deleted_bytes += int(result["deleted_bytes"])
+        return {"deleted_count": deleted_count, "deleted_bytes": deleted_bytes}
+
+    def _ensure_no_active_jobs(self, message: str) -> None:
+        active = tuple(
+            job for job in self.jobs.list()
+            if job.status not in ("completed", "failed", "cancelled", "transcribed")
+        )
+        if active:
+            raise ServiceBusyError(message)
+
+    @staticmethod
+    def _remove_empty_archive_parents(directory: Path, archive_root: Path) -> None:
+        while directory != archive_root:
+            try:
+                directory.rmdir()
+            except OSError:
+                return
+            directory = directory.parent
 
     def close(self) -> None:
         self.jobs.close()

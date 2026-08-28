@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
@@ -32,6 +33,24 @@ class LibraryItem:
             "status": self.status,
             "transcript": str(self.transcript) if self.transcript else None,
             "output": str(self.output) if self.output else None,
+        }
+
+
+@dataclass(frozen=True)
+class ArchiveItem:
+    """A user-visible original retained in the configured Processed folder."""
+
+    source: Path
+    relative_path: Path
+    size_bytes: int
+    archived_at: datetime
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "source": str(self.source),
+            "relative_path": str(self.relative_path),
+            "size_bytes": self.size_bytes,
+            "archived_at": self.archived_at.isoformat(),
         }
 
 
@@ -84,3 +103,25 @@ def scan_library(
         else:
             items.append(LibraryItem(source, "ready"))
     return tuple(items)
+
+
+def scan_archive(settings: AppSettings) -> tuple[ArchiveItem, ...]:
+    """Return supported originals retained in Processed, without following symlinks."""
+    settings.validate()
+    archive_root = settings.directories.archive
+    if not archive_root.is_dir():
+        raise LibraryScanError(f"Archive directory is not available: {archive_root}")
+    try:
+        items = [
+            ArchiveItem(
+                source=path,
+                relative_path=path.relative_to(archive_root),
+                size_bytes=path.stat().st_size,
+                archived_at=datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc),
+            )
+            for path in archive_root.rglob("*")
+            if path.is_file() and not path.is_symlink() and path.suffix.lower() in MEDIA_EXTENSIONS
+        ]
+    except OSError as exc:
+        raise LibraryScanError(f"Could not scan archive directory {archive_root}: {exc}") from exc
+    return tuple(sorted(items, key=lambda item: str(item.relative_path).casefold()))
