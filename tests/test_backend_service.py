@@ -67,6 +67,44 @@ class BackendServiceTests(unittest.TestCase):
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0].source.name, "movie.mkv")
 
+    def test_import_copies_supported_source_without_overwriting_or_touching_original(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            service = BackendService(self.create_store(root), manager_factory=StubManager)
+            original = root / "outside" / "movie.mkv"
+            original.parent.mkdir()
+            original.write_bytes(b"original")
+            try:
+                result = service.import_sources([original])
+                duplicate = service.import_sources([original])
+            finally:
+                service.close()
+
+            copied = root / "Ready" / "movie.mkv"
+            self.assertEqual(copied.read_bytes(), b"original")
+            self.assertEqual(original.read_bytes(), b"original")
+            self.assertEqual(result[0]["status"], "added")
+            self.assertEqual(duplicate[0]["status"], "already_exists")
+
+    def test_archive_lists_and_purges_only_its_own_supported_files(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            service = BackendService(self.create_store(root), manager_factory=StubManager)
+            archived = root / "Processed" / "nested" / "movie.mkv"
+            archived.parent.mkdir()
+            archived.write_bytes(b"original")
+            (root / "Processed" / "notes.txt").write_text("keep", encoding="utf-8")
+            try:
+                items = service.get_archive()
+                result = service.purge_archive_source(archived)
+            finally:
+                service.close()
+
+            self.assertEqual(items[0].relative_path, Path("nested/movie.mkv"))
+            self.assertEqual(result["deleted_bytes"], len(b"original"))
+            self.assertFalse(archived.exists())
+            self.assertTrue((root / "Processed" / "notes.txt").is_file())
+
 
 if __name__ == "__main__":
     unittest.main()

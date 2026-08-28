@@ -10,6 +10,18 @@ export function formatEta(seconds: number): string {
   return minutes ? `${minutes}m ${total % 60}s` : `${total}s`
 }
 
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  const units = ['KB', 'MB', 'GB', 'TB']
+  let value = bytes
+  let unit = -1
+  do {
+    value /= 1024
+    unit += 1
+  } while (value >= 1024 && unit < units.length - 1)
+  return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unit]}`
+}
+
 export function statusLabel(status: LibraryStatus | JobStatus): string {
   return {
     ready: 'Ready',
@@ -28,4 +40,3 @@ export function statusLabel(status: LibraryStatus | JobStatus): string {
 export function errorMessage(reason: unknown): string {
   return reason instanceof Error ? reason.message : String(reason)
 }
-

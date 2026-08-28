@@ -114,6 +114,20 @@ class DesktopBridge:
             return [item.to_dict() for item in self.service.get_library()]
         if method == "library.archive":
             return self.service.archive_source(Path(params["source"]))
+        if method == "library.import":
+            sources = params.get("sources")
+            if not isinstance(sources, list) or not all(isinstance(source, str) for source in sources):
+                raise ValueError("Adding files requires a list of file paths")
+            return self.service.import_sources([Path(source) for source in sources])
+        if method == "archive.list":
+            return [item.to_dict() for item in self.service.get_archive()]
+        if method == "archive.purge":
+            source = params.get("source")
+            if source is None:
+                return self.service.purge_archive()
+            if not isinstance(source, str):
+                raise ValueError("Archive deletion requires a file path")
+            return self.service.purge_archive_source(Path(source))
         if method == "jobs.list":
             return [job.to_dict() for job in self.service.jobs.list()]
         if method == "jobs.submit":

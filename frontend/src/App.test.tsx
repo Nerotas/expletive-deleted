@@ -38,6 +38,7 @@ describe('desktop application renderer', () => {
     vi.spyOn(desktopClient, 'getCapabilities').mockResolvedValue(readyCapabilities)
     vi.spyOn(desktopClient, 'getDictionary').mockResolvedValue(emptyDictionary)
     vi.spyOn(desktopClient, 'listLibrary').mockResolvedValue([])
+    vi.spyOn(desktopClient, 'listArchive').mockResolvedValue([])
     vi.spyOn(desktopClient, 'listJobs').mockResolvedValue([])
     vi.spyOn(desktopClient, 'listJobEvents').mockResolvedValue([])
     vi.spyOn(desktopClient, 'selectDirectory').mockResolvedValue(undefined)
@@ -110,7 +111,7 @@ describe('desktop application renderer', () => {
   it('renders the empty Queue and performs a Dictionary add through typed actions', async () => {
     const user = userEvent.setup()
     renderApp('/')
-    expect(await screen.findByText('No media in Ready')).toBeInTheDocument()
+    expect(await screen.findByText('Drop media here to add it')).toBeInTheDocument()
     await user.click(screen.getByRole('link', { name: 'Dictionary' }))
     await user.type(await screen.findByRole('textbox', { name: 'Word or phrase' }), 'example')
     await user.click(screen.getByRole('button', { name: 'Add' }))
@@ -121,5 +122,19 @@ describe('desktop application renderer', () => {
       'example',
     ))
   })
-})
 
+  it('shows archived originals in the Queue archive view', async () => {
+    vi.mocked(desktopClient.listArchive).mockResolvedValueOnce([{
+      source: 'C:\\Media\\Processed\\movie.mkv',
+      relative_path: 'movie.mkv',
+      size_bytes: 2_048,
+      archived_at: '2026-08-28T12:00:00+00:00',
+    }])
+    const user = userEvent.setup()
+    renderApp('/')
+
+    await user.click(await screen.findByRole('tab', { name: /archive/i }))
+    expect((await screen.findAllByText('movie.mkv')).length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: 'Delete permanently' })).toBeInTheDocument()
+  })
+})
