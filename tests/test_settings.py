@@ -129,20 +129,22 @@ class SettingsStoreTests(unittest.TestCase):
         root = default_app_data_root({"LOCALAPPDATA": "C:\\Users\\User\\AppData\\Local"})
         self.assertEqual(root, Path("C:\\Users\\User\\AppData\\Local\\ProfanityCensor"))
 
-    def test_missing_file_returns_defaults_without_writing(self):
+    def test_missing_file_initializes_an_ignored_ini_template(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
-            path = Path(temporary_directory) / "settings.json"
+            path = Path(temporary_directory) / "settings.ini"
             defaults = AppSettings.defaults(Path(temporary_directory))
             store = SettingsStore(path, defaults)
 
             loaded = store.load()
 
             self.assertEqual(loaded, defaults)
-            self.assertFalse(path.exists())
+            self.assertTrue(path.exists())
+            self.assertIn("[settings]", path.read_text(encoding="utf-8"))
+            self.assertIn("[directories]", path.read_text(encoding="utf-8"))
 
     def test_save_and_load_round_trip_atomically(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
-            path = Path(temporary_directory) / "nested" / "settings.json"
+            path = Path(temporary_directory) / "nested" / "settings.ini"
             settings = AppSettings.defaults(Path(temporary_directory))
             store = SettingsStore(path, settings)
 
@@ -151,16 +153,29 @@ class SettingsStoreTests(unittest.TestCase):
 
             self.assertEqual(saved_path, path.resolve())
             self.assertEqual(loaded, settings)
-            self.assertEqual(json.loads(path.read_text())["schema_version"], SETTINGS_SCHEMA_VERSION)
+            self.assertIn(f"schema_version = {SETTINGS_SCHEMA_VERSION}", path.read_text(encoding="utf-8"))
             self.assertEqual(list(path.parent.glob("*.tmp")), [])
 
-    def test_invalid_json_is_reported_without_falling_back(self):
+    def test_invalid_ini_is_reported_without_falling_back(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
-            path = Path(temporary_directory) / "settings.json"
-            path.write_text("{not-json", encoding="utf-8")
+            path = Path(temporary_directory) / "settings.ini"
+            path.write_text("[settings\nschema_version = 1", encoding="utf-8")
 
-            with self.assertRaisesRegex(SettingsFileError, "invalid JSON"):
+            with self.assertRaisesRegex(SettingsFileError, "invalid INI"):
                 SettingsStore(path).load()
+
+    def test_legacy_json_is_migrated_when_ini_is_first_loaded(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            path = root / "settings.ini"
+            defaults = AppSettings.defaults(root / "home")
+            (root / "settings.json").write_text(json.dumps(settings_to_dict(defaults)), encoding="utf-8")
+
+            loaded = SettingsStore(path, defaults).load()
+
+            self.assertEqual(loaded, defaults)
+            self.assertTrue(path.exists())
+            self.assertIn("[whisper]", path.read_text(encoding="utf-8"))
 
 
 class DirectoryValidationTests(unittest.TestCase):

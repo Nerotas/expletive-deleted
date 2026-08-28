@@ -52,7 +52,7 @@ The root compatibility files remain intentionally thin. New backend code should 
 
 ## Persistent Settings
 
-Settings default to `%LOCALAPPDATA%\ProfanityCensor\settings\settings.json`. User working directories default to:
+Settings default to `%LOCALAPPDATA%\ProfanityCensor\settings.ini`. It is created automatically from validated defaults, remains outside the repository, and has a tracked [`config.example.ini`](config.example.ini) schema template. Existing `settings.json` files migrate on first launch. User working directories default to:
 
 ```text
 Documents\Profanity Censor\Ready

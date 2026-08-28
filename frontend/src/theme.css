@@ -34,7 +34,7 @@
   background: var(--soft);
 }
 
-.top-nav button.active,
+.top-nav a.active,
 .segmented button.selected,
 .runtime-pill,
 .button,

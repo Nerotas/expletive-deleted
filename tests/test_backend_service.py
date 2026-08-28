@@ -26,7 +26,7 @@ class BackendServiceTests(unittest.TestCase):
             archive=root / "Processed",
             transcripts=root / "Transcripts",
         )
-        return SettingsStore(root / "settings.json", AppSettings(directories=directories))
+        return SettingsStore(root / "settings.ini", AppSettings(directories=directories))
 
     def test_settings_update_is_persisted_and_rebuilds_manager(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -44,7 +44,9 @@ class BackendServiceTests(unittest.TestCase):
             updated = service.update_settings(payload)
             service.close()
 
-            persisted = store.load()
+            reopened = BackendService(store, manager_factory=StubManager)
+            persisted = reopened.settings
+            reopened.close()
 
         self.assertEqual(updated["processing"]["mode"], "report_only")
         self.assertEqual(persisted.processing.mode, "report_only")

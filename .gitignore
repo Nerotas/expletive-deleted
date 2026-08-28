@@ -76,6 +76,7 @@ temp_*
 
 # Local Configuration (may contain paths)
 config.ini
+settings.ini
 .env
 .env.local
 /cookies.txt
@@ -104,11 +105,6 @@ ffmpeg-runtime.json
 *.mp4
 *.mpeg
 *.mpg
-*.ts
-!/frontend/electron.vite.config.ts
-!/frontend/electron/
-!/frontend/electron/*.ts
-!/frontend/src/electron-api.d.ts
 *.webm
 *.wmv
 
