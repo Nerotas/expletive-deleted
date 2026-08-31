@@ -2,7 +2,7 @@
 
 ## Current Status
 
-This repository contains the known-working Python profanity-censor pipeline and is being reconstructed as the backend foundation for the desktop application.
+This repository contains the Python profanity-censor pipeline, local application service, and Electron/React desktop application.
 
 The master product and architecture direction is recorded in [docs/Profanity Censor Desktop App - Master Project Handoff.md](docs/Profanity%20Censor%20Desktop%20App%20%E2%80%94%20Master%20Project%20Handoff.md).
 
@@ -11,20 +11,25 @@ The master product and architecture direction is recorded in [docs/Profanity Cen
 ```text
 Media file
     -> faster-whisper large-v3 transcription
+    -> atomic transcript persistence and post-write validation
     -> word-level timestamps
     -> profanity detection
     -> FFmpeg censor filters
     -> censored output
 ```
 
-The current CLI supports:
+The current desktop and backend application supports:
 
-- Serial folder-based batch processing
+- Explicit single-file transcription, combined processing, and archival actions
+- Checkbox-based selective submission to a one-worker serial queue
+- Ready, Queued, Active, Transcribed, and Finished filtering with queue positions
+- Partial batch acceptance with structured per-file rejection codes
 - Report-only transcription and detection
 - Stereo muting or karaoke cancellation
 - Discrete center-channel handling for recognized surround layouts
 - H.264 stream copy or detected encoder selection
 - Reusable transcript caches
+- A mandatory persisted-transcript gate before any censor/transcode work
 - FFmpeg and Whisper progress reporting
 
 ## Repository Layout
@@ -32,13 +37,16 @@ The current CLI supports:
 ```text
 backend/
   censor/engine.py       Proven transcription, detection, and censor engine
-  jobs/batch.py          Serial folder batch orchestration
+  jobs/                  Serial job manager, records, events, and batch compatibility
+  service/               Library, import, archive, settings, and capability boundary
   runtime/environment.py Dependency, hardware, cache, and encoder discovery
   runtime/paths.py       Runtime folder ownership
+  policy/                Versioned, atomic user-policy overlay
   settings/              Validated schema, atomic store, and path checks
 
 resources/               Curated censor and exclusion word lists
 scripts/                 Bootstrap and maintenance commands
+frontend/                Electron host, typed preload boundary, and React renderer
 tests/                   Backend regression tests
 docs/                    Product and architecture handoff
 
@@ -52,7 +60,11 @@ The root compatibility files remain intentionally thin. New backend code should 
 
 ## Persistent Settings
 
-Settings default to `%LOCALAPPDATA%\ProfanityCensor\settings.ini`. It is created automatically from validated defaults, remains outside the repository, and has a tracked [`config.example.ini`](config.example.ini) schema template. Existing `settings.json` files migrate on first launch. User working directories default to:
+Settings default to `%LOCALAPPDATA%\ProfanityCensor\settings.ini`. It is created automatically from validated defaults, remains outside the repository, and has a tracked [`config.example.ini`](config.example.ini) schema template. Existing `settings.json` files migrate on first launch.
+
+Dictionary changes are stored separately in `%LOCALAPPDATA%\ProfanityCensor\policy.json`. The small versioned document records only user overrides; shipped defaults remain under `resources/`. This lets upgrades add defaults without modifying or losing the user's explicit classifications and removals.
+
+User working directories default to:
 
 ```text
 Documents\Profanity Censor\Ready
@@ -61,7 +73,7 @@ Documents\Profanity Censor\Processed
 Documents\Profanity Censor\Transcripts
 ```
 
-All four paths are independently configurable and validated. The batch keeps source media by default; archival is opt-in and occurs only after verified output.
+All four paths are independently configurable and validated. The application keeps source media by default. Manual archival is available after a verified transcript or output exists and only while the processing queue is idle.
 
 ## Commands
 
@@ -81,12 +93,10 @@ Package entry points are also available for backend development:
 .\.venv\Scripts\python.exe -m scripts.bootstrap --help
 ```
 
-## Next Architecture Milestones
+## Current Architecture Guarantees
 
-1. Formalize jobs, statuses, structured events, and cancellation.
-2. Add dependency and capability service operations.
-3. Complete processing-option coverage and regression fixtures.
-4. Add the local authenticated service boundary.
-5. Build the Electron and React Queue and Settings UI.
-
-The existing engine should remain the behavioral baseline while those layers are added.
+1. Jobs, statuses, structured events, and cancellation are owned by the backend.
+2. Queue execution is session-only, ordered, and limited to one worker.
+3. Electron exposes a narrow validated bridge; the renderer uses the typed desktop client.
+4. Transcoding cannot begin until a compatible transcript has been persisted and verified from disk.
+5. Source media is retained on failed or cancelled work, and incomplete output is removed when safe.

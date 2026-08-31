@@ -96,6 +96,8 @@ export type DictionaryInfo = {
   exclusions_path: string
   exclusions_count: number
   exclusions: string[]
+  overrides_path: string
+  overrides_count: number
   discovered_count: number
   discovered: string[]
   changed?: boolean

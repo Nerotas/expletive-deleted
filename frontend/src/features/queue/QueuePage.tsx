@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import {
   ArchiveIcon,
   CircleStop,
@@ -63,18 +63,10 @@ export function QueuePage({ queue, settings, capabilities, onChangeFolder, onRev
   const selectableSources = mergedRows
     .filter(({ item, pendingJob }) => item.status === 'ready' && !pendingJob)
     .map(({ item }) => item.source)
-  const selectableKey = selectableSources.join('\u0000')
-
-  // Polling can change eligibility while a selection is open, so prune stale choices.
-  useEffect(() => {
-    const eligible = new Set(selectableSources)
-    setSelectedSources((current) => {
-      const retained = new Set([...current].filter((source) => eligible.has(source)))
-      return retained.size === current.size ? current : retained
-    })
-    // selectableKey is a stable primitive derived from the displayed order.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectableKey])
+  const selectableSet = new Set(selectableSources)
+  const eligibleSelections = new Set(
+    [...selectedSources].filter((source) => selectableSet.has(source)),
+  )
 
   const receiveDrop = (event: React.DragEvent<HTMLElement>) => {
     event.preventDefault()
@@ -100,7 +92,8 @@ export function QueuePage({ queue, settings, capabilities, onChangeFolder, onRev
   }
   const toggleSelection = (source: string) => {
     setSelectedSources((current) => {
-      const next = new Set(current)
+      // Polling may have changed eligibility since the last interaction.
+      const next = new Set([...current].filter((candidate) => selectableSet.has(candidate)))
       if (next.has(source)) next.delete(source)
       else next.add(source)
       return next
@@ -156,8 +149,7 @@ export function QueuePage({ queue, settings, capabilities, onChangeFolder, onRev
       queue={queue}
       settings={settings}
       capabilities={capabilities}
-      selectedSources={selectedSources}
-      selectableSources={selectableSources}
+      selectedSources={eligibleSelections}
       onToggleSelection={toggleSelection}
       onSelectAll={(sources) => setSelectedSources(new Set(sources))}
       onClearSelection={() => setSelectedSources(new Set())}
@@ -198,7 +190,6 @@ function QueueView({
   settings,
   capabilities,
   selectedSources,
-  selectableSources,
   onToggleSelection,
   onSelectAll,
   onClearSelection,
@@ -211,7 +202,6 @@ function QueueView({
   settings: Settings | null
   capabilities: Capabilities | null
   selectedSources: Set<string>
-  selectableSources: string[]
   onToggleSelection: (source: string) => void
   onSelectAll: (sources: string[]) => void
   onClearSelection: () => void
@@ -344,6 +334,7 @@ function QueueView({
             onArchive={queue.archiveSource}
             onRetry={queue.retryJob}
             onSubmit={queue.submitFile}
+            onCancelRunning={queue.cancelActive}
             onRemoveQueued={queue.removeQueued}
           />)}
           {!queue.loading && !visibleRows.length && <tr><td colSpan={6}><div className="empty-state">
@@ -411,6 +402,8 @@ function QueueRow({
   item,
   job,
   pendingJob,
+  active,
+  queuePosition,
   event,
   queueIdle,
   processingReady,
@@ -421,11 +414,14 @@ function QueueRow({
   onArchive,
   onRetry,
   onSubmit,
+  onCancelRunning,
   onRemoveQueued,
 }: {
   item: LibraryItem
   job?: Job
   pendingJob?: Job
+  active: boolean
+  queuePosition?: number
   event?: JobEvent
   queueIdle: boolean
   processingReady: boolean
@@ -436,6 +432,7 @@ function QueueRow({
   onArchive: (source: string) => Promise<unknown>
   onRetry: (job: Job) => Promise<unknown>
   onSubmit: (source: string, mode: Job['mode']) => Promise<void>
+  onCancelRunning: () => Promise<unknown>
   onRemoveQueued: (job: Job) => Promise<void>
 }) {
   const displayJob = pendingJob ?? job
@@ -484,11 +481,13 @@ function QueueRow({
       <div><strong>{fileName(item.source)}</strong><small>{item.source}</small></div>
     </div></td>
     <td><StatusBadge status={status} /></td>
+    <td className="position-cell">{active ? <strong>Active</strong> : queuePosition != null ? <span>#{queuePosition}</span> : <span className="muted">—</span>}</td>
     <td>{percent != null ? <div className="progress-wrap"><div className="progress-track"><span style={{ width: `${percent}%` }} /></div><span>{Math.round(percent)}%</span></div> : <span className="muted">—</span>}</td>
     <td className="actions-cell">
       <span className="row-detail">{detail}</span>
       <div className="row-actions" aria-label={`Actions for ${fileName(item.source)}`}>
         {item.transcript && <button onClick={() => onReview(item.source)}>Review words</button>}
+        {active && <button disabled={busy} title="Cancel this running job and keep the source file" onClick={() => void onCancelRunning()}><CircleStop size={13} />Cancel job</button>}
         {pendingJob?.status === 'queued' && <button disabled={busy} title="Remove this waiting job without cancelling the active job" onClick={() => void onRemoveQueued(pendingJob)}><X size={13} />Remove from queue</button>}
         <button
           disabled={transcribeDisabled}

@@ -1,4 +1,5 @@
 import importlib
+import json
 import os
 import io
 import tempfile
@@ -10,8 +11,11 @@ from unittest.mock import MagicMock, patch
 from backend.censor.engine import (
     ProcessingCancelled,
     ProfanityCensor,
+    TranscriptValidationError,
     run_ffmpeg_with_progress,
     transcript_cache_is_compatible,
+    validate_transcript_data,
+    write_transcript_atomic,
 )
 from better_profanity import profanity
 from backend.runtime.environment import (
@@ -233,50 +237,50 @@ class RuntimeTests(unittest.TestCase):
         )
 
     def test_5_1_transcription_uses_extracted_center_channel(self):
-        censor = object.__new__(ProfanityCensor)
-        model = MagicMock()
-        model.transcribe.return_value = (iter(()), MagicMock())
-        censor._shared_model = (model, "cpu")
-        censor.input_file = "input.mkv"
-        censor.model_name = "large"
-        censor.transcripts_dir = None
-        censor.used_cached_transcript = False
-        censor.get_media_duration_seconds = MagicMock(return_value=60.0)
-        censor.has_discrete_center_audio = MagicMock(return_value=True)
-        censor.extract_center_channel = MagicMock(return_value="center.wav")
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            censor = object.__new__(ProfanityCensor)
+            model = MagicMock()
+            model.transcribe.return_value = (iter(()), MagicMock())
+            censor._shared_model = (model, "cpu")
+            censor.input_file = "input.mkv"
+            censor.model_name = "large"
+            censor.whisper_library = "faster-whisper"
+            censor.transcripts_dir = temporary_directory
+            censor.used_cached_transcript = False
+            censor.get_media_duration_seconds = MagicMock(return_value=60.0)
+            censor.has_discrete_center_audio = MagicMock(return_value=True)
+            censor.extract_center_channel = MagicMock(return_value="center.wav")
 
-        with (
-            patch("backend.censor.engine.os.path.exists", return_value=False),
-            patch("backend.censor.engine.record_transcription_timing"),
-        ):
-            transcript = censor.transcribe_with_timestamps()
+            with patch("backend.censor.engine.record_transcription_timing"):
+                transcript = censor.transcribe_with_timestamps()
 
         model.transcribe.assert_called_once()
         self.assertEqual(model.transcribe.call_args.args[0], "center.wav")
         self.assertEqual(transcript["audio_source"], "front_center")
 
     def test_transcription_reports_live_progress_bar(self):
-        censor = object.__new__(ProfanityCensor)
-        model = MagicMock()
-        word = MagicMock(word="hello", start=29.0, end=30.0)
-        segment = MagicMock(text=" hello", words=[word], start=29.0, end=30.0)
-        model.transcribe.return_value = (iter([segment]), MagicMock())
-        censor._shared_model = (model, "cpu")
-        censor.input_file = "input.mkv"
-        censor.model_name = "large"
-        censor.transcripts_dir = None
-        censor.used_cached_transcript = False
-        censor.get_media_duration_seconds = MagicMock(return_value=60.0)
-        censor.has_discrete_center_audio = MagicMock(return_value=False)
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            censor = object.__new__(ProfanityCensor)
+            model = MagicMock()
+            word = MagicMock(word="hello", start=29.0, end=30.0)
+            segment = MagicMock(text=" hello", words=[word], start=29.0, end=30.0)
+            model.transcribe.return_value = (iter([segment]), MagicMock())
+            censor._shared_model = (model, "cpu")
+            censor.input_file = "input.mkv"
+            censor.model_name = "large"
+            censor.whisper_library = "faster-whisper"
+            censor.transcripts_dir = temporary_directory
+            censor.used_cached_transcript = False
+            censor.get_media_duration_seconds = MagicMock(return_value=60.0)
+            censor.has_discrete_center_audio = MagicMock(return_value=False)
 
-        output = io.StringIO()
-        with (
-            patch("backend.censor.engine.os.path.exists", return_value=False),
-            patch("backend.censor.engine.record_transcription_timing"),
-            patch("backend.censor.engine.time.perf_counter", side_effect=[100.0, 110.0, 120.0]),
-            patch("backend.censor.engine.sys.stdout", output),
-        ):
-            censor.transcribe_with_timestamps()
+            output = io.StringIO()
+            with (
+                patch("backend.censor.engine.record_transcription_timing"),
+                patch("backend.censor.engine.time.perf_counter", side_effect=[100.0, 110.0, 120.0]),
+                patch("backend.censor.engine.sys.stdout", output),
+            ):
+                censor.transcribe_with_timestamps()
 
         self.assertIn("[Whisper] [############------------]  50%", output.getvalue())
         self.assertIn("speed 3.00x", output.getvalue())
@@ -353,6 +357,147 @@ class RuntimeTests(unittest.TestCase):
                 self.assertTrue(
                     transcript_cache_is_compatible("episode.mkv", str(transcript_path), "ffprobe")
                 )
+
+    def test_zero_word_transcript_is_valid(self):
+        transcript = validate_transcript_data(
+            {
+                "text": "",
+                "words": [],
+                "audio_source": "full_mix",
+                "whisper_library": "faster-whisper",
+                "whisper_model": "large",
+            },
+            whisper_library="faster-whisper",
+            whisper_model="large",
+        )
+
+        self.assertEqual(transcript["words"], [])
+
+    def test_malformed_word_timestamps_do_not_validate(self):
+        with self.assertRaisesRegex(TranscriptValidationError, "timestamps"):
+            validate_transcript_data(
+                {
+                    "text": "hello",
+                    "words": [{"word": "hello", "start": 2.0, "end": 1.0}],
+                    "audio_source": "full_mix",
+                }
+            )
+
+    def test_atomic_transcript_failure_preserves_prior_artifact(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            transcript_path = Path(temporary_directory) / "movie-transcript.json"
+            transcript_path.write_text("prior transcript", encoding="utf-8")
+            transcript = {
+                "text": "",
+                "words": [],
+                "audio_source": "full_mix",
+                "whisper_library": "faster-whisper",
+                "whisper_model": "large",
+            }
+
+            with (
+                patch("backend.censor.engine.os.replace", side_effect=OSError("disk is read-only")),
+                self.assertRaisesRegex(TranscriptValidationError, "saved and verified"),
+            ):
+                write_transcript_atomic(
+                    transcript_path,
+                    transcript,
+                    whisper_library="faster-whisper",
+                    whisper_model="large",
+                    require_front_center=False,
+                )
+
+            self.assertEqual(transcript_path.read_text(encoding="utf-8"), "prior transcript")
+            self.assertEqual(list(transcript_path.parent.glob("*.tmp")), [])
+
+    def create_gated_pipeline(self, transcript_path: Path, transcription_result):
+        censor = object.__new__(ProfanityCensor)
+        censor.get_transcript_path = MagicMock(return_value=str(transcript_path))
+        censor.estimate_processing_seconds = MagicMock(
+            return_value={"total": 0.0, "transcribe": 0.0, "detect": 0.0, "censor": 0.0, "source": "test"}
+        )
+        if isinstance(transcription_result, Exception):
+            censor.transcribe_with_timestamps = MagicMock(side_effect=transcription_result)
+        else:
+            censor.transcribe_with_timestamps = MagicMock(return_value=transcription_result)
+        censor.whisper_library = "faster-whisper"
+        censor.model_name = "large"
+        censor.has_discrete_center_audio = MagicMock(return_value=False)
+        censor.find_review_candidates = MagicMock(return_value=[])
+        censor.detect_profanity = MagicMock(return_value=[])
+        censor.report_potential_profanity = MagicMock()
+        censor.censor_video = MagicMock(return_value=True)
+        censor.last_error = None
+        return censor
+
+    def test_unsaved_in_memory_transcript_never_unlocks_transcoding(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            transcript_path = Path(temporary_directory) / "missing-transcript.json"
+            valid_in_memory = {
+                "text": "",
+                "words": [],
+                "audio_source": "full_mix",
+                "whisper_library": "faster-whisper",
+                "whisper_model": "large",
+            }
+            censor = self.create_gated_pipeline(transcript_path, valid_in_memory)
+
+            success = censor.process()
+
+        self.assertFalse(success)
+        censor.censor_video.assert_not_called()
+        self.assertIn("No such file", censor.last_error)
+
+    def test_malformed_persisted_transcript_never_unlocks_transcoding(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            transcript_path = Path(temporary_directory) / "movie-transcript.json"
+            malformed = {
+                "text": "hello",
+                "words": [{"word": "hello"}],
+                "audio_source": "full_mix",
+                "whisper_library": "faster-whisper",
+                "whisper_model": "large",
+            }
+            transcript_path.write_text(json.dumps(malformed), encoding="utf-8")
+            censor = self.create_gated_pipeline(transcript_path, malformed)
+
+            success = censor.process()
+
+        self.assertFalse(success)
+        censor.censor_video.assert_not_called()
+        self.assertIn("timestamps", censor.last_error)
+
+    def test_transcription_failure_never_invokes_transcoding(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            transcript_path = Path(temporary_directory) / "movie-transcript.json"
+            censor = self.create_gated_pipeline(
+                transcript_path,
+                RuntimeError("Whisper could not transcribe the file"),
+            )
+
+            success = censor.process()
+
+        self.assertFalse(success)
+        censor.censor_video.assert_not_called()
+        self.assertIn("Whisper could not transcribe", censor.last_error)
+
+    def test_verified_zero_word_transcript_unlocks_transcoding(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            transcript_path = Path(temporary_directory) / "movie-transcript.json"
+            transcript = {
+                "text": "",
+                "words": [],
+                "audio_source": "full_mix",
+                "whisper_library": "faster-whisper",
+                "whisper_model": "large",
+            }
+            transcript_path.write_text(json.dumps(transcript), encoding="utf-8")
+            censor = self.create_gated_pipeline(transcript_path, transcript)
+
+            success = censor.process()
+
+        self.assertTrue(success)
+        censor.censor_video.assert_called_once_with([])
 
     def test_encoder_preference(self):
         self.assertEqual(select_video_encoder({"libx264", "h264_nvenc"}), "h264_nvenc")
@@ -487,10 +632,11 @@ class RuntimeTests(unittest.TestCase):
             status = get_whisper_device_status(requested_device="cuda")
         self.assertEqual(status.requested, "cpu")
 
-    def test_censorship_requires_whisper_large(self):
-        self.assertEqual(require_whisper_model("large"), "large")
+    def test_whisper_model_validation_normalizes_large_alias(self):
+        self.assertEqual(require_whisper_model("large"), "large-v3")
+        self.assertEqual(require_whisper_model("small"), "small")
         with self.assertRaises(ValueError):
-            require_whisper_model("small")
+            require_whisper_model("not-a-model")
 
     def test_whisper_uses_supported_cuda_type_with_sufficient_memory(self):
         ctranslate2 = MagicMock()

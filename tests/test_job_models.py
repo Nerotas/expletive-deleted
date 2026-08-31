@@ -1,7 +1,7 @@
 import unittest
 from pathlib import Path
 
-from backend.jobs import JobError, JobEvent, JobRecord
+from backend.jobs import JobError, JobEvent, JobRecord, JobSubmissionResult
 
 
 class JobModelTests(unittest.TestCase):
@@ -36,6 +36,23 @@ class JobModelTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "0 through 100"):
             JobRecord("job-1", source, "censor", progress_percent=101)
+
+    def test_submission_results_are_discriminated_and_json_ready(self):
+        source = Path("C:/media/movie.mkv").resolve()
+        job = JobRecord("job-1", source, "report_only")
+
+        queued = JobSubmissionResult(source, "queued", job=job).to_dict()
+        rejected = JobSubmissionResult(
+            source,
+            "rejected",
+            code="already_queued",
+            detail="Already waiting",
+        ).to_dict()
+
+        self.assertEqual(queued["job"]["id"], "job-1")
+        self.assertNotIn("code", queued)
+        self.assertEqual(rejected["code"], "already_queued")
+        self.assertNotIn("job", rejected)
 
 
 if __name__ == "__main__":

@@ -41,6 +41,14 @@ describe('desktop application renderer', () => {
     vi.spyOn(desktopClient, 'listArchive').mockResolvedValue([])
     vi.spyOn(desktopClient, 'listJobs').mockResolvedValue([])
     vi.spyOn(desktopClient, 'listJobEvents').mockResolvedValue([])
+    vi.spyOn(desktopClient, 'submitJob').mockImplementation(async (source, mode) => ({
+      id: 'submitted-job', source, mode, status: 'queued', progress_percent: 0, error: null,
+    }))
+    vi.spyOn(desktopClient, 'submitJobs').mockResolvedValue([])
+    vi.spyOn(desktopClient, 'cancelJob').mockImplementation(async (jobId) => ({
+      id: jobId, source: 'C:\\Media\\Ready\\movie.mkv', mode: 'censor', status: 'cancelled', progress_percent: 0, error: null,
+    }))
+    vi.spyOn(desktopClient, 'archiveSource').mockResolvedValue({})
     vi.spyOn(desktopClient, 'selectDirectory').mockResolvedValue(undefined)
     vi.spyOn(desktopClient, 'updateDictionary').mockResolvedValue(emptyDictionary)
     localStorage.clear()
@@ -121,6 +129,131 @@ describe('desktop application renderer', () => {
       'censor',
       'example',
     ))
+  })
+
+  it('shows the shipped resource policy in the Dictionary page', async () => {
+    vi.mocked(desktopClient.getDictionary).mockResolvedValueOnce({
+      words_path: 'C:\\App\\resources\\profanity_censor_words.txt',
+      words_count: 2,
+      words: ['example-censor-one', 'example-censor-two'],
+      exclusions_path: 'C:\\App\\resources\\profanity_exclusions.txt',
+      exclusions_count: 1,
+      exclusions: ['example-exclusion'],
+      overrides_path: 'C:\\Users\\Parent\\AppData\\Local\\ProfanityCensor\\policy.json',
+      overrides_count: 0,
+      discovered_count: 0,
+      discovered: [],
+    })
+
+    renderApp('/dictionary')
+
+    expect(await screen.findByText('example-censor-one')).toBeInTheDocument()
+    expect(screen.getByText('example-censor-two')).toBeInTheDocument()
+    expect(screen.getByText('Built-in defaults: resources/profanity_censor_words.txt')).toBeInTheDocument()
+    expect(screen.getByText('Built-in defaults: resources/profanity_exclusions.txt')).toBeInTheDocument()
+    expect(screen.getByText('No user overrides yet')).toBeInTheDocument()
+  })
+
+  it('does not present a pending Dictionary request as an empty policy', () => {
+    vi.mocked(desktopClient.getDictionary).mockImplementationOnce(
+      () => new Promise(() => undefined),
+    )
+
+    renderApp('/dictionary')
+
+    expect(screen.getByText('Loading censor dictionary')).toBeInTheDocument()
+    expect(screen.queryByText('No words configured.')).not.toBeInTheDocument()
+  })
+
+  it('submits each explicit row action with its required mode', async () => {
+    const source = 'C:\\Media\\Ready\\movie.mkv'
+    vi.mocked(desktopClient.listLibrary).mockResolvedValue([{
+      source,
+      status: 'ready',
+      transcript: null,
+      output: null,
+    }])
+    const user = userEvent.setup()
+    renderApp('/')
+
+    await screen.findByText('movie.mkv')
+    await user.click(await screen.findByRole('button', { name: 'Transcribe only' }))
+    await waitFor(() => expect(desktopClient.submitJob).toHaveBeenCalledWith(source, 'report_only'))
+    await user.click(screen.getByRole('button', { name: 'Transcribe + Transcode' }))
+
+    await waitFor(() => expect(desktopClient.submitJob).toHaveBeenCalledWith(source, 'censor'))
+  })
+
+  it('queues selected files in displayed order and retains rejected selections', async () => {
+    const alpha = 'C:\\Media\\Ready\\alpha.mkv'
+    const zulu = 'C:\\Media\\Ready\\zulu.mkv'
+    vi.mocked(desktopClient.listLibrary).mockResolvedValue([
+      { source: zulu, status: 'ready', transcript: null, output: null },
+      { source: alpha, status: 'ready', transcript: null, output: null },
+    ])
+    vi.mocked(desktopClient.submitJobs).mockResolvedValueOnce([
+      {
+        source: alpha,
+        status: 'queued',
+        job: { id: 'alpha-job', source: alpha, mode: 'censor', status: 'queued', progress_percent: 0, error: null },
+      },
+      { source: zulu, status: 'rejected', code: 'already_queued', detail: 'Already queued' },
+    ])
+    const user = userEvent.setup()
+    renderApp('/')
+
+    await user.click(await screen.findByRole('button', { name: 'Select all shown' }))
+    await user.click(screen.getByRole('button', { name: 'Queue transcribe + transcode' }))
+
+    await waitFor(() => expect(desktopClient.submitJobs).toHaveBeenCalledWith([alpha, zulu], 'censor'))
+    expect(screen.getByRole('checkbox', { name: 'Select alpha.mkv' })).not.toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Select zulu.mkv' })).toBeChecked()
+    expect(await screen.findByRole('alert')).toHaveTextContent('1 queued; 1 could not be queued')
+  })
+
+  it('shows queue positions, filters active and waiting work, and removes only a waiting job', async () => {
+    const active = 'C:\\Media\\Ready\\active.mkv'
+    const first = 'C:\\Media\\Ready\\first.mkv'
+    const second = 'C:\\Media\\Ready\\second.mkv'
+    vi.mocked(desktopClient.listLibrary).mockResolvedValue([
+      { source: second, status: 'ready', transcript: null, output: null },
+      { source: active, status: 'ready', transcript: null, output: null },
+      { source: first, status: 'ready', transcript: null, output: null },
+    ])
+    vi.mocked(desktopClient.listJobs).mockResolvedValue([
+      { id: 'active-job', source: active, mode: 'censor', status: 'transcribing', progress_percent: 20, error: null },
+      { id: 'first-job', source: first, mode: 'report_only', status: 'queued', progress_percent: 0, error: null },
+      { id: 'second-job', source: second, mode: 'censor', status: 'queued', progress_percent: 0, error: null },
+    ])
+    const user = userEvent.setup()
+    renderApp('/')
+
+    expect(await screen.findByText('#1')).toBeInTheDocument()
+    expect(screen.getByText('#2')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Cancel active job' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Cancel job' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /Queued 2/ }))
+    expect(screen.queryByText('active.mkv')).not.toBeInTheDocument()
+    expect(screen.getByText('first.mkv')).toBeInTheDocument()
+    expect(screen.getByText('second.mkv')).toBeInTheDocument()
+
+    await user.click(screen.getAllByRole('button', { name: 'Remove from queue' })[0])
+    await waitFor(() => expect(desktopClient.cancelJob).toHaveBeenCalledWith('first-job'))
+    expect(desktopClient.cancelJob).not.toHaveBeenCalledWith('active-job')
+  })
+
+  it('sorts visible queue rows by file name', async () => {
+    vi.mocked(desktopClient.listLibrary).mockResolvedValue([
+      { source: 'C:\\Media\\Ready\\zulu.mkv', status: 'ready', transcript: null, output: null },
+      { source: 'C:\\Media\\Ready\\alpha.mkv', status: 'ready', transcript: null, output: null },
+    ])
+    const user = userEvent.setup()
+    renderApp('/')
+
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Sort' }), 'name')
+    const fileRows = screen.getAllByRole('row').slice(1)
+    expect(fileRows[0]).toHaveTextContent('alpha.mkv')
+    expect(fileRows[1]).toHaveTextContent('zulu.mkv')
   })
 
   it('shows archived originals in the Queue archive view', async () => {

@@ -10,16 +10,11 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any, TextIO
 
+from backend.policy import PolicyStore, ProfanityPolicy
 from backend.runtime import (
-    add_word_to_list,
     build_install_plan,
     execute_install_plan,
-    get_profanity_censor_words_file,
-    get_profanity_exclusions_file,
     get_whisper_cache_dir,
-    load_profanity_censor_words,
-    load_profanity_exclusions,
-    remove_word_from_list,
 )
 from backend.censor import find_review_candidates
 from backend.jobs.media import transcript_path
@@ -27,8 +22,13 @@ from backend.service import BackendService
 
 
 class DesktopBridge:
-    def __init__(self, service: BackendService | None = None):
+    def __init__(
+        self,
+        service: BackendService | None = None,
+        policy_store: PolicyStore | None = None,
+    ):
         self.service = service or BackendService()
+        self.policy_store = policy_store or PolicyStore()
         self._install_plans = {}
 
     def handle(self, method: str, params: Mapping[str, Any] | None = None) -> object:
@@ -46,20 +46,18 @@ class DesktopBridge:
             word = params.get("word")
             if target not in ("censor", "exclude") or not isinstance(word, str):
                 raise ValueError("Dictionary updates require a censor/exclude target and a word")
-            path, description = self._dictionary_target(target)
-            _, added = add_word_to_list(path, word, description)
-            result = self._dictionary()
-            result["changed"] = added
+            policy, changed = self.policy_store.update(target, word, "add")
+            result = self._dictionary(policy)
+            result["changed"] = changed
             return result
         if method == "dictionary.remove":
             target = params.get("target")
             word = params.get("word")
             if target not in ("censor", "exclude") or not isinstance(word, str):
                 raise ValueError("Dictionary updates require a censor/exclude target and a word")
-            path, description = self._dictionary_target(target)
-            _, removed = remove_word_from_list(path, word, description)
-            result = self._dictionary()
-            result["changed"] = removed
+            policy, changed = self.policy_store.update(target, word, "remove")
+            result = self._dictionary(policy)
+            result["changed"] = changed
             return result
         if method == "reviews.list":
             source = Path(params["source"]).expanduser().resolve()
@@ -70,10 +68,11 @@ class DesktopBridge:
                 words_data = json.loads(transcript.read_text(encoding="utf-8"))
             except json.JSONDecodeError as exc:
                 raise ValueError(f"Transcript could not be read: {transcript}") from exc
+            policy = self.policy_store.load()
             candidates = find_review_candidates(
                 words_data,
-                load_profanity_censor_words(get_profanity_censor_words_file()),
-                load_profanity_exclusions(get_profanity_exclusions_file()),
+                set(policy.censor_words),
+                set(policy.exclusions),
             )
             return {"source": str(source), "candidates": candidates}
         if method == "dependencies.plan":
@@ -168,25 +167,20 @@ class DesktopBridge:
     def close(self) -> None:
         self.service.close()
 
-    @staticmethod
-    def _dictionary_target(target: str) -> tuple[Path, str]:
-        if target == "censor":
-            return get_profanity_censor_words_file(), "Profanity censor words"
-        return get_profanity_exclusions_file(), "Profanity exclusions"
-
-    def _dictionary(self) -> dict[str, object]:
-        words_path = get_profanity_censor_words_file()
-        exclusions_path = get_profanity_exclusions_file()
-        words = sorted(load_profanity_censor_words(words_path))
-        exclusions = sorted(load_profanity_exclusions(exclusions_path))
+    def _dictionary(self, policy: ProfanityPolicy | None = None) -> dict[str, object]:
+        policy = policy or self.policy_store.load()
+        words = sorted(policy.censor_words)
+        exclusions = sorted(policy.exclusions)
         discovered = self._discovered_words(set(words), set(exclusions))
         return {
-            "words_path": str(words_path),
+            "words_path": str(policy.censor_defaults_path),
             "words_count": len(words),
             "words": words,
-            "exclusions_path": str(exclusions_path),
+            "exclusions_path": str(policy.exclusions_defaults_path),
             "exclusions_count": len(exclusions),
             "exclusions": exclusions,
+            "overrides_path": str(policy.overrides_path),
+            "overrides_count": policy.overrides_count,
             "discovered_count": len(discovered),
             "discovered": discovered,
         }

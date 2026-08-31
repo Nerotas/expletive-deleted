@@ -145,7 +145,7 @@ class DependencyInventoryTests(unittest.TestCase):
         )
         with (
             patch("backend.runtime.dependencies.inspect_whisper_model", return_value=missing),
-            self.assertRaisesRegex(DependencyNotReadyError, "Review and approve"),
+            self.assertRaisesRegex(DependencyNotReadyError, "Install it from the app setup"),
         ):
             require_whisper_model_path()
 

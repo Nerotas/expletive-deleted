@@ -77,16 +77,6 @@ class JobManager:
                 "unsupported",
                 f"Unsupported media type: {source.suffix or '(none)'}",
             )
-        if selected_mode == "censor" and output_path(
-            source,
-            self.settings.directories.output,
-            self.settings.directories.input,
-        ).exists():
-            raise JobSubmissionError(
-                "existing_output",
-                f"Output already exists for {source.name}",
-            )
-
         job = JobRecord(uuid4().hex, source, selected_mode)
         cancellation = Event()
         with self._lock:
@@ -97,6 +87,15 @@ class JobManager:
                 raise JobSubmissionError(
                     "already_queued",
                     f"A job is already queued or running for {source.name}",
+                )
+            if selected_mode == "censor" and output_path(
+                source,
+                self.settings.directories.output,
+                self.settings.directories.input,
+            ).exists():
+                raise JobSubmissionError(
+                    "existing_output",
+                    f"Output already exists for {source.name}",
                 )
             self._jobs[job.id] = job
             self._events[job.id] = []

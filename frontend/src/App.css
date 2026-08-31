@@ -23,7 +23,7 @@ main { max-width: 1480px; margin: 0 auto; padding: 28px 34px 56px; }
 .button.primary { background: var(--ink); color: white; border-color: var(--ink); }
 .button.secondary { background: white; }
 .button.danger { color: var(--danger); border-color: #e8c4c0; }
-.button:disabled { opacity: .45; cursor: not-allowed; }
+.button:disabled { cursor: not-allowed; }
 .button:not(:disabled):hover, .icon-button:hover { border-color: var(--signal); }
 .alert { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border: 1px solid; border-radius: 5px; margin-bottom: 14px; font-size: 13px; }
 .alert span { flex: 1; }

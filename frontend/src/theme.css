@@ -79,6 +79,22 @@ th,
   background: var(--signal-strong);
 }
 
+/* Keep disabled actions visibly inactive without washing out their labels. */
+.button:disabled,
+.button.primary:disabled,
+.button.secondary:disabled,
+.button.danger:disabled {
+  opacity: 1;
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--muted) 14%, var(--surface));
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.button:disabled svg {
+  color: currentColor;
+}
+
 .setup-band {
   background: #12354b;
   box-shadow: 0 8px 24px var(--shadow);

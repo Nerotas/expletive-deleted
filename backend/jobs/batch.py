@@ -405,8 +405,8 @@ def main(argv: list[str] | None = None, store: SettingsStore | None = None) -> i
         for word in sorted(all_discovered):
             print(f"  {word}")
         print(
-            "Add to resources/profanity_censor_words.txt to censor, "
-            "or resources/profanity_exclusions.txt to ignore."
+            "Classify these words in the desktop Dictionary to censor or ignore them; "
+            "user changes are stored in the local policy overlay."
         )
     else:
         print("\nNo undiscovered potential words found across all files.")

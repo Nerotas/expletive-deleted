@@ -13,17 +13,14 @@ from pathlib import Path
 from threading import Event
 from typing import Callable, List, Dict
 
+from backend.policy import PolicyStore
 from backend.runtime import (
     available_encoders,
     find_ffmpeg,
     find_ffprobe,
-    get_profanity_censor_words_file,
-    get_profanity_exclusions_file,
     get_calibrated_transcription_factor,
     get_whisper_cache_dir,
     get_whisper_device_status,
-    load_profanity_censor_words,
-    load_profanity_exclusions,
     record_transcription_timing,
     select_working_video_encoder,
     require_whisper_model,
@@ -343,7 +340,8 @@ class ProfanityCensor:
                  video_mode: str = "h264",
                  progress_callback: Callable[[dict[str, object]], None] | None = None,
                  cancellation: Event | None = None, ffmpeg_bin: str | None = None,
-                 ffprobe_bin: str | None = None, whisper_cache_dir: Path | None = None):
+                 ffprobe_bin: str | None = None, whisper_cache_dir: Path | None = None,
+                 policy_store: PolicyStore | None = None):
         self.input_file = input_file
         self.output_file = output_file
         self.model_name = require_whisper_model(model_name)
@@ -379,16 +377,21 @@ class ProfanityCensor:
             self.encoders,
             os.environ.get("CENSOR_VIDEO_ENCODER"),
         )
-        self.censor_words_file = get_profanity_censor_words_file()
-        self.censor_words = load_profanity_censor_words(self.censor_words_file)
-        self.exclusions_file = get_profanity_exclusions_file()
-        self.exclude_words = load_profanity_exclusions(self.exclusions_file)
+        policy = (policy_store or PolicyStore()).load()
+        self.censor_words_file = policy.censor_defaults_path
+        self.censor_words = set(policy.censor_words)
+        self.exclusions_file = policy.exclusions_defaults_path
+        self.exclude_words = set(policy.exclusions)
+        self.policy_file = policy.overrides_path
         self.review_candidates: list[dict] = []
         self.used_cached_transcript: bool = False
         self.profane_count: int = 0
         self.last_error: str | None = None
-        print(f"[*] Loaded {len(self.censor_words)} profanity censor word(s): {self.censor_words_file}")
-        print(f"[*] Loaded {len(self.exclude_words)} profanity exclusion(s): {self.exclusions_file}")
+        print(
+            f"[*] Loaded {len(self.censor_words)} profanity censor word(s) "
+            f"from defaults plus {self.policy_file}"
+        )
+        print(f"[*] Loaded {len(self.exclude_words)} profanity exclusion(s)")
 
     def _check_cancelled(self) -> None:
         cancellation = getattr(self, "cancellation", None)
@@ -1022,13 +1025,20 @@ class ProfanityCensor:
             self._check_cancelled()
             stage_started = time.perf_counter()
             # Transcribe the original file directly (gets accurate timestamps)
-            words_data = self.transcribe_with_timestamps()
-            validate_transcript_data(
-                words_data,
-                whisper_library=self.whisper_library,
-                whisper_model=self.model_name,
-                require_front_center=self.has_discrete_center_audio(),
-            )
+            self.transcribe_with_timestamps()
+            if not transcript_path:
+                raise TranscriptValidationError(
+                    "A persisted transcript is required before processing can continue"
+                )
+            # Re-open the artifact rather than trusting an in-memory result. This is
+            # the final gate shared by report-only and censor/transcode jobs.
+            with Path(transcript_path).open(encoding="utf-8") as transcript_file:
+                words_data = validate_transcript_data(
+                    json.load(transcript_file),
+                    whisper_library=self.whisper_library,
+                    whisper_model=self.model_name,
+                    require_front_center=self.has_discrete_center_audio(),
+                )
             self._check_cancelled()
             print(
                 f"[+] Stage 1 complete in {self._format_seconds(time.perf_counter() - stage_started)}"

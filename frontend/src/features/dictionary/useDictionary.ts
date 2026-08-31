@@ -60,9 +60,16 @@ export function useDictionary({
   })
 
   return {
-    dictionary: updateMutation.data ?? query.data ?? null,
+    // The query cache is the single renderer snapshot. Mutation responses update
+    // it above, while a later reload can still reveal policy-file changes.
+    dictionary: query.data ?? null,
     review,
-    busy: updateMutation.isPending || reviewMutation.isPending,
+    loading: query.isLoading,
+    loadFailed: query.isError,
+    busy: query.isFetching || updateMutation.isPending || reviewMutation.isPending,
+    reload: async () => {
+      await query.refetch()
+    },
     updateDictionary: async (
       target: DictionaryTarget,
       word: string,
