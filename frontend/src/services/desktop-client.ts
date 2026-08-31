@@ -41,6 +41,7 @@ export const desktopClient = {
   archiveSource: (source: string) => invoke<unknown>('library.archive', { source }),
   importSources: (sources: string[]) => invoke<ImportResult[]>('library.import', { sources }),
   listArchive: () => invoke<ArchiveItem[]>('archive.list'),
+  restoreArchiveSource: (source: string) => invoke<unknown>('archive.restore', { source }),
   purgeArchiveSource: (source: string) => invoke<unknown>('archive.purge', { source }),
   purgeArchive: () => invoke<unknown>('archive.purge'),
   listJobs: () => invoke<Job[]>('jobs.list'),

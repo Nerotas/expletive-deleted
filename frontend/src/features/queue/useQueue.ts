@@ -115,6 +115,10 @@ export function useQueue({
       return results
     },
     archive,
+    restoreArchiveSource: (source: string) => run(async () => {
+      await client.restoreArchiveSource(source)
+      onNotice(`${fileName(source)} returned to Ready`)
+    }),
     purgeArchiveSource: (source: string) => run(async () => {
       await client.purgeArchiveSource(source)
       onNotice(`${fileName(source)} permanently deleted`)

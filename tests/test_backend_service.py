@@ -152,6 +152,42 @@ class BackendServiceTests(unittest.TestCase):
             self.assertEqual(source.read_bytes(), b"source")
             self.assertEqual(destination.read_bytes(), b"existing")
 
+    def test_restore_archive_moves_file_back_to_ready_without_overwriting(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            service = BackendService(self.create_store(root), manager_factory=StubManager)
+            archived = root / "Processed" / "nested" / "movie.mkv"
+            archived.parent.mkdir()
+            archived.write_bytes(b"original")
+            destination = root / "Ready" / "nested" / "movie.mkv"
+            output = root / "Finished" / "nested" / "movie-censored.mkv"
+            output.parent.mkdir()
+            output.write_bytes(b"censored")
+            try:
+                service.jobs.list = lambda: (
+                    JobRecord("active-job", destination, "censor", "transcribing", 25.0),
+                )
+                with self.assertRaises(ServiceBusyError):
+                    service.restore_archive_source(archived)
+
+                service.jobs.list = lambda: ()
+                result = service.restore_archive_source(archived)
+                self.assertEqual(result["restored_to"], str(destination))
+                self.assertEqual(destination.read_bytes(), b"original")
+                self.assertFalse(archived.exists())
+                self.assertFalse(archived.parent.exists())
+                self.assertEqual(service.get_library()[0].status, "finished")
+
+                archived.parent.mkdir()
+                archived.write_bytes(b"archived")
+                with self.assertRaisesRegex(ArchiveSourceError, "already exists"):
+                    service.restore_archive_source(archived)
+            finally:
+                service.close()
+
+            self.assertEqual(archived.read_bytes(), b"archived")
+            self.assertEqual(destination.read_bytes(), b"original")
+
 
 if __name__ == "__main__":
     unittest.main()

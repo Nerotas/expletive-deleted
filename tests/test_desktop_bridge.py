@@ -107,12 +107,15 @@ class DesktopBridgeTests(unittest.TestCase):
 
         imported = bridge.handle("library.import", {"sources": ["C:/media/movie.mkv"]})
         archived = bridge.handle("archive.list")
+        restored = bridge.handle("archive.restore", {"source": "C:/media/Processed/movie.mkv"})
         purged = bridge.handle("archive.purge", {"source": "C:/media/Processed/movie.mkv"})
 
         service.import_sources.assert_called_once_with([Path("C:/media/movie.mkv")])
+        service.restore_archive_source.assert_called_once_with(Path("C:/media/Processed/movie.mkv"))
         service.purge_archive_source.assert_called_once_with(Path("C:/media/Processed/movie.mkv"))
         self.assertEqual(imported, service.import_sources.return_value)
         self.assertEqual(archived, [{"source": "C:/media/Processed/movie.mkv"}])
+        self.assertEqual(restored, service.restore_archive_source.return_value)
         self.assertEqual(purged, service.purge_archive_source.return_value)
 
     def test_selective_batch_submission_preserves_ordered_results(self):

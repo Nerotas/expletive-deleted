@@ -120,6 +120,11 @@ class DesktopBridge:
             return self.service.import_sources([Path(source) for source in sources])
         if method == "archive.list":
             return [item.to_dict() for item in self.service.get_archive()]
+        if method == "archive.restore":
+            source = params.get("source")
+            if not isinstance(source, str):
+                raise ValueError("Returning an archived file requires a file path")
+            return self.service.restore_archive_source(Path(source))
         if method == "archive.purge":
             source = params.get("source")
             if source is None:

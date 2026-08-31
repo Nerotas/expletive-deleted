@@ -49,6 +49,7 @@ describe('desktop application renderer', () => {
       id: jobId, source: 'C:\\Media\\Ready\\movie.mkv', mode: 'censor', status: 'cancelled', progress_percent: 0, error: null,
     }))
     vi.spyOn(desktopClient, 'archiveSource').mockResolvedValue({})
+    vi.spyOn(desktopClient, 'restoreArchiveSource').mockResolvedValue({})
     vi.spyOn(desktopClient, 'selectDirectory').mockResolvedValue(undefined)
     vi.spyOn(desktopClient, 'updateDictionary').mockResolvedValue(emptyDictionary)
     localStorage.clear()
@@ -268,6 +269,24 @@ describe('desktop application renderer', () => {
 
     await user.click(await screen.findByRole('tab', { name: /archive/i }))
     expect((await screen.findAllByText('movie.mkv')).length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: 'Return to Queue' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Delete permanently' })).toBeInTheDocument()
+  })
+
+  it('returns an archived original to Ready', async () => {
+    const source = 'C:\\Media\\Processed\\movie.mkv'
+    vi.mocked(desktopClient.listArchive).mockResolvedValue([{
+      source,
+      relative_path: 'movie.mkv',
+      size_bytes: 2_048,
+      archived_at: '2026-08-28T12:00:00+00:00',
+    }])
+    const user = userEvent.setup()
+    renderApp('/')
+
+    await user.click(await screen.findByRole('tab', { name: /archive/i }))
+    await user.click(screen.getByRole('button', { name: 'Return to Queue' }))
+
+    await waitFor(() => expect(desktopClient.restoreArchiveSource).toHaveBeenCalledWith(source))
   })
 })
