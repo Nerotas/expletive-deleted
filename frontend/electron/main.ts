@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, shell, type IpcMainInvokeEvent } from 'electron'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
@@ -110,6 +110,7 @@ function createWindow(): void {
 if (process.platform === 'win32') app.setAppUserModelId(APPLICATION_ID)
 
 app.whenReady().then(() => {
+  if (!process.env.ELECTRON_RENDERER_URL) Menu.setApplicationMenu(null)
   startBridge()
   ipcMain.handle('profanity-censor:invoke', (_event: IpcMainInvokeEvent, method: string, params?: Record<string, unknown>) => invoke(method, params))
   ipcMain.handle('profanity-censor:select-directory', async (_event: IpcMainInvokeEvent, defaultPath?: string) => {

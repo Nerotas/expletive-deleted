@@ -33,6 +33,9 @@ try {
   const desktop = await window.evaluate(() => window.profanityCensor.desktop)
   if (!desktop) throw new Error('Context-isolated desktop bridge was not exposed')
 
+  const applicationMenuVisible = await app.evaluate(({ Menu }) => Menu.getApplicationMenu() !== null)
+  if (applicationMenuVisible) throw new Error('Production Electron menu should be hidden')
+
   await Promise.race([
     window.getByRole('heading', { name: 'Finish local setup', exact: true }).waitFor(),
     window.getByText('System ready', { exact: true }).waitFor(),
