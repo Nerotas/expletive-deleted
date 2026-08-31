@@ -4,6 +4,7 @@
 import os
 import sys
 import json
+import math
 import subprocess
 import tempfile
 import time
@@ -12,17 +13,14 @@ from pathlib import Path
 from threading import Event
 from typing import Callable, List, Dict
 
+from backend.policy import PolicyStore
 from backend.runtime import (
     available_encoders,
     find_ffmpeg,
     find_ffprobe,
-    get_profanity_censor_words_file,
-    get_profanity_exclusions_file,
     get_calibrated_transcription_factor,
     get_whisper_cache_dir,
     get_whisper_device_status,
-    load_profanity_censor_words,
-    load_profanity_exclusions,
     record_transcription_timing,
     select_working_video_encoder,
     require_whisper_model,
@@ -35,10 +33,113 @@ from backend.runtime.transcription import (
 
 
 def _profanity_dictionary():
-    """Load the optional detection library only when detection is requested."""
+    """Create an isolated vendor dictionary only when broad detection is requested."""
     from better_profanity import profanity
 
-    return profanity
+    # The package-level object is mutable. Sharing it lets dictionary review requests
+    # replace the active processing policy while a job is running.
+    return type(profanity)()
+
+
+class TranscriptValidationError(RuntimeError):
+    """Raised when a transcript cannot safely unlock downstream processing."""
+
+
+def validate_transcript_data(
+    transcript_data: object,
+    *,
+    whisper_library: str | None = None,
+    whisper_model: str | None = None,
+    require_front_center: bool = False,
+) -> Dict:
+    """Validate the persisted transcript contract used by detection and censoring."""
+    if not isinstance(transcript_data, dict):
+        raise TranscriptValidationError("Transcript must be a JSON object")
+    if not isinstance(transcript_data.get("text"), str):
+        raise TranscriptValidationError("Transcript text must be a string")
+
+    words = transcript_data.get("words")
+    if not isinstance(words, list):
+        raise TranscriptValidationError("Transcript words must be a list")
+    for index, item in enumerate(words):
+        if not isinstance(item, dict) or not isinstance(item.get("word"), str):
+            raise TranscriptValidationError(f"Transcript word {index} is invalid")
+        start = item.get("start")
+        end = item.get("end")
+        if (
+            isinstance(start, bool)
+            or isinstance(end, bool)
+            or not isinstance(start, (int, float))
+            or not isinstance(end, (int, float))
+            or not math.isfinite(float(start))
+            or not math.isfinite(float(end))
+            or start < 0
+            or end < start
+        ):
+            raise TranscriptValidationError(
+                f"Transcript word {index} has invalid timestamps"
+            )
+
+    audio_source = transcript_data.get("audio_source")
+    if audio_source not in ("full_mix", "front_center"):
+        raise TranscriptValidationError("Transcript audio source is invalid")
+    if require_front_center and audio_source != "front_center":
+        raise TranscriptValidationError(
+            "Transcript must use the source's front-center audio channel"
+        )
+    if whisper_library and transcript_data.get("whisper_library") != whisper_library:
+        raise TranscriptValidationError("Transcript uses a different Whisper library")
+    if whisper_model and transcript_data.get("whisper_model") != whisper_model:
+        raise TranscriptValidationError("Transcript uses a different Whisper model")
+    return transcript_data
+
+
+def write_transcript_atomic(
+    transcript_path: Path,
+    transcript_data: Dict,
+    *,
+    whisper_library: str,
+    whisper_model: str,
+    require_front_center: bool,
+) -> Dict:
+    """Atomically persist and verify a transcript before it can unlock transcoding."""
+    validate = lambda value: validate_transcript_data(
+        value,
+        whisper_library=whisper_library,
+        whisper_model=whisper_model,
+        require_front_center=require_front_center,
+    )
+    validate(transcript_data)
+    transcript_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=transcript_path.parent,
+            prefix=f".{transcript_path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temporary_file:
+            json.dump(transcript_data, temporary_file, indent=2)
+            temporary_file.write("\n")
+            temporary_file.flush()
+            os.fsync(temporary_file.fileno())
+            temporary_path = Path(temporary_file.name)
+
+        with temporary_path.open(encoding="utf-8") as source:
+            validate(json.load(source))
+        os.replace(temporary_path, transcript_path)
+        temporary_path = None
+        with transcript_path.open(encoding="utf-8") as source:
+            return validate(json.load(source))
+    except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise TranscriptValidationError(
+            f"Transcript could not be saved and verified: {exc}"
+        ) from exc
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
 
 
 def probe_audio_stream(ffprobe_bin: str, input_file: str) -> tuple[int, str]:
@@ -87,15 +188,13 @@ def transcript_cache_is_compatible(
     try:
         with open(transcript_path, 'r') as transcript_file:
             transcript_data = json.load(transcript_file)
-        if whisper_library and transcript_data.get("whisper_library") != whisper_library:
-            return False
-        if whisper_model and transcript_data.get("whisper_model") != whisper_model:
-            return False
-        return (
-            transcript_data.get('audio_source') == 'front_center'
-            if has_discrete_center_channel(channels, layout)
-            else True
+        validate_transcript_data(
+            transcript_data,
+            whisper_library=whisper_library,
+            whisper_model=whisper_model,
+            require_front_center=has_discrete_center_channel(channels, layout),
         )
+        return True
     except Exception:
         return False
 
@@ -108,23 +207,19 @@ def find_review_candidates(
     """Find vendor-list matches that a user has not yet classified as censor or ignore."""
     profanity = _profanity_dictionary()
     candidates = []
-    profanity.load_censor_words()
-    try:
-        for word_obj in words_data.get("words", []):
-            word = str(word_obj.get("word", "")).strip(".,!?;:\"' \t")
-            word_lower = word.lower()
-            if not word or word_lower in censor_words or word_lower in exclude_words:
-                continue
-            if profanity.contains_profanity(word_lower):
-                candidates.append(
-                    {
-                        "word": word_lower,
-                        "start": word_obj.get("start"),
-                        "end": word_obj.get("end"),
-                    }
-                )
-    finally:
-        profanity.load_censor_words(list(censor_words))
+    for word_obj in words_data.get("words", []):
+        word = str(word_obj.get("word", "")).strip(".,!?;:\"' \t")
+        word_lower = word.lower()
+        if not word or word_lower in censor_words or word_lower in exclude_words:
+            continue
+        if profanity.contains_profanity(word_lower):
+            candidates.append(
+                {
+                    "word": word_lower,
+                    "start": word_obj.get("start"),
+                    "end": word_obj.get("end"),
+                }
+            )
     return candidates
 
 
@@ -245,7 +340,8 @@ class ProfanityCensor:
                  video_mode: str = "h264",
                  progress_callback: Callable[[dict[str, object]], None] | None = None,
                  cancellation: Event | None = None, ffmpeg_bin: str | None = None,
-                 ffprobe_bin: str | None = None, whisper_cache_dir: Path | None = None):
+                 ffprobe_bin: str | None = None, whisper_cache_dir: Path | None = None,
+                 policy_store: PolicyStore | None = None):
         self.input_file = input_file
         self.output_file = output_file
         self.model_name = require_whisper_model(model_name)
@@ -281,18 +377,21 @@ class ProfanityCensor:
             self.encoders,
             os.environ.get("CENSOR_VIDEO_ENCODER"),
         )
-        self.profanity = _profanity_dictionary()
-        self.censor_words_file = get_profanity_censor_words_file()
-        self.censor_words = load_profanity_censor_words(self.censor_words_file)
-        self.profanity.load_censor_words(list(self.censor_words))
-        self.exclusions_file = get_profanity_exclusions_file()
-        self.exclude_words = load_profanity_exclusions(self.exclusions_file)
+        policy = (policy_store or PolicyStore()).load()
+        self.censor_words_file = policy.censor_defaults_path
+        self.censor_words = set(policy.censor_words)
+        self.exclusions_file = policy.exclusions_defaults_path
+        self.exclude_words = set(policy.exclusions)
+        self.policy_file = policy.overrides_path
         self.review_candidates: list[dict] = []
         self.used_cached_transcript: bool = False
         self.profane_count: int = 0
         self.last_error: str | None = None
-        print(f"[*] Loaded {len(self.censor_words)} profanity censor word(s): {self.censor_words_file}")
-        print(f"[*] Loaded {len(self.exclude_words)} profanity exclusion(s): {self.exclusions_file}")
+        print(
+            f"[*] Loaded {len(self.censor_words)} profanity censor word(s) "
+            f"from defaults plus {self.policy_file}"
+        )
+        print(f"[*] Loaded {len(self.exclude_words)} profanity exclusion(s)")
 
     def _check_cancelled(self) -> None:
         cancellation = getattr(self, "cancellation", None)
@@ -490,28 +589,29 @@ class ProfanityCensor:
             print(f"[-] Failed to extract front-center channel: {e}")
             raise
 
-    def transcribe_with_timestamps(self) -> Dict:
+    def transcribe_with_timestamps(self, force: bool = False) -> Dict:
         """Transcribe audio using Whisper or load from cached transcript."""
         transcript_path = self.get_transcript_path()
+        if not transcript_path:
+            raise TranscriptValidationError(
+                "A transcripts directory is required before media can be processed"
+            )
+        transcript_file = Path(transcript_path)
+        require_front_center = self.has_discrete_center_audio()
 
-        if transcript_path and os.path.exists(transcript_path):
+        if transcript_file.exists() and not force:
             print(f"[*] Loading cached transcript...")
             try:
-                with open(transcript_path, 'r') as f:
+                with transcript_file.open(encoding="utf-8") as f:
                     transcript_data = json.load(f)
-                compatible = (
-                    transcript_data.get("whisper_library") == self.whisper_library
-                    and transcript_data.get("whisper_model") == self.model_name
-                    and (
-                        not self.has_discrete_center_audio()
-                        or transcript_data.get('audio_source') == 'front_center'
-                    )
+                validate_transcript_data(
+                    transcript_data,
+                    whisper_library=self.whisper_library,
+                    whisper_model=self.model_name,
+                    require_front_center=require_front_center,
                 )
-                if not compatible:
-                    print("[!] Cached transcript uses a different Whisper profile or audio source; re-transcribing.")
-                else:
-                    self.used_cached_transcript = True
-                    return transcript_data
+                self.used_cached_transcript = True
+                return transcript_data
             except Exception as e:
                 print(f"[!] Failed to load cached transcript, re-transcribing: {e}")
 
@@ -526,7 +626,7 @@ class ProfanityCensor:
 
             duration = self.get_media_duration_seconds() or 0.0
             transcription_input = self.input_file
-            if self.has_discrete_center_audio():
+            if require_front_center:
                 temporary_audio = self.extract_center_channel()
                 transcription_input = temporary_audio
             # hallucination_silence_threshold prevents drift from hallucinated content in silent sections
@@ -606,16 +706,15 @@ class ProfanityCensor:
                 'whisper_model': self.model_name,
             }
 
-            if transcript_path:
-                os.makedirs(self.transcripts_dir, exist_ok=True)
-                try:
-                    with open(transcript_path, 'w') as f:
-                        json.dump(transcript_data, f, indent=2)
-                    print(f"[+] Transcript saved: {transcript_path}")
-                except Exception as e:
-                    print(f"[!] Failed to save transcript: {e}")
-
-            return transcript_data
+            persisted_transcript = write_transcript_atomic(
+                transcript_file,
+                transcript_data,
+                whisper_library=self.whisper_library,
+                whisper_model=self.model_name,
+                require_front_center=require_front_center,
+            )
+            print(f"[+] Transcript saved and verified: {transcript_path}")
+            return persisted_transcript
         except Exception as e:
             print(f"[-] Transcription failed: {e}")
             raise
@@ -628,28 +727,30 @@ class ProfanityCensor:
         print(f"[*] Detecting profanity...")
 
         profane_words = []
-        if include_undiscovered:
-            self.profanity.load_censor_words()
+        vendor_dictionary = _profanity_dictionary() if include_undiscovered else None
 
-        try:
-            for word_obj in words_data['words']:
-                word = word_obj['word'].strip('.,!?;:\'" \t')
-                word_lower = word.lower()
+        for word_obj in words_data['words']:
+            word = word_obj['word'].strip('.,!?;:\'" \t')
+            word_lower = word.lower()
 
-                if word_lower in self.exclude_words:
-                    continue
+            if word_lower in self.exclude_words:
+                continue
 
-                if self.profanity.contains_profanity(word_lower):
-                    detection = {
-                        'word': word,
-                        'start': word_obj['start'],
-                        'end': word_obj['end'],
-                    }
-                    profane_words.append(detection)
-                    self._emit_detection(word, detection['start'], detection['end'])
-        finally:
-            if include_undiscovered:
-                self.profanity.load_censor_words(list(self.censor_words))
+            # The curated set is the processing source of truth; the vendor list is
+            # consulted only for the explicit include-undiscovered workflow.
+            configured_match = word_lower in self.censor_words
+            vendor_match = (
+                vendor_dictionary is not None
+                and vendor_dictionary.contains_profanity(word_lower)
+            )
+            if configured_match or vendor_match:
+                detection = {
+                    'word': word,
+                    'start': word_obj['start'],
+                    'end': word_obj['end'],
+                }
+                profane_words.append(detection)
+                self._emit_detection(word, detection['start'], detection['end'])
 
         self.profane_count = len(profane_words)
         print(f"[+] Found {len(profane_words)} profane word(s)")
@@ -892,7 +993,12 @@ class ProfanityCensor:
             print(f"[-] Error during censoring: {e}")
             return False
 
-    def process(self, report_only: bool = False, include_undiscovered: bool = False) -> bool:
+    def process(
+        self,
+        report_only: bool = False,
+        include_undiscovered: bool = False,
+        force_transcribe: bool = False,
+    ) -> bool:
         """Execute the complete censoring pipeline."""
         started = time.perf_counter()
         transcript_path = self.get_transcript_path()
@@ -924,7 +1030,23 @@ class ProfanityCensor:
             self._check_cancelled()
             stage_started = time.perf_counter()
             # Transcribe the original file directly (gets accurate timestamps)
-            words_data = self.transcribe_with_timestamps()
+            if force_transcribe:
+                self.transcribe_with_timestamps(force=True)
+            else:
+                self.transcribe_with_timestamps()
+            if not transcript_path:
+                raise TranscriptValidationError(
+                    "A persisted transcript is required before processing can continue"
+                )
+            # Re-open the artifact rather than trusting an in-memory result. This is
+            # the final gate shared by report-only and censor/transcode jobs.
+            with Path(transcript_path).open(encoding="utf-8") as transcript_file:
+                words_data = validate_transcript_data(
+                    json.load(transcript_file),
+                    whisper_library=self.whisper_library,
+                    whisper_model=self.model_name,
+                    require_front_center=self.has_discrete_center_audio(),
+                )
             self._check_cancelled()
             print(
                 f"[+] Stage 1 complete in {self._format_seconds(time.perf_counter() - stage_started)}"

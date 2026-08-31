@@ -44,7 +44,7 @@ class LibraryScannerTests(unittest.TestCase):
 
             with patch(
                 "backend.service.library.transcript_cache_is_compatible",
-                side_effect=lambda _source, candidate, _ffprobe: Path(candidate) == transcript,
+                side_effect=lambda _source, candidate, _ffprobe, *_profile: Path(candidate) == transcript,
             ):
                 items = scan_library(settings, ffprobe_bin="ffprobe")
 

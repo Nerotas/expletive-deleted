@@ -2,7 +2,7 @@
 
 from .events import EventType, JobEvent
 from .manager import JobManager, JobNotFoundError, JobSubmissionError
-from .models import JobError, JobMode, JobRecord, JobStatus
+from .models import JobError, JobMode, JobRecord, JobStatus, JobSubmissionCode, JobSubmissionResult
 
 __all__ = [
 	"EventType",
@@ -14,4 +14,6 @@ __all__ = [
 	"JobRecord",
 	"JobStatus",
 	"JobSubmissionError",
+	"JobSubmissionCode",
+	"JobSubmissionResult",
 ]

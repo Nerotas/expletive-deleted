@@ -46,7 +46,26 @@ export type Job = {
   status: JobStatus
   progress_percent: number | null
   error: JobError | null
+  force_transcribe?: boolean
+  overwrite_output?: boolean
 }
+
+export type JobSubmissionOptions = {
+  force_transcribe?: boolean
+  overwrite_output?: boolean
+}
+
+export type JobSubmissionCode =
+  | 'already_queued'
+  | 'existing_output'
+  | 'invalid_mode'
+  | 'outside_input'
+  | 'unavailable'
+  | 'unsupported'
+
+export type JobSubmissionResult =
+  | { source: string; status: 'queued'; job: Job }
+  | { source: string; status: 'rejected'; code: JobSubmissionCode; detail: string }
 
 export type JobEvent = {
   event: string
@@ -72,6 +91,10 @@ export type Capabilities = {
   whisper_model_ready: boolean
   whisper_device: string
   video_encoders: string[]
+  ffmpeg_version?: string | null
+  ffmpeg_path?: string | null
+  ffprobe_path?: string | null
+  model_path?: string | null
 }
 
 export type DictionaryTarget = 'censor' | 'exclude'
@@ -84,6 +107,8 @@ export type DictionaryInfo = {
   exclusions_path: string
   exclusions_count: number
   exclusions: string[]
+  overrides_path: string
+  overrides_count: number
   discovered_count: number
   discovered: string[]
   changed?: boolean
@@ -128,4 +153,17 @@ export type Settings = {
   }
 }
 
-export type InstallPlan = { plan_id: string }
+export type InstallAction = {
+  id: string
+  dependencies: string[]
+  description: string
+  source_name: string
+  source_url: string
+  estimated_download_bytes: number | null
+  destination: string
+}
+
+export type InstallPlan = {
+  plan_id: string
+  actions: InstallAction[]
+}

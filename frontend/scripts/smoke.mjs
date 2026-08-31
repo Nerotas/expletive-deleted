@@ -1,9 +1,10 @@
-import { mkdir } from 'node:fs/promises'
+import { access, mkdir } from 'node:fs/promises'
 import path from 'node:path'
 
 const electronTempDirectory = process.env.TEMP
 const tempDirectory = path.join(process.cwd(), 'node_modules', '.tmp', 'playwright')
 await mkdir(tempDirectory, { recursive: true })
+await access(path.join(process.cwd(), 'out', 'assets', 'profanity-censor-icon.ico'))
 delete process.env.ELECTRON_RUN_AS_NODE
 process.env.TMPDIR = tempDirectory
 process.env.TMP = tempDirectory
@@ -31,6 +32,9 @@ try {
 
   const desktop = await window.evaluate(() => window.profanityCensor.desktop)
   if (!desktop) throw new Error('Context-isolated desktop bridge was not exposed')
+
+  const applicationMenuVisible = await app.evaluate(({ Menu }) => Menu.getApplicationMenu() !== null)
+  if (applicationMenuVisible) throw new Error('Production Electron menu should be hidden')
 
   await Promise.race([
     window.getByRole('heading', { name: 'Finish local setup', exact: true }).waitFor(),

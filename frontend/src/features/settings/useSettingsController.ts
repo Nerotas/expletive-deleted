@@ -70,6 +70,32 @@ export function useSettingsController({
     }
   }
 
+  const chooseFfmpeg = async () => {
+    try {
+      const selected = await client.selectFile(form.getValues('runtime.ffmpeg_path') ?? undefined)
+      if (!selected) return
+      const inspected = await client.inspectExistingFfmpeg(selected)
+      form.setValue('runtime', {
+        ...form.getValues('runtime'),
+        ffmpeg_path: inspected.ffmpeg_path,
+        ffprobe_path: inspected.ffprobe_path,
+      }, { shouldDirty: true })
+    } catch (reason) {
+      onError(errorMessage(reason))
+    }
+  }
+
+  const chooseWhisperCache = async () => {
+    try {
+      const selected = await client.selectDirectory(
+        form.getValues('runtime.whisper_cache') ?? undefined,
+      )
+      if (selected) form.setValue('runtime.whisper_cache', selected, { shouldDirty: true })
+    } catch (reason) {
+      onError(errorMessage(reason))
+    }
+  }
+
   return {
     persisted: settingsQuery.data ?? null,
     draft,
@@ -81,6 +107,8 @@ export function useSettingsController({
     discard,
     save,
     chooseDirectory,
+    chooseFfmpeg,
+    chooseWhisperCache,
   }
 }
 

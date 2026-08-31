@@ -2,6 +2,7 @@
 
 from .engine import (
     ProfanityCensor,
+    TranscriptValidationError,
     find_review_candidates,
     has_discrete_center_channel,
     is_5_1_stream,
@@ -9,10 +10,13 @@ from .engine import (
     probe_audio_stream,
     run_ffmpeg_with_progress,
     transcript_cache_is_compatible,
+    validate_transcript_data,
+    write_transcript_atomic,
 )
 
 __all__ = [
     "ProfanityCensor",
+    "TranscriptValidationError",
     "find_review_candidates",
     "has_discrete_center_channel",
     "is_5_1_stream",
@@ -20,4 +24,6 @@ __all__ = [
     "probe_audio_stream",
     "run_ffmpeg_with_progress",
     "transcript_cache_is_compatible",
+    "validate_transcript_data",
+    "write_transcript_atomic",
 ]

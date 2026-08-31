@@ -8,7 +8,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Callable
 
-from backend.jobs import JobManager, JobMode, JobRecord
+from backend.jobs import JobManager, JobMode, JobRecord, JobSubmissionResult
 from backend.jobs.media import MEDIA_EXTENSIONS, archive_path, relative_media_path
 from backend.settings import (
     AppSettings,
@@ -82,8 +82,24 @@ class BackendService:
     def get_capabilities(self) -> dict[str, object]:
         return get_capabilities(self.settings)
 
-    def submit_job(self, source: Path, mode: JobMode | None = None) -> JobRecord:
-        return self.jobs.submit(source, mode)
+    def submit_job(
+        self,
+        source: Path,
+        mode: JobMode | None = None,
+        *,
+        force_transcribe: bool = False,
+        overwrite_output: bool = False,
+    ) -> JobRecord:
+        return self.jobs.submit(
+            source,
+            mode,
+            force_transcribe=force_transcribe,
+            overwrite_output=overwrite_output,
+        )
+
+    def submit_jobs(self, sources: list[Path], mode: JobMode) -> tuple[JobSubmissionResult, ...]:
+        """Submit a selective batch while retaining ordered per-source results."""
+        return self.jobs.submit_many(sources, mode)
 
     def archive_source(self, source: Path) -> dict[str, object]:
         """Move a completed or transcribed source out of the Queue without touching artifacts."""
@@ -119,7 +135,6 @@ class BackendService:
 
     def import_sources(self, sources: list[Path]) -> list[dict[str, object]]:
         """Copy explicitly selected media to Ready without overwriting originals or targets."""
-        self._ensure_no_active_jobs("Files cannot be added while a job is active")
         ready = self.settings.directories.input.resolve()
         results: list[dict[str, object]] = []
         planned: set[Path] = set()
@@ -162,6 +177,33 @@ class BackendService:
         except OSError as exc:
             raise ArchiveSourceError(f"Could not delete archive file: {exc}") from exc
         return {"source": str(source), "deleted_bytes": size_bytes}
+
+    def restore_archive_source(self, source: Path) -> dict[str, object]:
+        """Move an archived original back to Ready without overwriting a Queue source."""
+        self._ensure_no_active_jobs("Archived files cannot be returned while a job is active")
+        raw_source = source.expanduser()
+        if raw_source.is_symlink():
+            raise ArchiveSourceError(f"Archive file is unavailable or unsupported: {raw_source}")
+        source = raw_source.resolve()
+        archive_root = self.settings.directories.archive.resolve()
+        input_root = self.settings.directories.input.resolve()
+        try:
+            relative_path = relative_media_path(source, archive_root)
+        except ValueError as exc:
+            raise ArchiveSourceError(str(exc)) from exc
+        if not source.is_file() or source.suffix.lower() not in MEDIA_EXTENSIONS:
+            raise ArchiveSourceError(f"Archive file is unavailable or unsupported: {source}")
+
+        destination = input_root / relative_path
+        if destination.exists():
+            raise ArchiveSourceError(f"Queue destination already exists: {destination}")
+        try:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(source), destination)
+            self._remove_empty_archive_parents(source.parent, archive_root)
+        except OSError as exc:
+            raise ArchiveSourceError(f"Could not return archive file to Queue: {exc}") from exc
+        return {"source": str(source), "restored_to": str(destination)}
 
     def purge_archive(self) -> dict[str, object]:
         """Permanently delete every supported original in Processed after confirmation."""

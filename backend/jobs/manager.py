@@ -15,7 +15,17 @@ from backend.settings import AppSettings
 
 from .events import JobEvent
 from .media import MEDIA_EXTENSIONS, archive_path, output_path, relative_media_path, transcript_path
-from .models import JobError, JobMode, JobRecord, JobStatus
+from .models import (
+    JobError,
+    JobMode,
+    JobRecord,
+    JobStatus,
+    JobSubmissionCode,
+    JobSubmissionResult,
+)
+
+
+TERMINAL_STATUSES = {"completed", "failed", "cancelled", "transcribed"}
 
 
 class JobNotFoundError(KeyError):
@@ -24,6 +34,11 @@ class JobNotFoundError(KeyError):
 
 class JobSubmissionError(ValueError):
     """Raised when a source cannot be submitted safely."""
+
+    def __init__(self, code: JobSubmissionCode, detail: str):
+        self.code = code
+        self.detail = detail
+        super().__init__(detail)
 
 
 class JobManager:
@@ -46,26 +61,97 @@ class JobManager:
         self._futures: dict[str, Future[None]] = {}
         self._sequence = 0
 
-    def submit(self, source: Path, mode: JobMode | None = None) -> JobRecord:
+    def submit(
+        self,
+        source: Path,
+        mode: JobMode | None = None,
+        *,
+        force_transcribe: bool = False,
+        overwrite_output: bool = False,
+    ) -> JobRecord:
         source = source.expanduser().resolve()
+        selected_mode = mode or self.settings.processing.mode
+        if selected_mode not in ("report_only", "censor"):
+            raise JobSubmissionError("invalid_mode", f"Unsupported processing mode: {selected_mode}")
         try:
             relative_media_path(source, self.settings.directories.input)
         except ValueError as exc:
-            raise JobSubmissionError(str(exc)) from exc
+            raise JobSubmissionError("outside_input", str(exc)) from exc
         if not source.is_file():
-            raise JobSubmissionError(f"Source file does not exist: {source}")
+            raise JobSubmissionError("unavailable", f"Source file does not exist: {source}")
         if source.suffix.lower() not in MEDIA_EXTENSIONS:
-            raise JobSubmissionError(f"Unsupported media type: {source.suffix or '(none)'}")
-        selected_mode: JobMode = mode or self.settings.processing.mode
-        job = JobRecord(uuid4().hex, source, selected_mode)
+            raise JobSubmissionError(
+                "unsupported",
+                f"Unsupported media type: {source.suffix or '(none)'}",
+            )
+        if force_transcribe and selected_mode != "report_only":
+            raise JobSubmissionError(
+                "invalid_mode",
+                "A fresh transcript can only be requested for a transcript-only job",
+            )
+        if overwrite_output and selected_mode != "censor":
+            raise JobSubmissionError(
+                "invalid_mode",
+                "Output replacement can only be requested for a censor job",
+            )
+        job = JobRecord(
+            uuid4().hex,
+            source,
+            selected_mode,
+            force_transcribe=force_transcribe,
+            overwrite_output=overwrite_output,
+        )
         cancellation = Event()
         with self._lock:
+            if any(
+                existing.source == source and existing.status not in TERMINAL_STATUSES
+                for existing in self._jobs.values()
+            ):
+                raise JobSubmissionError(
+                    "already_queued",
+                    f"A job is already queued or running for {source.name}",
+                )
+            if selected_mode == "censor" and not overwrite_output and output_path(
+                source,
+                self.settings.directories.output,
+                self.settings.directories.input,
+            ).exists():
+                raise JobSubmissionError(
+                    "existing_output",
+                    f"Output already exists for {source.name}",
+                )
             self._jobs[job.id] = job
             self._events[job.id] = []
             self._cancellations[job.id] = cancellation
             self._emit(job.id, "stage", stage="queued", message="Job queued")
             self._futures[job.id] = self._executor.submit(self._run, job.id)
         return job
+
+    def submit_many(
+        self,
+        sources: list[Path] | tuple[Path, ...],
+        mode: JobMode,
+    ) -> tuple[JobSubmissionResult, ...]:
+        """Queue valid sources in request order and retain per-source rejections."""
+        if mode not in ("report_only", "censor"):
+            raise JobSubmissionError("invalid_mode", f"Unsupported processing mode: {mode}")
+
+        results: list[JobSubmissionResult] = []
+        for raw_source in sources:
+            source = raw_source.expanduser().resolve()
+            try:
+                job = self.submit(source, mode)
+                results.append(JobSubmissionResult(source, "queued", job=job))
+            except JobSubmissionError as exc:
+                results.append(
+                    JobSubmissionResult(
+                        source,
+                        "rejected",
+                        code=exc.code,
+                        detail=exc.detail,
+                    )
+                )
+        return tuple(results)
 
     def get(self, job_id: str) -> JobRecord:
         with self._lock:
@@ -87,7 +173,7 @@ class JobManager:
     def cancel(self, job_id: str) -> JobRecord:
         with self._lock:
             job = self.get(job_id)
-            if job.status in ("completed", "failed", "cancelled", "transcribed"):
+            if job.status in TERMINAL_STATUSES:
                 return job
             self._cancellations[job_id].set()
             future = self._futures[job_id]
@@ -173,20 +259,32 @@ class JobManager:
             self.settings.directories.transcripts,
             self.settings.directories.input,
         )
-        created_output = False
+        output_existed = destination.exists()
+        processing_destination = destination
+        if self._jobs[job_id].overwrite_output and output_existed:
+            processing_destination = destination.with_name(
+                f".{destination.stem}.{uuid4().hex}.partial{destination.suffix}"
+            )
         try:
             if cancellation.is_set():
                 self._set_status(job_id, "cancelled", message="Job cancelled")
                 return
-            if self._jobs[job_id].mode == "censor" and destination.exists():
-                raise JobSubmissionError(f"Output already exists: {destination}")
+            if (
+                self._jobs[job_id].mode == "censor"
+                and destination.exists()
+                and not self._jobs[job_id].overwrite_output
+            ):
+                raise JobSubmissionError(
+                    "existing_output",
+                    f"Output already exists: {destination}",
+                )
             destination.parent.mkdir(parents=True, exist_ok=True)
 
             with self._lock:
                 self._set_status(job_id, "transcribing", percent=0.0)
             censor = self._censor_factory(
                 str(source),
-                str(destination),
+                str(processing_destination),
                 self.settings.whisper.model,
                 str(transcript.parent),
                 whisper_library=self.settings.whisper.library,
@@ -208,21 +306,31 @@ class JobManager:
                 else None,
                 whisper_cache_dir=self.settings.runtime.whisper_cache,
             )
-            success = censor.process(report_only=self._jobs[job_id].mode == "report_only")
-            created_output = destination.exists()
+            process_options = {
+                "report_only": self._jobs[job_id].mode == "report_only",
+            }
+            if self._jobs[job_id].force_transcribe:
+                process_options["force_transcribe"] = True
+            success = censor.process(**process_options)
             if cancellation.is_set():
                 raise InterruptedError("Job cancelled")
             if not success:
                 detail = getattr(censor, "last_error", None)
                 raise RuntimeError(detail or "Processing engine reported failure")
+            if not transcript.is_file():
+                raise RuntimeError(
+                    f"Processing completed without a verified transcript: {transcript}"
+                )
 
             with self._lock:
                 if self._jobs[job_id].mode == "report_only":
                     self._set_status(job_id, "transcribed", percent=100.0, message="Report completed")
                     return
                 self._set_status(job_id, "verifying", percent=100.0)
-            if not destination.is_file():
-                raise RuntimeError(f"Expected output was not created: {destination}")
+            if not processing_destination.is_file():
+                raise RuntimeError(f"Expected output was not created: {processing_destination}")
+            if processing_destination != destination:
+                processing_destination.replace(destination)
             if self.settings.source.archive_after_success:
                 archive = archive_path(
                     source,
@@ -236,13 +344,11 @@ class JobManager:
             with self._lock:
                 self._set_status(job_id, "completed", percent=100.0, message="Processing completed")
         except InterruptedError:
-            if created_output or destination.exists():
-                destination.unlink(missing_ok=True)
+            self._remove_incomplete_output(processing_destination, destination, output_existed)
             with self._lock:
                 self._set_status(job_id, "cancelled", message="Job cancelled")
         except Exception as exc:
-            if created_output:
-                destination.unlink(missing_ok=True)
+            self._remove_incomplete_output(processing_destination, destination, output_existed)
             error = JobError(
                 "processing_failed",
                 "Media processing failed",
@@ -251,3 +357,14 @@ class JobManager:
             )
             with self._lock:
                 self._set_status(job_id, "failed", error=error, message=error.message)
+
+    @staticmethod
+    def _remove_incomplete_output(
+        processing_destination: Path,
+        destination: Path,
+        output_existed: bool,
+    ) -> None:
+        if processing_destination != destination:
+            processing_destination.unlink(missing_ok=True)
+        elif not output_existed:
+            destination.unlink(missing_ok=True)

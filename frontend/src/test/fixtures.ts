@@ -40,6 +40,8 @@ export const emptyDictionary: DictionaryInfo = {
   exclusions_path: 'exclude.txt',
   exclusions_count: 0,
   exclusions: [],
+  overrides_path: 'policy.json',
+  overrides_count: 0,
   discovered_count: 0,
   discovered: [],
 }

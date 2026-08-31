@@ -9,10 +9,10 @@ See [QUICKSTART.md](QUICKSTART.md) for the condensed command sequence and [TROUB
 ## Workflow
 
 1. Put source media in the configured Ready/Input directory.
-2. Run a report-only or censor job through the local application service.
-3. Whisper transcribes the input and stores a reusable transcript in the configured Transcripts directory.
-4. FFmpeg applies the selected censor method and writes the result to the configured Finished/Output directory.
-5. The original remains in place unless archive-after-success is explicitly enabled.
+2. Choose **Transcribe only** or **Transcribe + Transcode** for one file, or select Ready files for the serial queue.
+3. Whisper transcribes the input and atomically stores a validated reusable transcript in the configured Transcripts directory.
+4. For combined jobs, the saved transcript is re-opened and verified before FFmpeg can create the censored result in Finished/Output.
+5. The original remains in place unless archival is explicitly requested after a verified transcript or output exists.
 
 Outputs are never overwritten silently. Application-service jobs fail clearly on a conflict; compatibility batch runs skip the file unless overwrite is explicitly enabled.
 
@@ -43,7 +43,7 @@ The root Python commands remain as compatibility entry points. New backend code 
 
 The repository bootstrap installs Python packages in a local `.venv`. FFmpeg and the Whisper model follow the reviewed dependency-plan workflow described below.
 
-User media and transcripts default to `Documents\Profanity Censor`. Internal settings use the operating system's application-data location in an automatically created `settings.ini`; the current development model cache remains under the repository unless overridden.
+User media and transcripts default to `Documents\Profanity Censor`. Internal settings use the operating system's application-data location in an automatically created `settings.ini`. Runtime assets explicitly retrieved through the desktop setup flow use `%LOCALAPPDATA%\ExpletiveDeleted\dependencies` and `%LOCALAPPDATA%\ExpletiveDeleted\models`; they are not written into the packaged application or user-media folders.
 
 ## Prepare the Application
 
@@ -86,7 +86,7 @@ Windows defaults:
 
 Settings are stored at `%LOCALAPPDATA%\ProfanityCensor\settings.ini` by default. The generated, machine-specific file is ignored by Git; [`config.example.ini`](config.example.ini) documents its schema.
 
-Setup also creates a repository-local Whisper cache at `whisper-cache/` by default and prints both the active cache path and current cache size. If Whisper models were previously downloaded to the user cache outside the repo, setup points you to the cache migration helper.
+The advanced CLI setup retains its repository-local `whisper-cache/` default and prints the active path and size. The desktop setup flow instead uses its per-user managed model directory unless the user selects another verified cache in Settings.
 
 When FFmpeg is missing, the approved dependency plan installs the pinned cross-platform `static-ffmpeg` runtime manager and then downloads its matching `ffmpeg` and `ffprobe` binaries. The app records their paths locally; it does not require WinGet or modify the system `PATH`.
 
@@ -145,6 +145,10 @@ npm run dev
 
 Vite is used only as Electron's renderer build and hot-reload tool. Normal users interact with the Electron window, not a browser URL.
 
+The desktop Queue provides explicit per-file **Transcribe only**, **Transcribe + Transcode**, and **Archive** actions. Checkboxes queue an exact selection in the displayed sort order, and the backend processes one job at a time. Filters expose Ready, Queued, Active, Transcribed, and Finished rows; waiting jobs display `#1`, `#2`, and so on and can be removed independently. Files may be imported while processing continues, but imports remain Ready until the user queues them.
+
+Every censor job has a hard transcript gate. A compatible cache may be reused; otherwise Whisper must produce a transcript whose structure, profile, audio source, and word timestamps validate. New transcripts are written atomically and verified from disk before profanity detection or FFmpeg processing begins. Empty word lists are valid for media with no speech.
+
 Place a supported file in the configured `Ready` directory and inspect the Queue-equivalent library snapshot:
 
 ```powershell
@@ -198,16 +202,16 @@ Review potentially profane words without creating output files or moving source 
 .\.venv\Scripts\python.exe batch_process.py --report-only
 ```
 
-The report lists words detected by the broader `better-profanity` vocabulary that are not in your curated censor list or exclusions file, with occurrence counts and timestamps. Add reviewed words to [resources/profanity_censor_words.txt](resources/profanity_censor_words.txt) to censor them in future runs, or [resources/profanity_exclusions.txt](resources/profanity_exclusions.txt) to permanently ignore them.
+The report lists words detected by the broader `better-profanity` vocabulary that are not in your effective policy, with occurrence counts and timestamps. Classify reviewed words from the desktop **Dictionary** page. User decisions are stored locally in `%LOCALAPPDATA%\ProfanityCensor\policy.json` and are applied to future desktop and CLI runs.
 
-The default censor run uses [resources/profanity_censor_words.txt](resources/profanity_censor_words.txt) as the source of truth and skips inputs with an existing output. Use these deliberate opt-in controls when needed:
+The default censor run combines the shipped [censor defaults](resources/profanity_censor_words.txt), shipped [exclusions](resources/profanity_exclusions.txt), and the local user-policy overlay. It skips inputs with an existing output. Use these deliberate opt-in controls when needed:
 
 ```powershell
 # Replace an existing censored output for files still in ready/.
 .\.venv\Scripts\python.exe batch_process.py --overwrite
 
 # Censor and report words found only in better-profanity's broad vocabulary,
-# unless they are present in resources/profanity_exclusions.txt.
+# unless they are excluded by the effective policy.
 .\.venv\Scripts\python.exe batch_process.py --include-undiscovered
 
 # Combine both for a full reprocess using the broad vocabulary.
@@ -324,16 +328,18 @@ Under `[Whisper]`, `Device = auto` and `ComputeType = auto` are the portable def
 
 The application service and batch workflow apply processing mode, device, stereo censor method, before/after padding, surround output, video output, and source archival settings. Batch CLI flags such as `--report-only`, `--censor-media`, `--censor-method`, `--archive-original`, and `--keep-original` override their matching settings for one run.
 
-The workflow uses the curated inclusion list in [resources/profanity_censor_words.txt](resources/profanity_censor_words.txt), not `better-profanity`'s much broader built-in dictionary. Add only words that should produce censored audio, one per line. Blank lines and text after `#` are ignored. The optional `CensorWordsFile` setting under `[Profanity]` can replace the default.
+The workflow does not use `better-profanity`'s broad built-in dictionary for normal censoring. The text files under `resources/` are immutable product defaults. User additions, exclusions, moves, and removals belong in the desktop **Dictionary**, which writes a versioned override document to `%LOCALAPPDATA%\ProfanityCensor\policy.json`. Writes are staged, verified, and atomically replaced.
 
-Use [resources/profanity_exclusions.txt](resources/profanity_exclusions.txt) only as a final override for a configured word that should not be censored. To inject a different source list for one run without modifying the project configuration:
+The effective policy is recalculated whenever a job starts. New defaults shipped in an upgrade appear automatically, while explicit user removals remain removed. A word can be classified as censored, excluded, or removed, but never censored and excluded simultaneously.
+
+For an advanced workstation deployment, `CensorWordsFile` and `ExclusionsFile` under the legacy project `[Profanity]` configuration can replace the shipped baseline. To inject a different baseline for one run:
 
 ```powershell
 $env:CENSOR_CENSOR_WORDS_FILE = 'D:\media-policies\strict-censor-words.txt'
 .\.venv\Scripts\python.exe batch_process.py
 ```
 
-To inject a different exclusions file, use `CENSOR_EXCLUSIONS_FILE` the same way. The batch process passes both settings to every file it processes. Each run prints the source and exclusions files it loaded, with their entry counts.
+To inject a different exclusions baseline, use `CENSOR_EXCLUSIONS_FILE` the same way. `CENSOR_POLICY_FILE` can select a different user-policy overlay. Each job reports the effective policy counts it loaded without logging transcript content.
 
 To inspect, migrate, or clean Whisper model caches:
 

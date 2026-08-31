@@ -39,7 +39,9 @@ The first launch checks the local system for:
 - Python speech-recognition dependencies
 - Whisper `large-v3`
 
-If anything is missing, the **Finish local setup** panel shows the affected component. Select **Install** and the app installs and verifies it. The underlying dependency plan remains internal so the same tested, pinned components are used by the desktop app and CLI.
+If anything is missing, the **Finish local setup** panel shows the affected component. Choose **Locate existing** to select and verify an installation already on the computer, or choose **Get** to review the exact third-party source, local destination, and download size before continuing. Canceling the disclosure does not start retrieval. After an approved operation, the backend verifies the component and refreshes System Ready status.
+
+Approved FFmpeg binaries and Whisper models are stored beneath `%LOCALAPPDATA%\ExpletiveDeleted\`, outside the application package and user-media folders. The app does not modify the global Windows `PATH`. Runtime locations remain inspectable and changeable under **Settings → Runtime components**.
 
 Whisper `large-v3` is required for reliable word-level censor timing. Smaller models are not supported for this workflow.
 
@@ -47,10 +49,19 @@ Whisper `large-v3` is required for reliable word-level censor timing. Smaller mo
 
 1. In **Settings**, confirm the working folders and processing preferences. The default input folder is `%USERPROFILE%\Documents\Profanity Censor\Ready`.
 2. Add supported audio or video files to the configured Ready/Input folder.
-3. Return to **Queue**, refresh if needed, then choose **Start batch**.
-4. Review discovered potential profanity and update the local censor or ignore policy in the app when appropriate.
+3. Return to **Queue** and choose an action for one file:
+   - **Transcribe only** creates and verifies a transcript without creating media output.
+   - **Transcribe + Transcode** creates or validates the transcript first, then creates the censored output.
+   - **Retranscribe** replaces an existing transcript with a newly generated, verified transcript while retaining any finished output.
+   - **Retranscode** reuses a compatible transcript when one exists and safely replaces the finished censored output only after the new output succeeds.
+   - **Archive** moves an original with a verified transcript or output to Processed while the queue is idle.
+4. To process selected files serially, check the eligible Ready rows and choose **Queue transcript only** or **Queue transcribe + transcode**. Valid files remain queued if another selected file is rejected.
+5. Use the status filters and sort control to inspect Ready, Queued, Active, Transcribed, or Finished files. The active row can be cancelled from its Actions group; waiting rows show their queue position and can be removed independently.
+6. Review discovered potential profanity and update the local censor or ignore policy in the app when appropriate.
 
-Completed output is written to Finished/Output. Transcripts are reusable, and originals remain in Ready/Input unless **Archive original after success** is enabled.
+Jobs run one at a time in the displayed submission order. You can add files to Ready while another job is active; imported files are not queued automatically. Completed output is written to Finished/Output. Transcripts are reusable, and originals remain in Ready/Input unless explicitly archived.
+
+Transcoding never begins from an in-memory transcription alone. The app must validate and persist the transcript, then re-open and verify the saved artifact. A valid transcript containing no words is accepted for media with no speech. If transcription or transcript persistence fails, no censored output is created and the source remains intact.
 
 ## Backend and command line (advanced)
 

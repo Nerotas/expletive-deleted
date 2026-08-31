@@ -8,6 +8,8 @@ import type {
   ImportResult,
   Job,
   JobEvent,
+  JobSubmissionResult,
+  JobSubmissionOptions,
   LibraryItem,
   ReviewResult,
   Settings,
@@ -36,18 +38,32 @@ export const desktopClient = {
     invoke<InstallPlan>('dependencies.plan', { components }),
   installDependencies: (planId: string) =>
     invoke<unknown>('dependencies.install', { plan_id: planId }),
+  inspectExistingFfmpeg: (path: string) =>
+    invoke<{ ffmpeg_path: string; ffprobe_path: string; version: string | null }>(
+      'dependencies.inspect_ffmpeg',
+      { path },
+    ),
+  locateExistingFfmpeg: (path: string) =>
+    invoke<Capabilities>('dependencies.locate_ffmpeg', { path }),
+  locateExistingModel: (path: string) =>
+    invoke<Capabilities>('dependencies.locate_model', { path }),
   listLibrary: () => invoke<LibraryItem[]>('library.list'),
   archiveSource: (source: string) => invoke<unknown>('library.archive', { source }),
   importSources: (sources: string[]) => invoke<ImportResult[]>('library.import', { sources }),
   listArchive: () => invoke<ArchiveItem[]>('archive.list'),
+  restoreArchiveSource: (source: string) => invoke<unknown>('archive.restore', { source }),
   purgeArchiveSource: (source: string) => invoke<unknown>('archive.purge', { source }),
   purgeArchive: () => invoke<unknown>('archive.purge'),
   listJobs: () => invoke<Job[]>('jobs.list'),
-  submitJob: (source: string, mode: Job['mode']) =>
-    invoke<Job>('jobs.submit', { source, mode }),
+  submitJob: (source: string, mode: Job['mode'], options?: JobSubmissionOptions) =>
+    invoke<Job>('jobs.submit', { source, mode, ...options }),
+  submitJobs: (sources: string[], mode: Job['mode']) =>
+    invoke<JobSubmissionResult[]>('jobs.submit_many', { sources, mode }),
   listJobEvents: (jobId: string) => invoke<JobEvent[]>('jobs.events', { job_id: jobId }),
   cancelJob: (jobId: string) => invoke<Job>('jobs.cancel', { job_id: jobId }),
   selectDirectory: (defaultPath?: string) => bridge().selectDirectory(defaultPath),
+  selectFile: (defaultPath?: string) => bridge().selectFile(defaultPath),
+  openExternal: (url: string) => bridge().openExternal(url),
   getDroppedFilePath: (file: File) => bridge().getPathForFile(file),
 }
 

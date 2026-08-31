@@ -10,16 +10,17 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any, TextIO
 
+from backend.policy import PolicyStore, ProfanityPolicy
 from backend.runtime import (
-    add_word_to_list,
+    FFMPEG_VERSION,
     build_install_plan,
     execute_install_plan,
-    get_profanity_censor_words_file,
-    get_profanity_exclusions_file,
-    get_whisper_cache_dir,
-    load_profanity_censor_words,
-    load_profanity_exclusions,
-    remove_word_from_list,
+    get_application_runtime_root,
+    get_managed_ffmpeg_directory,
+    get_managed_ffmpeg_paths,
+    get_managed_whisper_cache_dir,
+    inspect_executable,
+    inspect_whisper_model,
 )
 from backend.censor import find_review_candidates
 from backend.jobs.media import transcript_path
@@ -27,8 +28,13 @@ from backend.service import BackendService
 
 
 class DesktopBridge:
-    def __init__(self, service: BackendService | None = None):
+    def __init__(
+        self,
+        service: BackendService | None = None,
+        policy_store: PolicyStore | None = None,
+    ):
         self.service = service or BackendService()
+        self.policy_store = policy_store or PolicyStore()
         self._install_plans = {}
 
     def handle(self, method: str, params: Mapping[str, Any] | None = None) -> object:
@@ -46,20 +52,18 @@ class DesktopBridge:
             word = params.get("word")
             if target not in ("censor", "exclude") or not isinstance(word, str):
                 raise ValueError("Dictionary updates require a censor/exclude target and a word")
-            path, description = self._dictionary_target(target)
-            _, added = add_word_to_list(path, word, description)
-            result = self._dictionary()
-            result["changed"] = added
+            policy, changed = self.policy_store.update(target, word, "add")
+            result = self._dictionary(policy)
+            result["changed"] = changed
             return result
         if method == "dictionary.remove":
             target = params.get("target")
             word = params.get("word")
             if target not in ("censor", "exclude") or not isinstance(word, str):
                 raise ValueError("Dictionary updates require a censor/exclude target and a word")
-            path, description = self._dictionary_target(target)
-            _, removed = remove_word_from_list(path, word, description)
-            result = self._dictionary()
-            result["changed"] = removed
+            policy, changed = self.policy_store.update(target, word, "remove")
+            result = self._dictionary(policy)
+            result["changed"] = changed
             return result
         if method == "reviews.list":
             source = Path(params["source"]).expanduser().resolve()
@@ -70,16 +74,23 @@ class DesktopBridge:
                 words_data = json.loads(transcript.read_text(encoding="utf-8"))
             except json.JSONDecodeError as exc:
                 raise ValueError(f"Transcript could not be read: {transcript}") from exc
+            policy = self.policy_store.load()
             candidates = find_review_candidates(
                 words_data,
-                load_profanity_censor_words(get_profanity_censor_words_file()),
-                load_profanity_exclusions(get_profanity_exclusions_file()),
+                set(policy.censor_words),
+                set(policy.exclusions),
             )
             return {"source": str(source), "candidates": candidates}
         if method == "dependencies.plan":
+            runtime_root = get_application_runtime_root()
+            cache_dir = (
+                self.service.settings.runtime.whisper_cache
+                or get_managed_whisper_cache_dir(runtime_root)
+            )
             plan = build_install_plan(
                 list(params["components"]),
-                cache_dir=self.service.settings.runtime.whisper_cache or get_whisper_cache_dir(),
+                cache_dir=cache_dir,
+                runtime_root=runtime_root,
                 whisper_library=self.service.settings.whisper.library,
                 whisper_model=self.service.settings.whisper.model,
             )
@@ -95,6 +106,11 @@ class DesktopBridge:
                         "source_url": action.source_url,
                         "command": action.command,
                         "estimated_download_bytes": action.estimated_download_bytes,
+                        "destination": self._install_destination(
+                            action.id,
+                            runtime_root,
+                            cache_dir,
+                        ),
                     }
                     for action in plan.actions
                 ],
@@ -104,12 +120,64 @@ class DesktopBridge:
             plan = self._install_plans.get(plan_id)
             if plan is None:
                 raise ValueError("Dependency plan is unknown or expired; review it again")
+            runtime_root = get_application_runtime_root()
+            cache_dir = (
+                self.service.settings.runtime.whisper_cache
+                or get_managed_whisper_cache_dir(runtime_root)
+            )
             results = execute_install_plan(
                 plan,
                 approved_plan_id=plan_id,
-                cache_dir=self.service.settings.runtime.whisper_cache or get_whisper_cache_dir(),
+                cache_dir=cache_dir,
             )
+            installed_ids = {
+                dependency_id
+                for result in results
+                for dependency_id in result.dependency_ids
+            }
+            settings = self.service.get_settings()
+            runtime = dict(settings["runtime"])
+            if {"ffmpeg", "ffprobe"}.issubset(installed_ids):
+                ffmpeg_path, ffprobe_path = get_managed_ffmpeg_paths(runtime_root)
+                if not ffmpeg_path or not ffprobe_path:
+                    raise RuntimeError("Managed FFmpeg completed but its verified paths are unavailable")
+                runtime["ffmpeg_path"] = ffmpeg_path
+                runtime["ffprobe_path"] = ffprobe_path
+            if any(dependency_id.startswith("whisper:") for dependency_id in installed_ids):
+                runtime["whisper_cache"] = str(cache_dir)
+            if runtime != settings["runtime"]:
+                settings["runtime"] = runtime
+                self.service.update_settings(settings)
             return [asdict(result) for result in results]
+        if method == "dependencies.inspect_ffmpeg":
+            return self._inspect_ffmpeg_selection(params.get("path"))
+        if method == "dependencies.locate_ffmpeg":
+            selected = self._inspect_ffmpeg_selection(params.get("path"))
+            settings = self.service.get_settings()
+            runtime = dict(settings["runtime"])
+            runtime["ffmpeg_path"] = selected["ffmpeg_path"]
+            runtime["ffprobe_path"] = selected["ffprobe_path"]
+            settings["runtime"] = runtime
+            self.service.update_settings(settings)
+            return self.service.get_capabilities()
+        if method == "dependencies.locate_model":
+            selected = params.get("path")
+            if not isinstance(selected, str) or not selected.strip():
+                raise ValueError("Choosing an existing Whisper model requires a cache directory")
+            cache_dir = Path(selected).expanduser().resolve()
+            status = inspect_whisper_model(
+                cache_dir,
+                library=self.service.settings.whisper.library,
+                model=self.service.settings.whisper.model,
+            )
+            if not status.ready:
+                raise ValueError(f"The selected model cache is not ready: {status.detail}")
+            settings = self.service.get_settings()
+            runtime = dict(settings["runtime"])
+            runtime["whisper_cache"] = str(cache_dir)
+            settings["runtime"] = runtime
+            self.service.update_settings(settings)
+            return self.service.get_capabilities()
         if method == "library.list":
             return [item.to_dict() for item in self.service.get_library()]
         if method == "library.archive":
@@ -121,6 +189,11 @@ class DesktopBridge:
             return self.service.import_sources([Path(source) for source in sources])
         if method == "archive.list":
             return [item.to_dict() for item in self.service.get_archive()]
+        if method == "archive.restore":
+            source = params.get("source")
+            if not isinstance(source, str):
+                raise ValueError("Returning an archived file requires a file path")
+            return self.service.restore_archive_source(Path(source))
         if method == "archive.purge":
             source = params.get("source")
             if source is None:
@@ -132,8 +205,39 @@ class DesktopBridge:
             return [job.to_dict() for job in self.service.jobs.list()]
         if method == "jobs.submit":
             mode = params.get("mode")
-            job = self.service.submit_job(Path(params["source"]), mode)
+            source = params.get("source")
+            force_transcribe = params.get("force_transcribe", False)
+            overwrite_output = params.get("overwrite_output", False)
+            if (
+                not isinstance(source, str)
+                or mode not in ("report_only", "censor")
+                or not isinstance(force_transcribe, bool)
+                or not isinstance(overwrite_output, bool)
+            ):
+                raise ValueError("Job submission requires a source and supported mode")
+            job = self.service.submit_job(
+                Path(source),
+                mode,
+                force_transcribe=force_transcribe,
+                overwrite_output=overwrite_output,
+            )
             return job.to_dict()
+        if method == "jobs.submit_many":
+            mode = params.get("mode")
+            sources = params.get("sources")
+            if (
+                mode not in ("report_only", "censor")
+                or not isinstance(sources, list)
+                or not all(isinstance(source, str) for source in sources)
+            ):
+                raise ValueError("Batch submission requires source paths and a supported mode")
+            return [
+                result.to_dict()
+                for result in self.service.submit_jobs(
+                    [Path(source) for source in sources],
+                    mode,
+                )
+            ]
         if method == "jobs.get":
             return self.service.jobs.get(params["job_id"]).to_dict()
         if method == "jobs.events":
@@ -149,27 +253,51 @@ class DesktopBridge:
     def close(self) -> None:
         self.service.close()
 
-    @staticmethod
-    def _dictionary_target(target: str) -> tuple[Path, str]:
-        if target == "censor":
-            return get_profanity_censor_words_file(), "Profanity censor words"
-        return get_profanity_exclusions_file(), "Profanity exclusions"
-
-    def _dictionary(self) -> dict[str, object]:
-        words_path = get_profanity_censor_words_file()
-        exclusions_path = get_profanity_exclusions_file()
-        words = sorted(load_profanity_censor_words(words_path))
-        exclusions = sorted(load_profanity_exclusions(exclusions_path))
+    def _dictionary(self, policy: ProfanityPolicy | None = None) -> dict[str, object]:
+        policy = policy or self.policy_store.load()
+        words = sorted(policy.censor_words)
+        exclusions = sorted(policy.exclusions)
         discovered = self._discovered_words(set(words), set(exclusions))
         return {
-            "words_path": str(words_path),
+            "words_path": str(policy.censor_defaults_path),
             "words_count": len(words),
             "words": words,
-            "exclusions_path": str(exclusions_path),
+            "exclusions_path": str(policy.exclusions_defaults_path),
             "exclusions_count": len(exclusions),
             "exclusions": exclusions,
+            "overrides_path": str(policy.overrides_path),
+            "overrides_count": policy.overrides_count,
             "discovered_count": len(discovered),
             "discovered": discovered,
+        }
+
+    @staticmethod
+    def _install_destination(action_id: str, runtime_root: Path, cache_dir: Path) -> str:
+        if "ffmpeg" in action_id:
+            return str(get_managed_ffmpeg_directory(runtime_root))
+        if action_id.startswith("download-"):
+            return str(cache_dir)
+        return "The repository-local Python environment"
+
+    @staticmethod
+    def _inspect_ffmpeg_selection(selected: object) -> dict[str, object]:
+        if not isinstance(selected, str) or not selected.strip():
+            raise ValueError("Choosing FFmpeg requires an executable path")
+        ffmpeg_path = Path(selected).expanduser().resolve()
+        if ffmpeg_path.name.lower() not in {"ffmpeg", "ffmpeg.exe"}:
+            raise ValueError("Select ffmpeg.exe (or ffmpeg on non-Windows systems)")
+        companion_name = "ffprobe.exe" if ffmpeg_path.suffix.lower() == ".exe" else "ffprobe"
+        ffprobe_path = ffmpeg_path.with_name(companion_name)
+        ffmpeg = inspect_executable("ffmpeg", "FFmpeg", str(ffmpeg_path), FFMPEG_VERSION)
+        ffprobe = inspect_executable("ffprobe", "FFprobe", str(ffprobe_path), FFMPEG_VERSION)
+        failures = [status for status in (ffmpeg, ffprobe) if not status.ready]
+        if failures:
+            detail = "; ".join(f"{status.name}: {status.detail}" for status in failures)
+            raise ValueError(f"The selected FFmpeg installation is not ready: {detail}")
+        return {
+            "ffmpeg_path": str(ffmpeg_path),
+            "ffprobe_path": str(ffprobe_path),
+            "version": ffmpeg.installed_version,
         }
 
     def _discovered_words(self, censor_words: set[str], exclude_words: set[str]) -> list[str]:

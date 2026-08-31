@@ -11,7 +11,7 @@
   "scripts": {
     "postinstall": "node scripts/install-electron-runtime.mjs",
     "dev": "electron-vite dev",
-    "build": "tsc -b && electron-vite build",
+    "build": "tsc -b && electron-vite build && node scripts/copy-native-assets.mjs",
     "lint": "eslint .",
     "test": "node scripts/test.mjs",
     "test:watch": "node scripts/test.mjs --watch",

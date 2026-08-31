@@ -28,3 +28,17 @@ npm run smoke
 - `src/components/ui/` contains reusable controls and presentation primitives.
 - `src/services/desktop-client.ts` is the typed boundary around Electron IPC.
 - React Router handles renderer navigation, TanStack Query owns backend state, and React Hook Form owns the persisted/draft settings lifecycle.
+
+## Queue behavior
+
+- Each file exposes **Transcribe only**, **Transcribe + Transcode**, and guarded **Archive** actions.
+- Ready-file checkboxes submit an exact ordered selection through the typed `jobs.submit_many` bridge operation.
+- The table can filter Ready, Queued, Active, Transcribed, and Finished rows and sort by queue position, file name, or status.
+- Waiting jobs show their position and can be removed independently; the running job can be cancelled from its row or the top-level cancel action.
+- The renderer never decides that a transcript is safe for transcoding. That mandatory persisted-artifact gate belongs to the Python backend.
+
+## Dictionary behavior
+
+- The resource text files are built-in defaults and are never edited by the renderer.
+- User classifications and removals are stored atomically in the backend-managed `%LOCALAPPDATA%\ProfanityCensor\policy.json` overlay.
+- The Dictionary displays both built-in source paths and the user-policy path; processing resolves the same effective policy at job start.

@@ -18,7 +18,9 @@ Run the backend regression suite separately:
 
 ## FFmpeg or FFprobe Is Missing
 
-Install FFmpeg, open a new terminal, and rerun diagnostics.
+In the desktop app, use **Finish local setup → Locate existing** to select `ffmpeg.exe`; the backend also locates and verifies the adjacent `ffprobe.exe`. Or choose **Get**, review the source and destination disclosure, and select **Continue**. The managed copy is stored below `%LOCALAPPDATA%\ExpletiveDeleted\dependencies\ffmpeg\` and does not modify the global `PATH`.
+
+For advanced command-line use, install FFmpeg and rerun diagnostics.
 
 ```powershell
 winget install --id Gyan.FFmpeg.Shared -e
@@ -69,7 +71,7 @@ Show cache locations and sizes:
 .\.venv\Scripts\python.exe manage_whisper_cache.py status
 ```
 
-The current CLI retrieves the model through faster-whisper on the first transcription when it is not cached. A future desktop setup flow will ask before downloading it.
+In the desktop app, choose **Get** only when you are ready to review and approve the model source, destination, and approximate size. Choose **Locate existing** to verify an existing faster-whisper cache instead. Processing never starts a model download implicitly.
 
 Override the cache location when needed:
 
@@ -105,7 +107,7 @@ Run report-only mode first:
 .\.venv\Scripts\python.exe batch_process.py --report-only
 ```
 
-Review the transcript under the configured Transcripts directory. Add approved terms to `resources/profanity_censor_words.txt`; add false positives to `resources/profanity_exclusions.txt`.
+Review the transcript under the configured Transcripts directory, then classify the term from the desktop **Dictionary** page. The shipped files under `resources/` are defaults; user decisions are stored atomically in `%LOCALAPPDATA%\ProfanityCensor\policy.json`.
 
 If a surround transcript predates front-center transcription, the backend automatically rejects that cache and transcribes it again.
 

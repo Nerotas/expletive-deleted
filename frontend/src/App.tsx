@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { AppHeader } from './components/AppHeader'
 import { SetupBand } from './components/SetupBand'
+import { SetupConsentDialog } from './components/SetupConsentDialog'
 import { AlertBanner } from './components/ui/AlertBanner'
 import { LoadingRow } from './components/ui/LoadingRow'
 import { DictionaryPage } from './features/dictionary/DictionaryPage'
@@ -58,7 +59,9 @@ function App() {
         {!capabilities.loading && capabilities.capabilities && !capabilities.capabilities.ready && (
           <SetupBand
             capabilities={capabilities.capabilities}
-            installRequired={(components) => void capabilities.installRequired(components)}
+            reviewInstall={(components) => void capabilities.reviewInstall(components)}
+            locateExisting={(component) => void capabilities.locateExisting(component)}
+            checkAgain={() => void capabilities.refresh()}
             busy={capabilities.busy}
           />
         )}
@@ -82,7 +85,14 @@ function App() {
             element={
               settings.loading
                 ? <LoadingRow>Loading settings</LoadingRow>
-                : <SettingsPage controller={settings} capabilities={capabilities.capabilities} />
+                : (
+                  <SettingsPage
+                    controller={settings}
+                    capabilities={capabilities.capabilities}
+                    checkingSystem={capabilities.busy}
+                    onCheckSystem={() => void capabilities.refresh()}
+                  />
+                )
             }
           />
           <Route path="*" element={<Navigate to="/" replace />} />
@@ -94,6 +104,14 @@ function App() {
           busy={dictionary.busy}
           onClose={dictionary.closeReview}
           onClassify={(word, target) => void dictionary.updateDictionary(target, word)}
+        />
+      )}
+      {capabilities.pendingPlan && (
+        <SetupConsentDialog
+          plan={capabilities.pendingPlan}
+          busy={capabilities.installing}
+          onCancel={capabilities.cancelInstall}
+          onContinue={() => void capabilities.approveInstall()}
         />
       )}
     </div>

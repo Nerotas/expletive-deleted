@@ -27,8 +27,8 @@ export function AppHeader({
       <div className="brand-lockup">
         <img className="brand-mark" src={appIconUrl} alt="" />
         <div>
-          <strong>Profanity Censor</strong>
-          <small>Local media processing</small>
+          <strong>Expletive Deleted</strong>
+          <small>Censor profanity in local files.</small>
         </div>
       </div>
       <nav className="top-nav" aria-label="Application pages">

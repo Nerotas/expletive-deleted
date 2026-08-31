@@ -73,6 +73,8 @@ test_*.mp*
 original_segment_*.mp3
 temp_*
 ~$*
+/.playwright-cli/
+/output/playwright/
 
 # Local Configuration (may contain paths)
 config.ini
