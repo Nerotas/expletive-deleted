@@ -206,9 +206,21 @@ class DesktopBridge:
         if method == "jobs.submit":
             mode = params.get("mode")
             source = params.get("source")
-            if not isinstance(source, str) or mode not in ("report_only", "censor"):
+            force_transcribe = params.get("force_transcribe", False)
+            overwrite_output = params.get("overwrite_output", False)
+            if (
+                not isinstance(source, str)
+                or mode not in ("report_only", "censor")
+                or not isinstance(force_transcribe, bool)
+                or not isinstance(overwrite_output, bool)
+            ):
                 raise ValueError("Job submission requires a source and supported mode")
-            job = self.service.submit_job(Path(source), mode)
+            job = self.service.submit_job(
+                Path(source),
+                mode,
+                force_transcribe=force_transcribe,
+                overwrite_output=overwrite_output,
+            )
             return job.to_dict()
         if method == "jobs.submit_many":
             mode = params.get("mode")

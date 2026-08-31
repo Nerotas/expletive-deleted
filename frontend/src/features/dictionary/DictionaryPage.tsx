@@ -145,21 +145,11 @@ type PolicyListProps = {
   onRemove: (word: string) => Promise<void>
 }
 
-function policySourceLabel(source: string): string {
-  const normalized = source.replaceAll('\\', '/')
-  const resources = normalized.lastIndexOf('/resources/')
-  return resources >= 0 ? normalized.slice(resources + 1) : source
-}
 
-function PolicyList({ title, source, words, busy, onRemove }: PolicyListProps) {
+function PolicyList({ title, words, busy, onRemove }: PolicyListProps) {
   return (
     <div className="policy-list">
       <strong>{title}</strong>
-      {source && (
-        <small className="policy-source" title={source}>
-          Built-in defaults: {policySourceLabel(source)}
-        </small>
-      )}
       <div>
         {words.length ? words.map((word) => (
           <span key={word}>

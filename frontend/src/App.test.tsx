@@ -156,8 +156,6 @@ describe('desktop application renderer', () => {
 
     expect(await screen.findByText('example-censor-one')).toBeInTheDocument()
     expect(screen.getByText('example-censor-two')).toBeInTheDocument()
-    expect(screen.getByText('Built-in defaults: resources/profanity_censor_words.txt')).toBeInTheDocument()
-    expect(screen.getByText('Built-in defaults: resources/profanity_exclusions.txt')).toBeInTheDocument()
     expect(screen.getByText('No user overrides yet')).toBeInTheDocument()
   })
 
@@ -189,6 +187,34 @@ describe('desktop application renderer', () => {
     await user.click(screen.getByRole('button', { name: 'Transcribe + Transcode' }))
 
     await waitFor(() => expect(desktopClient.submitJob).toHaveBeenCalledWith(source, 'censor'))
+  })
+
+  it('offers finished files a fresh transcript or an atomic retranscode request', async () => {
+    const source = 'C:\\Media\\Ready\\movie.mkv'
+    vi.mocked(desktopClient.listLibrary).mockResolvedValue([{
+      source,
+      status: 'finished',
+      transcript: 'C:\\Media\\Transcripts\\movie-transcript.json',
+      output: 'C:\\Media\\Finished\\movie-censored.mkv',
+    }])
+    const user = userEvent.setup()
+    renderApp('/')
+
+    await user.click(await screen.findByRole('button', { name: 'Retranscribe' }))
+    await waitFor(() => expect(desktopClient.submitJob).toHaveBeenCalledWith(
+      source,
+      'report_only',
+      { force_transcribe: true },
+    ))
+
+    const retranscode = screen.getByRole('button', { name: 'Retranscode' })
+    await waitFor(() => expect(retranscode).toBeEnabled())
+    await user.click(retranscode)
+    await waitFor(() => expect(desktopClient.submitJob).toHaveBeenCalledWith(
+      source,
+      'censor',
+      { overwrite_output: true },
+    ))
   })
 
   it('queues selected files in displayed order and retains rejected selections', async () => {

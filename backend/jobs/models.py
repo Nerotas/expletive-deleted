@@ -53,6 +53,8 @@ class JobRecord:
     status: JobStatus = "queued"
     progress_percent: float | None = None
     error: JobError | None = None
+    force_transcribe: bool = False
+    overwrite_output: bool = False
 
     def __post_init__(self) -> None:
         if not self.id.strip():
@@ -65,6 +67,10 @@ class JobRecord:
             raise ValueError("Failed jobs require an error")
         if self.status != "failed" and self.error is not None:
             raise ValueError("Only failed jobs may contain an error")
+        if self.force_transcribe and self.mode != "report_only":
+            raise ValueError("Only report-only jobs can force a fresh transcript")
+        if self.overwrite_output and self.mode != "censor":
+            raise ValueError("Only censor jobs can replace an existing output")
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -74,6 +80,8 @@ class JobRecord:
             "status": self.status,
             "progress_percent": self.progress_percent,
             "error": self.error.to_dict() if self.error else None,
+            "force_transcribe": self.force_transcribe,
+            "overwrite_output": self.overwrite_output,
         }
 
 

@@ -15,6 +15,8 @@ class FakeCensor:
     block: Event | None = None
     started = Event()
     create_partial_output = False
+    fail_processing = False
+    process_options = []
 
     def __init__(self, input_file, output_file, *args, **kwargs):
         self.input_file = Path(input_file)
@@ -23,7 +25,11 @@ class FakeCensor:
         self.options = kwargs
         self.__class__.instances.append(self)
 
-    def process(self, report_only=False):
+    def process(self, report_only=False, force_transcribe=False):
+        self.__class__.process_options.append({
+            "report_only": report_only,
+            "force_transcribe": force_transcribe,
+        })
         self.__class__.processed_sources.append(self.input_file.name)
         self.__class__.started.set()
         callback = self.options["progress_callback"]
@@ -51,7 +57,7 @@ class FakeCensor:
         if not report_only:
             callback({"event": "progress", "stage": "censoring", "percent": 75.0, "fps": 120.0})
             self.output_file.write_bytes(b"output")
-        return True
+        return not self.fail_processing
 
 
 class JobManagerTests(unittest.TestCase):
@@ -61,6 +67,8 @@ class JobManagerTests(unittest.TestCase):
         FakeCensor.block = None
         FakeCensor.started = Event()
         FakeCensor.create_partial_output = False
+        FakeCensor.fail_processing = False
+        FakeCensor.process_options = []
 
     def create_settings(self, root: Path) -> AppSettings:
         directories = DirectorySettings(
@@ -254,6 +262,82 @@ class JobManagerTests(unittest.TestCase):
         self.assertEqual(outside_error.exception.code, "outside_input")
         self.assertEqual(unsupported_error.exception.code, "unsupported")
         self.assertEqual(output_error.exception.code, "existing_output")
+
+    def test_finished_file_can_force_a_fresh_transcript_without_touching_output(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            settings = self.create_settings(Path(temporary_directory))
+            source = settings.directories.input / "movie.mkv"
+            source.write_bytes(b"source")
+            transcript = settings.directories.transcripts / "movie-transcript.json"
+            transcript.write_text('{"text":"old"}', encoding="utf-8")
+            existing_output = output_path(
+                source,
+                settings.directories.output,
+                settings.directories.input,
+            )
+            existing_output.write_bytes(b"existing output")
+            manager = JobManager(settings, censor_factory=FakeCensor)
+            try:
+                job = manager.submit(source, "report_only", force_transcribe=True)
+                completed = manager.wait(job.id, timeout=2)
+            finally:
+                manager.close()
+            output_bytes = existing_output.read_bytes()
+
+        self.assertEqual(completed.status, "transcribed")
+        self.assertTrue(completed.force_transcribe)
+        self.assertTrue(FakeCensor.process_options[0]["force_transcribe"])
+        self.assertEqual(output_bytes, b"existing output")
+
+    def test_finished_file_retranscode_replaces_output_after_success(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            settings = self.create_settings(Path(temporary_directory))
+            source = settings.directories.input / "movie.mkv"
+            source.write_bytes(b"source")
+            existing_output = output_path(
+                source,
+                settings.directories.output,
+                settings.directories.input,
+            )
+            existing_output.write_bytes(b"existing output")
+            manager = JobManager(settings, censor_factory=FakeCensor)
+            try:
+                job = manager.submit(source, "censor", overwrite_output=True)
+                completed = manager.wait(job.id, timeout=2)
+            finally:
+                manager.close()
+            output_bytes = existing_output.read_bytes()
+
+        self.assertEqual(completed.status, "completed")
+        self.assertTrue(completed.overwrite_output)
+        self.assertFalse(FakeCensor.process_options[0]["force_transcribe"])
+        self.assertEqual(output_bytes, b"output")
+
+    def test_failed_retranscode_preserves_previous_verified_output(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            settings = self.create_settings(Path(temporary_directory))
+            source = settings.directories.input / "movie.mkv"
+            source.write_bytes(b"source")
+            existing_output = output_path(
+                source,
+                settings.directories.output,
+                settings.directories.input,
+            )
+            existing_output.write_bytes(b"existing output")
+            FakeCensor.fail_processing = True
+            manager = JobManager(settings, censor_factory=FakeCensor)
+            try:
+                job = manager.submit(source, "censor", overwrite_output=True)
+                completed = manager.wait(job.id, timeout=2)
+            finally:
+                manager.close()
+
+            output_bytes = existing_output.read_bytes()
+            partials = list(existing_output.parent.glob("*.partial*"))
+
+        self.assertEqual(completed.status, "failed")
+        self.assertEqual(output_bytes, b"existing output")
+        self.assertEqual(partials, [])
 
 
 if __name__ == "__main__":

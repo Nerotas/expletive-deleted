@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { desktopClient, type DesktopClient } from '../../services/desktop-client'
-import type { ArchiveItem, ImportResult, Job, JobEvent, JobSubmissionResult } from '../../types/domain'
+import type { ArchiveItem, ImportResult, Job, JobEvent, JobSubmissionOptions, JobSubmissionResult } from '../../types/domain'
 import { errorMessage, fileName } from '../../utils/format'
 
 const TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled', 'transcribed'])
@@ -66,8 +66,9 @@ export function useQueue({
     loading: query.isLoading,
     busy: actionMutation.isPending,
     refresh: async () => { await query.refetch() },
-    submitFile: (source: string, mode: Job['mode']) => run(async () => {
-      await client.submitJob(source, mode)
+    submitFile: (source: string, mode: Job['mode'], options?: JobSubmissionOptions) => run(async () => {
+      if (options) await client.submitJob(source, mode, options)
+      else await client.submitJob(source, mode)
       onNotice(`${fileName(source)} queued`)
     }).then(() => undefined),
     submitFiles: async (sources: string[], mode: Job['mode']): Promise<JobSubmissionResult[]> => {
@@ -93,7 +94,12 @@ export function useQueue({
       onNotice(`${fileName(job.source)} removed from the queue`)
     }).then(() => undefined),
     retryJob: (job: Job) => run(async () => {
-      await client.submitJob(job.source, job.mode)
+      const options: JobSubmissionOptions = {
+        ...(job.force_transcribe ? { force_transcribe: true } : {}),
+        ...(job.overwrite_output ? { overwrite_output: true } : {}),
+      }
+      if (Object.keys(options).length) await client.submitJob(job.source, job.mode, options)
+      else await client.submitJob(job.source, job.mode)
       onNotice(`${fileName(job.source)} queued again`)
     }),
     archiveSource: (source: string) => run(async () => {

@@ -20,6 +20,7 @@ import type {
   ImportResult,
   Job,
   JobEvent,
+  JobSubmissionOptions,
   LibraryItem,
   Settings,
 } from '../../types/domain'
@@ -434,7 +435,7 @@ function QueueRow({
   onReview: (source: string) => void
   onArchive: (source: string) => Promise<unknown>
   onRetry: (job: Job) => Promise<unknown>
-  onSubmit: (source: string, mode: Job['mode']) => Promise<void>
+  onSubmit: (source: string, mode: Job['mode'], options?: JobSubmissionOptions) => Promise<void>
   onCancelRunning: () => Promise<unknown>
   onRemoveQueued: (job: Job) => Promise<void>
 }) {
@@ -443,8 +444,8 @@ function QueueRow({
   const percent = displayJob?.progress_percent
   const selectable = item.status === 'ready' && !pendingJob
   const processingDisabled = busy || !processingReady || Boolean(pendingJob)
-  const transcribeDisabled = processingDisabled || item.status !== 'ready'
-  const combinedDisabled = processingDisabled || !['ready', 'transcribed'].includes(item.status)
+  const transcribeDisabled = processingDisabled
+  const combinedDisabled = processingDisabled
   const archiveDisabled = busy || !queueIdle || !['transcribed', 'finished'].includes(item.status)
   const processingReason = !processingReady
     ? 'Complete setup before processing this file'
@@ -493,15 +494,29 @@ function QueueRow({
         {active && <button disabled={busy} title="Cancel this running job and keep the source file" onClick={() => void onCancelRunning()}><CircleStop size={13} />Cancel job</button>}
         {pendingJob?.status === 'queued' && <button disabled={busy} title="Remove this waiting job without cancelling the active job" onClick={() => void onRemoveQueued(pendingJob)}><X size={13} />Remove from queue</button>}
         <button
+          aria-label={item.status === 'ready' ? 'Transcribe only' : 'Retranscribe'}
           disabled={transcribeDisabled}
-          title={processingReason ?? (item.status !== 'ready' ? 'A verified transcript already exists for this file' : 'Create and verify a transcript, then stop')}
-          onClick={() => void onSubmit(item.source, 'report_only')}
-        ><FileText size={13} />Transcribe</button>
+          title={processingReason ?? (item.status === 'ready'
+            ? 'Create and verify a transcript, then stop'
+            : 'Replace the existing transcript with a newly generated and verified transcript')}
+          onClick={() => void onSubmit(
+            item.source,
+            'report_only',
+            item.status === 'ready' ? undefined : { force_transcribe: true },
+          )}
+        ><FileText size={13} />{item.status === 'ready' ? 'Transcribe' : 'Retranscribe'}</button>
         <button
+          aria-label={item.status === 'finished' ? 'Retranscode' : 'Transcribe + Transcode'}
           disabled={combinedDisabled}
-          title={processingReason ?? (!['ready', 'transcribed'].includes(item.status) ? 'A verified censored output already exists for this file' : 'Transcribe if needed, then create a censored copy')}
-          onClick={() => void onSubmit(item.source, 'censor')}
-        ><Play size={13} />Censor</button>
+          title={processingReason ?? (item.status === 'finished'
+            ? 'Replace the censored output; reuse the verified transcript when available'
+            : 'Reuse a verified transcript when available, otherwise transcribe before censoring')}
+          onClick={() => void onSubmit(
+            item.source,
+            'censor',
+            item.status === 'finished' ? { overwrite_output: true } : undefined,
+          )}
+        ><Play size={13} />{item.status === 'finished' ? 'Retranscode' : 'Censor'}</button>
         <button
           disabled={archiveDisabled}
           title={!['transcribed', 'finished'].includes(item.status) ? 'Archive is available after a verified transcript or output exists' : !queueIdle ? 'Wait until the processing queue is idle before archiving' : 'Move the verified source to Processed'}

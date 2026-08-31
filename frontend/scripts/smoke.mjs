@@ -1,9 +1,10 @@
-import { mkdir } from 'node:fs/promises'
+import { access, mkdir } from 'node:fs/promises'
 import path from 'node:path'
 
 const electronTempDirectory = process.env.TEMP
 const tempDirectory = path.join(process.cwd(), 'node_modules', '.tmp', 'playwright')
 await mkdir(tempDirectory, { recursive: true })
+await access(path.join(process.cwd(), 'out', 'assets', 'profanity-censor-icon.ico'))
 delete process.env.ELECTRON_RUN_AS_NODE
 process.env.TMPDIR = tempDirectory
 process.env.TMP = tempDirectory

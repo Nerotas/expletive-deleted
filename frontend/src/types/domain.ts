@@ -46,6 +46,13 @@ export type Job = {
   status: JobStatus
   progress_percent: number | null
   error: JobError | null
+  force_transcribe?: boolean
+  overwrite_output?: boolean
+}
+
+export type JobSubmissionOptions = {
+  force_transcribe?: boolean
+  overwrite_output?: boolean
 }
 
 export type JobSubmissionCode =

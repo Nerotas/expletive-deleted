@@ -82,8 +82,20 @@ class BackendService:
     def get_capabilities(self) -> dict[str, object]:
         return get_capabilities(self.settings)
 
-    def submit_job(self, source: Path, mode: JobMode | None = None) -> JobRecord:
-        return self.jobs.submit(source, mode)
+    def submit_job(
+        self,
+        source: Path,
+        mode: JobMode | None = None,
+        *,
+        force_transcribe: bool = False,
+        overwrite_output: bool = False,
+    ) -> JobRecord:
+        return self.jobs.submit(
+            source,
+            mode,
+            force_transcribe=force_transcribe,
+            overwrite_output=overwrite_output,
+        )
 
     def submit_jobs(self, sources: list[Path], mode: JobMode) -> tuple[JobSubmissionResult, ...]:
         """Submit a selective batch while retaining ordered per-source results."""

@@ -10,6 +10,18 @@ let bridge: ChildProcessWithoutNullStreams | undefined
 let requestId = 0
 let bridgeFailure: string | undefined
 const pending = new Map<number, { resolve: (value: unknown) => void; reject: (reason: Error) => void }>()
+const APPLICATION_ID = 'com.profanity-censor.desktop'
+const APPLICATION_ICON = 'profanity-censor-icon.ico'
+
+function resolveApplicationIcon(): string | undefined {
+  const candidates = [
+    path.join(process.resourcesPath, 'assets', APPLICATION_ICON),
+    path.join(app.getAppPath(), 'assets', APPLICATION_ICON),
+    path.join(app.getAppPath(), 'out', 'assets', APPLICATION_ICON),
+    path.join(app.getAppPath(), 'src', 'assets', APPLICATION_ICON),
+  ]
+  return candidates.find((candidate) => existsSync(candidate))
+}
 
 function rejectPending(message: string): void {
   for (const request of pending.values()) request.reject(new Error(message))
@@ -82,8 +94,10 @@ function invoke(method: string, params?: Record<string, unknown>): Promise<unkno
 }
 
 function createWindow(): void {
+  const icon = resolveApplicationIcon()
   const browserWindow = new BrowserWindow({
     width: 1440, height: 940, minWidth: 1060, minHeight: 720, show: false,
+    ...(icon ? { icon } : {}),
     webPreferences: { preload: path.join(__dirname, '../preload/preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: false },
   })
   window = browserWindow
@@ -92,6 +106,8 @@ function createWindow(): void {
   if (process.env.ELECTRON_RENDERER_URL) void browserWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
   else void browserWindow.loadFile(path.join(__dirname, '../renderer/index.html'))
 }
+
+if (process.platform === 'win32') app.setAppUserModelId(APPLICATION_ID)
 
 app.whenReady().then(() => {
   startBridge()

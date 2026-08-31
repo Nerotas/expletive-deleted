@@ -151,6 +151,30 @@ class DesktopBridgeTests(unittest.TestCase):
         )
         self.assertEqual([item["status"] for item in result], ["queued", "rejected"])
 
+    def test_single_job_submission_forwards_explicit_reprocessing_options(self):
+        service = MagicMock()
+        job = MagicMock()
+        job.to_dict.return_value = {"id": "job-1", "mode": "censor"}
+        service.submit_job.return_value = job
+        bridge = DesktopBridge(service)
+
+        result = bridge.handle(
+            "jobs.submit",
+            {
+                "source": "C:/media/movie.mkv",
+                "mode": "censor",
+                "overwrite_output": True,
+            },
+        )
+
+        service.submit_job.assert_called_once_with(
+            Path("C:/media/movie.mkv"),
+            "censor",
+            force_transcribe=False,
+            overwrite_output=True,
+        )
+        self.assertEqual(result["id"], "job-1")
+
     def test_review_list_reads_a_saved_transcript_and_excludes_classified_words(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)

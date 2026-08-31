@@ -9,6 +9,7 @@ import type {
   Job,
   JobEvent,
   JobSubmissionResult,
+  JobSubmissionOptions,
   LibraryItem,
   ReviewResult,
   Settings,
@@ -54,8 +55,8 @@ export const desktopClient = {
   purgeArchiveSource: (source: string) => invoke<unknown>('archive.purge', { source }),
   purgeArchive: () => invoke<unknown>('archive.purge'),
   listJobs: () => invoke<Job[]>('jobs.list'),
-  submitJob: (source: string, mode: Job['mode']) =>
-    invoke<Job>('jobs.submit', { source, mode }),
+  submitJob: (source: string, mode: Job['mode'], options?: JobSubmissionOptions) =>
+    invoke<Job>('jobs.submit', { source, mode, ...options }),
   submitJobs: (sources: string[], mode: Job['mode']) =>
     invoke<JobSubmissionResult[]>('jobs.submit_many', { sources, mode }),
   listJobEvents: (jobId: string) => invoke<JobEvent[]>('jobs.events', { job_id: jobId }),

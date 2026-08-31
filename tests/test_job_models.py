@@ -54,6 +54,28 @@ class JobModelTests(unittest.TestCase):
         self.assertEqual(rejected["code"], "already_queued")
         self.assertNotIn("job", rejected)
 
+    def test_reprocessing_flags_are_mode_specific_and_serialized(self):
+        source = Path("C:/media/movie.mkv").resolve()
+        retranscribe = JobRecord(
+            "job-1",
+            source,
+            "report_only",
+            force_transcribe=True,
+        )
+        retranscode = JobRecord(
+            "job-2",
+            source,
+            "censor",
+            overwrite_output=True,
+        )
+
+        self.assertTrue(retranscribe.to_dict()["force_transcribe"])
+        self.assertTrue(retranscode.to_dict()["overwrite_output"])
+        with self.assertRaisesRegex(ValueError, "report-only"):
+            JobRecord("job-3", source, "censor", force_transcribe=True)
+        with self.assertRaisesRegex(ValueError, "censor jobs"):
+            JobRecord("job-4", source, "report_only", overwrite_output=True)
+
 
 if __name__ == "__main__":
     unittest.main()

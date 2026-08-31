@@ -589,7 +589,7 @@ class ProfanityCensor:
             print(f"[-] Failed to extract front-center channel: {e}")
             raise
 
-    def transcribe_with_timestamps(self) -> Dict:
+    def transcribe_with_timestamps(self, force: bool = False) -> Dict:
         """Transcribe audio using Whisper or load from cached transcript."""
         transcript_path = self.get_transcript_path()
         if not transcript_path:
@@ -599,7 +599,7 @@ class ProfanityCensor:
         transcript_file = Path(transcript_path)
         require_front_center = self.has_discrete_center_audio()
 
-        if transcript_file.exists():
+        if transcript_file.exists() and not force:
             print(f"[*] Loading cached transcript...")
             try:
                 with transcript_file.open(encoding="utf-8") as f:
@@ -993,7 +993,12 @@ class ProfanityCensor:
             print(f"[-] Error during censoring: {e}")
             return False
 
-    def process(self, report_only: bool = False, include_undiscovered: bool = False) -> bool:
+    def process(
+        self,
+        report_only: bool = False,
+        include_undiscovered: bool = False,
+        force_transcribe: bool = False,
+    ) -> bool:
         """Execute the complete censoring pipeline."""
         started = time.perf_counter()
         transcript_path = self.get_transcript_path()
@@ -1025,7 +1030,10 @@ class ProfanityCensor:
             self._check_cancelled()
             stage_started = time.perf_counter()
             # Transcribe the original file directly (gets accurate timestamps)
-            self.transcribe_with_timestamps()
+            if force_transcribe:
+                self.transcribe_with_timestamps(force=True)
+            else:
+                self.transcribe_with_timestamps()
             if not transcript_path:
                 raise TranscriptValidationError(
                     "A persisted transcript is required before processing can continue"

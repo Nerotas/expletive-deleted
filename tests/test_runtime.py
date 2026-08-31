@@ -258,6 +258,32 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(model.transcribe.call_args.args[0], "center.wav")
         self.assertEqual(transcript["audio_source"], "front_center")
 
+    def test_existing_compatible_transcript_skips_model_transcription(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            transcript_path = Path(temporary_directory) / "movie-transcript.json"
+            transcript = {
+                "text": "hello",
+                "words": [{"word": "hello", "start": 0.0, "end": 0.5}],
+                "audio_source": "full_mix",
+                "whisper_library": "faster-whisper",
+                "whisper_model": "large",
+            }
+            transcript_path.write_text(json.dumps(transcript), encoding="utf-8")
+            censor = object.__new__(ProfanityCensor)
+            censor.input_file = "movie.mkv"
+            censor.model_name = "large"
+            censor.whisper_library = "faster-whisper"
+            censor.transcripts_dir = temporary_directory
+            censor.used_cached_transcript = False
+            censor.has_discrete_center_audio = MagicMock(return_value=False)
+            censor._load_whisper_model = MagicMock()
+
+            loaded = censor.transcribe_with_timestamps()
+
+        self.assertEqual(loaded, transcript)
+        self.assertTrue(censor.used_cached_transcript)
+        censor._load_whisper_model.assert_not_called()
+
     def test_transcription_reports_live_progress_bar(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             censor = object.__new__(ProfanityCensor)
@@ -498,6 +524,25 @@ class RuntimeTests(unittest.TestCase):
 
         self.assertTrue(success)
         censor.censor_video.assert_called_once_with([])
+
+    def test_force_retranscription_bypasses_the_cached_transcript_path(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            transcript_path = Path(temporary_directory) / "movie-transcript.json"
+            transcript = {
+                "text": "",
+                "words": [],
+                "audio_source": "full_mix",
+                "whisper_library": "faster-whisper",
+                "whisper_model": "large",
+            }
+            transcript_path.write_text(json.dumps(transcript), encoding="utf-8")
+            censor = self.create_gated_pipeline(transcript_path, transcript)
+
+            success = censor.process(report_only=True, force_transcribe=True)
+
+        self.assertTrue(success)
+        censor.transcribe_with_timestamps.assert_called_once_with(force=True)
+        censor.censor_video.assert_not_called()
 
     def test_encoder_preference(self):
         self.assertEqual(select_video_encoder({"libx264", "h264_nvenc"}), "h264_nvenc")
