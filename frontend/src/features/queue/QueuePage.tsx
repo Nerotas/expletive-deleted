@@ -493,12 +493,12 @@ function QueueRow({
           disabled={transcribeDisabled}
           title={processingReason ?? (item.status !== 'ready' ? 'A verified transcript already exists for this file' : 'Create and verify a transcript, then stop')}
           onClick={() => void onSubmit(item.source, 'report_only')}
-        ><FileText size={13} />Transcribe only</button>
+        ><FileText size={13} />Transcribe</button>
         <button
           disabled={combinedDisabled}
           title={processingReason ?? (!['ready', 'transcribed'].includes(item.status) ? 'A verified censored output already exists for this file' : 'Transcribe if needed, then create a censored copy')}
           onClick={() => void onSubmit(item.source, 'censor')}
-        ><Play size={13} />Transcribe + Transcode</button>
+        ><Play size={13} />Censor</button>
         <button
           disabled={archiveDisabled}
           title={!['transcribed', 'finished'].includes(item.status) ? 'Archive is available after a verified transcript or output exists' : !queueIdle ? 'Wait until the processing queue is idle before archiving' : 'Move the verified source to Processed'}
