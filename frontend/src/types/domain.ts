@@ -84,6 +84,10 @@ export type Capabilities = {
   whisper_model_ready: boolean
   whisper_device: string
   video_encoders: string[]
+  ffmpeg_version?: string | null
+  ffmpeg_path?: string | null
+  ffprobe_path?: string | null
+  model_path?: string | null
 }
 
 export type DictionaryTarget = 'censor' | 'exclude'
@@ -142,4 +146,17 @@ export type Settings = {
   }
 }
 
-export type InstallPlan = { plan_id: string }
+export type InstallAction = {
+  id: string
+  dependencies: string[]
+  description: string
+  source_name: string
+  source_url: string
+  estimated_download_bytes: number | null
+  destination: string
+}
+
+export type InstallPlan = {
+  plan_id: string
+  actions: InstallAction[]
+}

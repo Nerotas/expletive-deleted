@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 from backend.policy import PolicyStore, ProfanityPolicy
 from backend.runtime import (
+    DependencyStatus,
     get_profanity_censor_words_file,
     get_profanity_exclusions_file,
     load_profanity_censor_words,
@@ -210,6 +211,65 @@ class DesktopBridgeTests(unittest.TestCase):
         self.assertFalse(response["ok"])
         self.assertEqual(response["error"]["type"], "ValueError")
         self.assertIn("Unknown desktop bridge method", response["error"]["message"])
+
+    def test_ffmpeg_location_validates_companion_and_persists_both_paths(self):
+        service = MagicMock()
+        service.get_settings.return_value = {
+            "runtime": {
+                "ffmpeg_path": None,
+                "ffprobe_path": None,
+                "whisper_cache": None,
+            }
+        }
+        service.get_capabilities.return_value = {"ready": True}
+        ready = lambda dependency_id, name, path: DependencyStatus(
+            id=dependency_id,
+            name=name,
+            state="ready",
+            required_version="8.0 or later",
+            installed_version="8.0",
+            path=Path(path),
+            detail="ready",
+            install_supported=True,
+        )
+        bridge = DesktopBridge(service)
+
+        with patch(
+            "scripts.desktop_bridge.inspect_executable",
+            side_effect=[
+                ready("ffmpeg", "FFmpeg", "C:/Tools/ffmpeg.exe"),
+                ready("ffprobe", "FFprobe", "C:/Tools/ffprobe.exe"),
+            ],
+        ):
+            result = bridge.handle(
+                "dependencies.locate_ffmpeg",
+                {"path": "C:/Tools/ffmpeg.exe"},
+            )
+
+        updated = service.update_settings.call_args.args[0]
+        self.assertEqual(updated["runtime"]["ffmpeg_path"], str(Path("C:/Tools/ffmpeg.exe").resolve()))
+        self.assertEqual(updated["runtime"]["ffprobe_path"], str(Path("C:/Tools/ffprobe.exe").resolve()))
+        self.assertEqual(result, {"ready": True})
+
+    def test_dependency_plan_discloses_managed_destination_without_installing(self):
+        service = MagicMock()
+        service.settings.runtime.whisper_cache = None
+        service.settings.whisper.library = "faster-whisper"
+        service.settings.whisper.model = "large-v3"
+        bridge = DesktopBridge(service)
+
+        with patch.dict(
+            "os.environ",
+            {"CENSOR_RUNTIME_ASSETS_DIR": "/tmp/expletive-runtime"},
+            clear=False,
+        ):
+            result = bridge.handle("dependencies.plan", {"components": ["whisper_model"]})
+
+        self.assertEqual(
+            result["actions"][0]["destination"],
+            "/tmp/expletive-runtime/models/whisper",
+        )
+        service.update_settings.assert_not_called()
 
 
 if __name__ == "__main__":

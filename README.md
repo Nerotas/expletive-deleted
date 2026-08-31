@@ -43,7 +43,7 @@ The root Python commands remain as compatibility entry points. New backend code 
 
 The repository bootstrap installs Python packages in a local `.venv`. FFmpeg and the Whisper model follow the reviewed dependency-plan workflow described below.
 
-User media and transcripts default to `Documents\Profanity Censor`. Internal settings use the operating system's application-data location in an automatically created `settings.ini`; the current development model cache remains under the repository unless overridden.
+User media and transcripts default to `Documents\Profanity Censor`. Internal settings use the operating system's application-data location in an automatically created `settings.ini`. Runtime assets explicitly retrieved through the desktop setup flow use `%LOCALAPPDATA%\ExpletiveDeleted\dependencies` and `%LOCALAPPDATA%\ExpletiveDeleted\models`; they are not written into the packaged application or user-media folders.
 
 ## Prepare the Application
 
@@ -86,7 +86,7 @@ Windows defaults:
 
 Settings are stored at `%LOCALAPPDATA%\ProfanityCensor\settings.ini` by default. The generated, machine-specific file is ignored by Git; [`config.example.ini`](config.example.ini) documents its schema.
 
-Setup also creates a repository-local Whisper cache at `whisper-cache/` by default and prints both the active cache path and current cache size. If Whisper models were previously downloaded to the user cache outside the repo, setup points you to the cache migration helper.
+The advanced CLI setup retains its repository-local `whisper-cache/` default and prints the active path and size. The desktop setup flow instead uses its per-user managed model directory unless the user selects another verified cache in Settings.
 
 When FFmpeg is missing, the approved dependency plan installs the pinned cross-platform `static-ffmpeg` runtime manager and then downloads its matching `ffmpeg` and `ffprobe` binaries. The app records their paths locally; it does not require WinGet or modify the system `PATH`.
 

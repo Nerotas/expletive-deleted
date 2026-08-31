@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
@@ -99,6 +99,21 @@ app.whenReady().then(() => {
   ipcMain.handle('profanity-censor:select-directory', async (_event: IpcMainInvokeEvent, defaultPath?: string) => {
     const result = await dialog.showOpenDialog(window!, { defaultPath, properties: ['openDirectory', 'createDirectory'] })
     return result.canceled ? undefined : result.filePaths[0]
+  })
+  ipcMain.handle('profanity-censor:select-file', async (_event: IpcMainInvokeEvent, defaultPath?: string) => {
+    const result = await dialog.showOpenDialog(window!, {
+      defaultPath,
+      properties: ['openFile'],
+      filters: process.platform === 'win32'
+        ? [{ name: 'FFmpeg executable', extensions: ['exe'] }]
+        : undefined,
+    })
+    return result.canceled ? undefined : result.filePaths[0]
+  })
+  ipcMain.handle('profanity-censor:open-external', async (_event: IpcMainInvokeEvent, value: string) => {
+    const url = new URL(value)
+    if (url.protocol !== 'https:') throw new Error('Only secure project links can be opened')
+    await shell.openExternal(url.toString())
   })
   createWindow()
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })

@@ -20,6 +20,7 @@ from .environment import (
     PROJECT_ROOT,
     find_ffmpeg,
     find_ffprobe,
+    get_application_runtime_root,
     get_directory_size,
     get_whisper_cache_dir,
 )
@@ -174,6 +175,7 @@ def build_install_plan(
     *,
     python_executable: Path | None = None,
     cache_dir: Path | None = None,
+    runtime_root: Path | None = None,
     platform_name: str | None = None,
     whisper_library: str = "faster-whisper",
     whisper_model: str = "large-v3",
@@ -190,6 +192,7 @@ def build_install_plan(
 
     python_executable = (python_executable or Path(sys.executable)).resolve()
     cache_dir = (cache_dir or get_whisper_cache_dir()).resolve()
+    runtime_root = (runtime_root or get_application_runtime_root()).resolve()
     platform_name = platform_name or platform.system()
     actions: list[InstallAction] = []
 
@@ -224,6 +227,8 @@ def build_install_plan(
                     str(python_executable),
                     "-m",
                     "scripts.download_ffmpeg_runtime",
+                    "--root",
+                    str(runtime_root),
                 ),
             )
         )

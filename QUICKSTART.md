@@ -39,7 +39,9 @@ The first launch checks the local system for:
 - Python speech-recognition dependencies
 - Whisper `large-v3`
 
-If anything is missing, the **Finish local setup** panel shows the affected component. Select **Install** and the app installs and verifies it. The underlying dependency plan remains internal so the same tested, pinned components are used by the desktop app and CLI.
+If anything is missing, the **Finish local setup** panel shows the affected component. Choose **Locate existing** to select and verify an installation already on the computer, or choose **Get** to review the exact third-party source, local destination, and download size before continuing. Canceling the disclosure does not start retrieval. After an approved operation, the backend verifies the component and refreshes System Ready status.
+
+Approved FFmpeg binaries and Whisper models are stored beneath `%LOCALAPPDATA%\ExpletiveDeleted\`, outside the application package and user-media folders. The app does not modify the global Windows `PATH`. Runtime locations remain inspectable and changeable under **Settings → Runtime components**.
 
 Whisper `large-v3` is required for reliable word-level censor timing. Smaller models are not supported for this workflow.
 

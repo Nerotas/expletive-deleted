@@ -1,4 +1,4 @@
-import { AlertCircle, FolderOpen, RotateCcw, Save } from 'lucide-react'
+import { AlertCircle, CheckCircle2, FileSearch, FolderOpen, RefreshCw, RotateCcw, Save } from 'lucide-react'
 import { NumberInput } from '../../components/ui/NumberInput'
 import { PageHeading } from '../../components/ui/PageHeading'
 import { SegmentedControl } from '../../components/ui/SegmentedControl'
@@ -10,6 +10,8 @@ import './settings.css'
 type SettingsPageProps = {
   controller: SettingsController
   capabilities: Capabilities | null
+  checkingSystem: boolean
+  onCheckSystem: () => void
 }
 
 const DIRECTORY_LABELS: Record<keyof Settings['directories'], string> = {
@@ -19,7 +21,7 @@ const DIRECTORY_LABELS: Record<keyof Settings['directories'], string> = {
   transcripts: 'Transcripts',
 }
 
-export function SettingsPage({ controller, capabilities }: SettingsPageProps) {
+export function SettingsPage({ controller, capabilities, checkingSystem, onCheckSystem }: SettingsPageProps) {
   const settings = controller.draft
   if (!settings) return <div className="loading-row">Loading settings</div>
 
@@ -227,6 +229,63 @@ export function SettingsPage({ controller, capabilities }: SettingsPageProps) {
           <small className="whisper-library-note">
             Changing the library or model requires its local component download. Existing
             transcripts from another profile will be regenerated.
+          </small>
+        </SettingsSection>
+
+        <SettingsSection title="Runtime components" description="Inspect or change local processing tools">
+          <label className="path-field">
+            <span>FFmpeg</span>
+            <div>
+              <input
+                value={settings.runtime.ffmpeg_path ?? ''}
+                placeholder="Not configured"
+                onChange={(event) => setGroup('runtime', {
+                  ...settings.runtime,
+                  ffmpeg_path: event.target.value || null,
+                })}
+              />
+              <button className="icon-button" title="Choose and verify FFmpeg" onClick={() => void controller.chooseFfmpeg()}>
+                <FileSearch size={17} />
+              </button>
+            </div>
+          </label>
+          <label className="path-field">
+            <span>FFprobe</span>
+            <input
+              value={settings.runtime.ffprobe_path ?? ''}
+              placeholder="Located beside FFmpeg"
+              onChange={(event) => setGroup('runtime', {
+                ...settings.runtime,
+                ffprobe_path: event.target.value || null,
+              })}
+            />
+          </label>
+          <label className="path-field">
+            <span>Whisper model cache</span>
+            <div>
+              <input
+                value={settings.runtime.whisper_cache ?? ''}
+                placeholder="Application-managed cache"
+                onChange={(event) => setGroup('runtime', {
+                  ...settings.runtime,
+                  whisper_cache: event.target.value || null,
+                })}
+              />
+              <button className="icon-button" title="Choose Whisper model cache" onClick={() => void controller.chooseWhisperCache()}>
+                <FolderOpen size={17} />
+              </button>
+            </div>
+          </label>
+          <div className={`runtime-status ${capabilities?.ready ? 'ready' : 'attention'}`}>
+            {capabilities?.ready ? <CheckCircle2 size={17} /> : <AlertCircle size={17} />}
+            <span>{capabilities?.ready ? 'All required components are verified.' : 'One or more required components need attention.'}</span>
+            <button className="button secondary" disabled={checkingSystem} onClick={onCheckSystem}>
+              <RefreshCw className={checkingSystem ? 'spin' : undefined} size={15} />Check system
+            </button>
+          </div>
+          <small className="whisper-library-note">
+            Save changed paths before checking. The backend verifies readiness and processing uses
+            the configured absolute paths; the application does not change the global PATH.
           </small>
         </SettingsSection>
 

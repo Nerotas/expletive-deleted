@@ -21,7 +21,7 @@ main { max-width: 1480px; margin: 0 auto; padding: 28px 34px 56px; }
 .button, .icon-button { height: 38px; border: 1px solid var(--line); background: white; color: var(--ink); border-radius: 5px; font: 700 12px var(--sans); display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 14px; }
 .icon-button { width: 38px; padding: 0; }
 .button.primary { background: var(--ink); color: white; border-color: var(--ink); }
-.button.secondary { background: white; }
+.button.secondary { background: var(--surface); }
 .button.danger { color: var(--danger); border-color: #e8c4c0; }
 .button:disabled { cursor: not-allowed; }
 .button:not(:disabled):hover, .icon-button:hover { border-color: var(--signal); }
@@ -30,20 +30,33 @@ main { max-width: 1480px; margin: 0 auto; padding: 28px 34px 56px; }
 .alert button { border: 0; background: none; font-weight: 700; }
 .alert.error { background: #fff3f1; color: #8d2922; border-color: #efc5c0; }
 .alert.success { background: #eef8f2; color: #256443; border-color: #bfddca; }
-.setup-band { display: grid; grid-template-columns: minmax(260px, .8fr) 1.4fr; gap: 32px; background: #172426; color: white; padding: 22px 26px; border-radius: 6px; margin-bottom: 24px; }
+.setup-band { display: grid; grid-template-columns: minmax(260px, .8fr) 1.4fr auto; gap: 32px; background: #172426; color: white; padding: 22px 26px; border-radius: 6px; margin-bottom: 24px; }
 .setup-band h2 { font: 700 22px var(--display); margin: 4px 0 7px; }
 .setup-band p { margin: 0; color: #aebbbb; font-size: 12px; }
 .setup-items { display: flex; flex-direction: column; justify-content: center; }
-.setup-item { min-height: 35px; display: grid; grid-template-columns: 20px 1fr auto auto; align-items: center; gap: 10px; border-bottom: 1px solid rgba(255, 255, 255, .12); font-size: 12px; }
+.setup-item { min-height: 39px; display: grid; grid-template-columns: 20px 1fr auto auto; align-items: center; gap: 10px; border-bottom: 1px solid rgba(255, 255, 255, .12); font-size: 12px; }
 .setup-item:last-child { border-bottom: 0; }
 .setup-item strong { color: #bcd1c4; }
 .setup-item button { border: 0; background: var(--signal); color: white; padding: 6px 9px; border-radius: 3px; font-weight: 700; font-size: 11px; }
+.setup-item-actions { display: flex; gap: 6px; }
+.setup-item button.secondary { border: 1px solid rgba(255, 255, 255, .35); background: transparent; }
+.setup-check { align-self: end; border: 1px solid rgba(255, 255, 255, .3); background: transparent; color: white; border-radius: 4px; padding: 8px 10px; font: 700 11px var(--sans); display: inline-flex; align-items: center; gap: 6px; }
 .loading-row { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 24px; color: var(--muted); font-size: 12px; }
 .modal-backdrop { position: fixed; inset: 0; background: rgba(20, 25, 26, .56); z-index: 50; display: grid; place-items: center; padding: 24px; }
 .modal { width: min(470px, 100%); background: white; border-radius: 6px; padding: 25px; box-shadow: 0 20px 70px rgba(0, 0, 0, .28); }
 .modal h2 { font: 700 24px var(--display); margin: 5px 0 9px; }
 .modal > p { color: var(--muted); font-size: 12px; line-height: 1.6; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.setup-consent { width: min(680px, 100%); max-height: calc(100vh - 48px); overflow: auto; color: var(--ink); }
+.setup-consent-actions-list { display: grid; gap: 10px; margin: 18px 0; }
+.setup-consent article { border: 1px solid var(--line); background: var(--soft); padding: 13px; }
+.setup-consent article > strong { font-size: 13px; }
+.setup-consent dl { display: grid; gap: 5px; margin: 10px 0; }
+.setup-consent dl div { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 8px; font-size: 11px; }
+.setup-consent dt { color: var(--muted); font-weight: 800; }
+.setup-consent dd { margin: 0; overflow-wrap: anywhere; }
+.setup-consent .setup-source-link { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; padding: 0; color: var(--signal-strong); font: 700 11px var(--sans); text-decoration: underline; }
+.setup-third-party-note { border-top: 1px solid var(--line); padding-top: 12px; }
 .spin { animation: spin .9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes page-in { from { opacity: 0; transform: translateY(4px); } }

@@ -1,6 +1,7 @@
-import { useEffect } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { desktopClient, type DesktopClient } from '../../services/desktop-client'
+import type { InstallPlan } from '../../types/domain'
 import { errorMessage } from '../../utils/format'
 
 type CapabilitiesOptions = {
@@ -14,6 +15,8 @@ export function useCapabilities({
   onError,
   onNotice,
 }: CapabilitiesOptions) {
+  const queryClient = useQueryClient()
+  const [pendingPlan, setPendingPlan] = useState<InstallPlan | null>(null)
   const query = useQuery({
     queryKey: ['capabilities'],
     queryFn: () => client.getCapabilities(),
@@ -23,14 +26,36 @@ export function useCapabilities({
     if (query.error) onError(errorMessage(query.error))
   }, [onError, query.error])
 
+  const planMutation = useMutation({
+    mutationFn: (components: string[]) => client.planDependencies(components),
+    onSuccess: setPendingPlan,
+    onError: (reason) => onError(errorMessage(reason)),
+  })
+
   const installMutation = useMutation({
-    mutationFn: async (components: string[]) => {
-      const plan = await client.planDependencies(components)
-      await client.installDependencies(plan.plan_id)
-    },
+    mutationFn: (planId: string) => client.installDependencies(planId),
     onSuccess: async () => {
+      setPendingPlan(null)
       await query.refetch()
       onNotice('Installation complete and verified')
+    },
+    onError: (reason) => onError(errorMessage(reason)),
+  })
+
+  const locateMutation = useMutation({
+    mutationFn: async (component: 'ffmpeg' | 'whisper_model') => {
+      if (component === 'ffmpeg') {
+        const selected = await client.selectFile(query.data?.ffmpeg_path ?? undefined)
+        return selected ? client.locateExistingFfmpeg(selected) : null
+      }
+      const selected = await client.selectDirectory()
+      return selected ? client.locateExistingModel(selected) : null
+    },
+    onSuccess: async (updated) => {
+      if (!updated) return
+      queryClient.setQueryData(['capabilities'], updated)
+      await queryClient.invalidateQueries({ queryKey: ['settings'] })
+      onNotice('Existing component located and verified')
     },
     onError: (reason) => onError(errorMessage(reason)),
   })
@@ -38,10 +63,20 @@ export function useCapabilities({
   return {
     capabilities: query.data ?? null,
     loading: query.isLoading,
-    busy: installMutation.isPending,
+    busy: planMutation.isPending || installMutation.isPending || locateMutation.isPending || query.isFetching,
+    installing: installMutation.isPending,
+    pendingPlan,
     refresh: async () => { await query.refetch() },
-    installRequired: async (components: string[]) => {
-      await installMutation.mutateAsync(components).catch(() => undefined)
+    reviewInstall: async (components: string[]) => {
+      await planMutation.mutateAsync(components).catch(() => undefined)
+    },
+    cancelInstall: () => setPendingPlan(null),
+    approveInstall: async () => {
+      if (!pendingPlan) return
+      await installMutation.mutateAsync(pendingPlan.plan_id).catch(() => undefined)
+    },
+    locateExisting: async (component: 'ffmpeg' | 'whisper_model') => {
+      await locateMutation.mutateAsync(component).catch(() => undefined)
     },
   }
 }

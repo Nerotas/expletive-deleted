@@ -12,9 +12,15 @@ from typing import Any, TextIO
 
 from backend.policy import PolicyStore, ProfanityPolicy
 from backend.runtime import (
+    FFMPEG_VERSION,
     build_install_plan,
     execute_install_plan,
-    get_whisper_cache_dir,
+    get_application_runtime_root,
+    get_managed_ffmpeg_directory,
+    get_managed_ffmpeg_paths,
+    get_managed_whisper_cache_dir,
+    inspect_executable,
+    inspect_whisper_model,
 )
 from backend.censor import find_review_candidates
 from backend.jobs.media import transcript_path
@@ -76,9 +82,15 @@ class DesktopBridge:
             )
             return {"source": str(source), "candidates": candidates}
         if method == "dependencies.plan":
+            runtime_root = get_application_runtime_root()
+            cache_dir = (
+                self.service.settings.runtime.whisper_cache
+                or get_managed_whisper_cache_dir(runtime_root)
+            )
             plan = build_install_plan(
                 list(params["components"]),
-                cache_dir=self.service.settings.runtime.whisper_cache or get_whisper_cache_dir(),
+                cache_dir=cache_dir,
+                runtime_root=runtime_root,
                 whisper_library=self.service.settings.whisper.library,
                 whisper_model=self.service.settings.whisper.model,
             )
@@ -94,6 +106,11 @@ class DesktopBridge:
                         "source_url": action.source_url,
                         "command": action.command,
                         "estimated_download_bytes": action.estimated_download_bytes,
+                        "destination": self._install_destination(
+                            action.id,
+                            runtime_root,
+                            cache_dir,
+                        ),
                     }
                     for action in plan.actions
                 ],
@@ -103,12 +120,64 @@ class DesktopBridge:
             plan = self._install_plans.get(plan_id)
             if plan is None:
                 raise ValueError("Dependency plan is unknown or expired; review it again")
+            runtime_root = get_application_runtime_root()
+            cache_dir = (
+                self.service.settings.runtime.whisper_cache
+                or get_managed_whisper_cache_dir(runtime_root)
+            )
             results = execute_install_plan(
                 plan,
                 approved_plan_id=plan_id,
-                cache_dir=self.service.settings.runtime.whisper_cache or get_whisper_cache_dir(),
+                cache_dir=cache_dir,
             )
+            installed_ids = {
+                dependency_id
+                for result in results
+                for dependency_id in result.dependency_ids
+            }
+            settings = self.service.get_settings()
+            runtime = dict(settings["runtime"])
+            if {"ffmpeg", "ffprobe"}.issubset(installed_ids):
+                ffmpeg_path, ffprobe_path = get_managed_ffmpeg_paths(runtime_root)
+                if not ffmpeg_path or not ffprobe_path:
+                    raise RuntimeError("Managed FFmpeg completed but its verified paths are unavailable")
+                runtime["ffmpeg_path"] = ffmpeg_path
+                runtime["ffprobe_path"] = ffprobe_path
+            if any(dependency_id.startswith("whisper:") for dependency_id in installed_ids):
+                runtime["whisper_cache"] = str(cache_dir)
+            if runtime != settings["runtime"]:
+                settings["runtime"] = runtime
+                self.service.update_settings(settings)
             return [asdict(result) for result in results]
+        if method == "dependencies.inspect_ffmpeg":
+            return self._inspect_ffmpeg_selection(params.get("path"))
+        if method == "dependencies.locate_ffmpeg":
+            selected = self._inspect_ffmpeg_selection(params.get("path"))
+            settings = self.service.get_settings()
+            runtime = dict(settings["runtime"])
+            runtime["ffmpeg_path"] = selected["ffmpeg_path"]
+            runtime["ffprobe_path"] = selected["ffprobe_path"]
+            settings["runtime"] = runtime
+            self.service.update_settings(settings)
+            return self.service.get_capabilities()
+        if method == "dependencies.locate_model":
+            selected = params.get("path")
+            if not isinstance(selected, str) or not selected.strip():
+                raise ValueError("Choosing an existing Whisper model requires a cache directory")
+            cache_dir = Path(selected).expanduser().resolve()
+            status = inspect_whisper_model(
+                cache_dir,
+                library=self.service.settings.whisper.library,
+                model=self.service.settings.whisper.model,
+            )
+            if not status.ready:
+                raise ValueError(f"The selected model cache is not ready: {status.detail}")
+            settings = self.service.get_settings()
+            runtime = dict(settings["runtime"])
+            runtime["whisper_cache"] = str(cache_dir)
+            settings["runtime"] = runtime
+            self.service.update_settings(settings)
+            return self.service.get_capabilities()
         if method == "library.list":
             return [item.to_dict() for item in self.service.get_library()]
         if method == "library.archive":
@@ -188,6 +257,35 @@ class DesktopBridge:
             "overrides_count": policy.overrides_count,
             "discovered_count": len(discovered),
             "discovered": discovered,
+        }
+
+    @staticmethod
+    def _install_destination(action_id: str, runtime_root: Path, cache_dir: Path) -> str:
+        if "ffmpeg" in action_id:
+            return str(get_managed_ffmpeg_directory(runtime_root))
+        if action_id.startswith("download-"):
+            return str(cache_dir)
+        return "The repository-local Python environment"
+
+    @staticmethod
+    def _inspect_ffmpeg_selection(selected: object) -> dict[str, object]:
+        if not isinstance(selected, str) or not selected.strip():
+            raise ValueError("Choosing FFmpeg requires an executable path")
+        ffmpeg_path = Path(selected).expanduser().resolve()
+        if ffmpeg_path.name.lower() not in {"ffmpeg", "ffmpeg.exe"}:
+            raise ValueError("Select ffmpeg.exe (or ffmpeg on non-Windows systems)")
+        companion_name = "ffprobe.exe" if ffmpeg_path.suffix.lower() == ".exe" else "ffprobe"
+        ffprobe_path = ffmpeg_path.with_name(companion_name)
+        ffmpeg = inspect_executable("ffmpeg", "FFmpeg", str(ffmpeg_path), FFMPEG_VERSION)
+        ffprobe = inspect_executable("ffprobe", "FFprobe", str(ffprobe_path), FFMPEG_VERSION)
+        failures = [status for status in (ffmpeg, ffprobe) if not status.ready]
+        if failures:
+            detail = "; ".join(f"{status.name}: {status.detail}" for status in failures)
+            raise ValueError(f"The selected FFmpeg installation is not ready: {detail}")
+        return {
+            "ffmpeg_path": str(ffmpeg_path),
+            "ffprobe_path": str(ffprobe_path),
+            "version": ffmpeg.installed_version,
         }
 
     def _discovered_words(self, censor_words: set[str], exclude_words: set[str]) -> list[str]:

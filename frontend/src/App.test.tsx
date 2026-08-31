@@ -51,6 +51,12 @@ describe('desktop application renderer', () => {
     vi.spyOn(desktopClient, 'archiveSource').mockResolvedValue({})
     vi.spyOn(desktopClient, 'restoreArchiveSource').mockResolvedValue({})
     vi.spyOn(desktopClient, 'selectDirectory').mockResolvedValue(undefined)
+    vi.spyOn(desktopClient, 'selectFile').mockResolvedValue(undefined)
+    vi.spyOn(desktopClient, 'planDependencies').mockResolvedValue({
+      plan_id: 'approved-plan',
+      actions: [],
+    })
+    vi.spyOn(desktopClient, 'installDependencies').mockResolvedValue({})
     vi.spyOn(desktopClient, 'updateDictionary').mockResolvedValue(emptyDictionary)
     localStorage.clear()
   })
@@ -271,6 +277,41 @@ describe('desktop application renderer', () => {
     expect((await screen.findAllByText('movie.mkv')).length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: 'Return to Queue' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Delete permanently' })).toBeInTheDocument()
+  })
+
+  it('shows source, destination, and size before an external retrieval can begin', async () => {
+    vi.mocked(desktopClient.getCapabilities).mockResolvedValue({
+      ...readyCapabilities,
+      ready: false,
+      ffmpeg: false,
+      ffprobe: false,
+    })
+    vi.mocked(desktopClient.planDependencies).mockResolvedValueOnce({
+      plan_id: 'ffmpeg-plan',
+      actions: [{
+        id: 'download-managed-ffmpeg-runtime',
+        dependencies: ['ffmpeg', 'ffprobe'],
+        description: 'Download and verify FFmpeg and FFprobe',
+        source_name: 'static-ffmpeg platform binaries',
+        source_url: 'https://pypi.org/project/static-ffmpeg/',
+        estimated_download_bytes: 1073741824,
+        destination: 'C:\\Users\\Parent\\AppData\\Local\\ExpletiveDeleted\\dependencies\\ffmpeg',
+      }],
+    })
+    const user = userEvent.setup()
+    renderApp('/')
+
+    await user.click((await screen.findAllByRole('button', { name: 'Get' }))[0])
+
+    expect(await screen.findByRole('dialog', { name: 'Retrieve required components?' })).toBeInTheDocument()
+    expect(screen.getByText('static-ffmpeg platform binaries')).toBeInTheDocument()
+    expect(screen.getByText(/ExpletiveDeleted/)).toBeInTheDocument()
+    expect(screen.getByText('1.0 GB (approximately)')).toBeInTheDocument()
+    expect(desktopClient.installDependencies).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(desktopClient.installDependencies).not.toHaveBeenCalled()
   })
 
   it('returns an archived original to Ready', async () => {

@@ -1,13 +1,15 @@
-import { AlertCircle, Check } from 'lucide-react'
+import { AlertCircle, Check, RefreshCw } from 'lucide-react'
 import type { Capabilities } from '../types/domain'
 
 type SetupBandProps = {
   capabilities: Capabilities
-  installRequired: (components: string[]) => void
+  reviewInstall: (components: string[]) => void
+  locateExisting: (component: 'ffmpeg' | 'whisper_model') => void
+  checkAgain: () => void
   busy: boolean
 }
 
-export function SetupBand({ capabilities, installRequired, busy }: SetupBandProps) {
+export function SetupBand({ capabilities, reviewInstall, locateExisting, checkAgain, busy }: SetupBandProps) {
   return (
     <section className="setup-band">
       <div>
@@ -23,9 +25,10 @@ export function SetupBand({ capabilities, installRequired, busy }: SetupBandProp
           label="FFmpeg + FFprobe"
           ready={capabilities.ffmpeg && capabilities.ffprobe}
           busy={busy}
+          locate={() => locateExisting('ffmpeg')}
           action={
             !(capabilities.ffmpeg && capabilities.ffprobe)
-              ? () => installRequired(['ffmpeg'])
+              ? () => reviewInstall(['ffmpeg'])
               : undefined
           }
         />
@@ -37,19 +40,23 @@ export function SetupBand({ capabilities, installRequired, busy }: SetupBandProp
           }
           ready={capabilities.whisper}
           busy={busy}
-          action={!capabilities.whisper ? () => installRequired(['python']) : undefined}
+          action={!capabilities.whisper ? () => reviewInstall(['python']) : undefined}
         />
         <SetupItem
           label={`Whisper ${capabilities.whisper_model}`}
           ready={capabilities.whisper_model_ready}
           busy={busy}
+          locate={() => locateExisting('whisper_model')}
           action={
             !capabilities.whisper_model_ready && capabilities.whisper
-              ? () => installRequired(['whisper_model'])
+              ? () => reviewInstall(['whisper_model'])
               : undefined
           }
         />
       </div>
+      <button className="setup-check" disabled={busy} onClick={checkAgain}>
+        <RefreshCw className={busy ? 'spin' : undefined} size={15} /> Check again
+      </button>
     </section>
   )
 }
@@ -59,16 +66,21 @@ type SetupItemProps = {
   ready: boolean
   busy: boolean
   action?: () => void
+  locate?: () => void
 }
 
-function SetupItem({ label, ready, busy, action }: SetupItemProps) {
+function SetupItem({ label, ready, busy, action, locate }: SetupItemProps) {
   return (
     <div className="setup-item">
       {ready ? <Check size={17} /> : <AlertCircle size={17} />}
       <span>{label}</span>
       <strong>{ready ? 'Ready' : 'Missing'}</strong>
-      {action && <button disabled={busy} onClick={action}>Install</button>}
+      {!ready && (locate || action) && (
+        <div className="setup-item-actions">
+          {locate && <button className="secondary" disabled={busy} onClick={locate}>Locate existing</button>}
+          {action && <button disabled={busy} onClick={action}>Get</button>}
+        </div>
+      )}
     </div>
   )
 }
-

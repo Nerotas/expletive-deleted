@@ -82,9 +82,42 @@ def get_whisper_cache_dir(root: Path | None = None) -> Path:
     return candidate.resolve() if candidate.is_absolute() else (project_root / candidate).resolve()
 
 
+def get_application_runtime_root(
+    environment: dict[str, str] | None = None,
+    home: Path | None = None,
+) -> Path:
+    """Return the per-user directory for explicitly approved runtime assets."""
+    environment = os.environ if environment is None else environment
+    configured = environment.get("CENSOR_RUNTIME_ASSETS_DIR", "").strip()
+    if configured:
+        return Path(configured).expanduser().resolve()
+
+    local_app_data = environment.get("LOCALAPPDATA", "").strip()
+    if local_app_data:
+        return (Path(local_app_data).expanduser() / "ExpletiveDeleted").resolve()
+
+    home = (home or Path.home()).expanduser()
+    data_home = environment.get("XDG_DATA_HOME", "").strip()
+    base = Path(data_home).expanduser() if data_home else home / ".local" / "share"
+    return (base / "expletive-deleted").resolve()
+
+
+def get_managed_whisper_cache_dir(root: Path | None = None) -> Path:
+    """Return the app-owned cache root without creating or downloading anything."""
+    runtime_root = (root or get_application_runtime_root()).expanduser().resolve()
+    return runtime_root / "models" / "whisper"
+
+
+def get_managed_ffmpeg_directory(root: Path | None = None) -> Path:
+    """Return the app-owned FFmpeg directory outside the installed application."""
+    runtime_root = (root or get_application_runtime_root()).expanduser().resolve()
+    return runtime_root / "dependencies" / "ffmpeg"
+
+
 def get_managed_ffmpeg_manifest_path(root: Path | None = None) -> Path:
     """Return the local manifest written after an approved managed FFmpeg download."""
-    return get_whisper_cache_dir(root).parent / "ffmpeg-runtime.json"
+    runtime_root = (root or get_application_runtime_root()).expanduser().resolve()
+    return runtime_root / "ffmpeg-runtime.json"
 
 
 def get_managed_ffmpeg_paths(root: Path | None = None) -> tuple[str | None, str | None]:
