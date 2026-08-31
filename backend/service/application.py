@@ -8,7 +8,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Callable
 
-from backend.jobs import JobManager, JobMode, JobRecord
+from backend.jobs import JobManager, JobMode, JobRecord, JobSubmissionResult
 from backend.jobs.media import MEDIA_EXTENSIONS, archive_path, relative_media_path
 from backend.settings import (
     AppSettings,
@@ -85,6 +85,10 @@ class BackendService:
     def submit_job(self, source: Path, mode: JobMode | None = None) -> JobRecord:
         return self.jobs.submit(source, mode)
 
+    def submit_jobs(self, sources: list[Path], mode: JobMode) -> tuple[JobSubmissionResult, ...]:
+        """Submit a selective batch while retaining ordered per-source results."""
+        return self.jobs.submit_many(sources, mode)
+
     def archive_source(self, source: Path) -> dict[str, object]:
         """Move a completed or transcribed source out of the Queue without touching artifacts."""
         active = tuple(
@@ -119,7 +123,6 @@ class BackendService:
 
     def import_sources(self, sources: list[Path]) -> list[dict[str, object]]:
         """Copy explicitly selected media to Ready without overwriting originals or targets."""
-        self._ensure_no_active_jobs("Files cannot be added while a job is active")
         ready = self.settings.directories.input.resolve()
         results: list[dict[str, object]] = []
         planned: set[Path] = set()

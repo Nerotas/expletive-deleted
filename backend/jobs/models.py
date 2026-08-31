@@ -8,6 +8,14 @@ from typing import Literal
 
 
 JobMode = Literal["report_only", "censor"]
+JobSubmissionCode = Literal[
+    "already_queued",
+    "existing_output",
+    "invalid_mode",
+    "outside_input",
+    "unavailable",
+    "unsupported",
+]
 JobStatus = Literal[
     "queued",
     "transcribing",
@@ -67,3 +75,35 @@ class JobRecord:
             "progress_percent": self.progress_percent,
             "error": self.error.to_dict() if self.error else None,
         }
+
+
+@dataclass(frozen=True)
+class JobSubmissionResult:
+    """One ordered result from a selective queue submission."""
+
+    source: Path
+    status: Literal["queued", "rejected"]
+    job: JobRecord | None = None
+    code: JobSubmissionCode | None = None
+    detail: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.source.is_absolute():
+            raise ValueError("Submission source must be an absolute path")
+        if self.status == "queued" and (self.job is None or self.code or self.detail):
+            raise ValueError("Queued submissions require only a job")
+        if self.status == "rejected" and (self.job is not None or not self.code or not self.detail):
+            raise ValueError("Rejected submissions require a code and detail")
+
+    def to_dict(self) -> dict[str, object]:
+        result: dict[str, object] = {
+            "source": str(self.source),
+            "status": self.status,
+        }
+        if self.job is not None:
+            result["job"] = self.job.to_dict()
+        if self.code is not None:
+            result["code"] = self.code
+        if self.detail is not None:
+            result["detail"] = self.detail
+        return result

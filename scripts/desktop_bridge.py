@@ -132,8 +132,27 @@ class DesktopBridge:
             return [job.to_dict() for job in self.service.jobs.list()]
         if method == "jobs.submit":
             mode = params.get("mode")
-            job = self.service.submit_job(Path(params["source"]), mode)
+            source = params.get("source")
+            if not isinstance(source, str) or mode not in ("report_only", "censor"):
+                raise ValueError("Job submission requires a source and supported mode")
+            job = self.service.submit_job(Path(source), mode)
             return job.to_dict()
+        if method == "jobs.submit_many":
+            mode = params.get("mode")
+            sources = params.get("sources")
+            if (
+                mode not in ("report_only", "censor")
+                or not isinstance(sources, list)
+                or not all(isinstance(source, str) for source in sources)
+            ):
+                raise ValueError("Batch submission requires source paths and a supported mode")
+            return [
+                result.to_dict()
+                for result in self.service.submit_jobs(
+                    [Path(source) for source in sources],
+                    mode,
+                )
+            ]
         if method == "jobs.get":
             return self.service.jobs.get(params["job_id"]).to_dict()
         if method == "jobs.events":

@@ -15,7 +15,17 @@ from backend.settings import AppSettings
 
 from .events import JobEvent
 from .media import MEDIA_EXTENSIONS, archive_path, output_path, relative_media_path, transcript_path
-from .models import JobError, JobMode, JobRecord, JobStatus
+from .models import (
+    JobError,
+    JobMode,
+    JobRecord,
+    JobStatus,
+    JobSubmissionCode,
+    JobSubmissionResult,
+)
+
+
+TERMINAL_STATUSES = {"completed", "failed", "cancelled", "transcribed"}
 
 
 class JobNotFoundError(KeyError):
@@ -24,6 +34,11 @@ class JobNotFoundError(KeyError):
 
 class JobSubmissionError(ValueError):
     """Raised when a source cannot be submitted safely."""
+
+    def __init__(self, code: JobSubmissionCode, detail: str):
+        self.code = code
+        self.detail = detail
+        super().__init__(detail)
 
 
 class JobManager:
@@ -48,24 +63,73 @@ class JobManager:
 
     def submit(self, source: Path, mode: JobMode | None = None) -> JobRecord:
         source = source.expanduser().resolve()
+        selected_mode = mode or self.settings.processing.mode
+        if selected_mode not in ("report_only", "censor"):
+            raise JobSubmissionError("invalid_mode", f"Unsupported processing mode: {selected_mode}")
         try:
             relative_media_path(source, self.settings.directories.input)
         except ValueError as exc:
-            raise JobSubmissionError(str(exc)) from exc
+            raise JobSubmissionError("outside_input", str(exc)) from exc
         if not source.is_file():
-            raise JobSubmissionError(f"Source file does not exist: {source}")
+            raise JobSubmissionError("unavailable", f"Source file does not exist: {source}")
         if source.suffix.lower() not in MEDIA_EXTENSIONS:
-            raise JobSubmissionError(f"Unsupported media type: {source.suffix or '(none)'}")
-        selected_mode: JobMode = mode or self.settings.processing.mode
+            raise JobSubmissionError(
+                "unsupported",
+                f"Unsupported media type: {source.suffix or '(none)'}",
+            )
+        if selected_mode == "censor" and output_path(
+            source,
+            self.settings.directories.output,
+            self.settings.directories.input,
+        ).exists():
+            raise JobSubmissionError(
+                "existing_output",
+                f"Output already exists for {source.name}",
+            )
+
         job = JobRecord(uuid4().hex, source, selected_mode)
         cancellation = Event()
         with self._lock:
+            if any(
+                existing.source == source and existing.status not in TERMINAL_STATUSES
+                for existing in self._jobs.values()
+            ):
+                raise JobSubmissionError(
+                    "already_queued",
+                    f"A job is already queued or running for {source.name}",
+                )
             self._jobs[job.id] = job
             self._events[job.id] = []
             self._cancellations[job.id] = cancellation
             self._emit(job.id, "stage", stage="queued", message="Job queued")
             self._futures[job.id] = self._executor.submit(self._run, job.id)
         return job
+
+    def submit_many(
+        self,
+        sources: list[Path] | tuple[Path, ...],
+        mode: JobMode,
+    ) -> tuple[JobSubmissionResult, ...]:
+        """Queue valid sources in request order and retain per-source rejections."""
+        if mode not in ("report_only", "censor"):
+            raise JobSubmissionError("invalid_mode", f"Unsupported processing mode: {mode}")
+
+        results: list[JobSubmissionResult] = []
+        for raw_source in sources:
+            source = raw_source.expanduser().resolve()
+            try:
+                job = self.submit(source, mode)
+                results.append(JobSubmissionResult(source, "queued", job=job))
+            except JobSubmissionError as exc:
+                results.append(
+                    JobSubmissionResult(
+                        source,
+                        "rejected",
+                        code=exc.code,
+                        detail=exc.detail,
+                    )
+                )
+        return tuple(results)
 
     def get(self, job_id: str) -> JobRecord:
         with self._lock:
@@ -87,7 +151,7 @@ class JobManager:
     def cancel(self, job_id: str) -> JobRecord:
         with self._lock:
             job = self.get(job_id)
-            if job.status in ("completed", "failed", "cancelled", "transcribed"):
+            if job.status in TERMINAL_STATUSES:
                 return job
             self._cancellations[job_id].set()
             future = self._futures[job_id]
@@ -179,7 +243,10 @@ class JobManager:
                 self._set_status(job_id, "cancelled", message="Job cancelled")
                 return
             if self._jobs[job_id].mode == "censor" and destination.exists():
-                raise JobSubmissionError(f"Output already exists: {destination}")
+                raise JobSubmissionError(
+                    "existing_output",
+                    f"Output already exists: {destination}",
+                )
             destination.parent.mkdir(parents=True, exist_ok=True)
 
             with self._lock:
@@ -215,6 +282,10 @@ class JobManager:
             if not success:
                 detail = getattr(censor, "last_error", None)
                 raise RuntimeError(detail or "Processing engine reported failure")
+            if not transcript.is_file():
+                raise RuntimeError(
+                    f"Processing completed without a verified transcript: {transcript}"
+                )
 
             with self._lock:
                 if self._jobs[job_id].mode == "report_only":

@@ -593,6 +593,19 @@ class RuntimeTests(unittest.TestCase):
         self.assertTrue(profanity.contains_profanity("fuck"))
         self.assertFalse(profanity.contains_profanity("weirdo"))
 
+    def test_configured_words_do_not_depend_on_shared_vendor_dictionary_state(self):
+        censor = object.__new__(ProfanityCensor)
+        censor.censor_words = {"customterm"}
+        censor.exclude_words = set()
+        censor.profanity = profanity
+        profanity.load_censor_words()
+
+        detected = censor.detect_profanity(
+            {"words": [{"word": "customterm", "start": 1.0, "end": 1.4}]}
+        )
+
+        self.assertEqual([item["word"] for item in detected], ["customterm"])
+
 
 if __name__ == "__main__":
     unittest.main()

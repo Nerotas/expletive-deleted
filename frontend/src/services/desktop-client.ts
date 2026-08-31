@@ -8,6 +8,7 @@ import type {
   ImportResult,
   Job,
   JobEvent,
+  JobSubmissionResult,
   LibraryItem,
   ReviewResult,
   Settings,
@@ -45,6 +46,8 @@ export const desktopClient = {
   listJobs: () => invoke<Job[]>('jobs.list'),
   submitJob: (source: string, mode: Job['mode']) =>
     invoke<Job>('jobs.submit', { source, mode }),
+  submitJobs: (sources: string[], mode: Job['mode']) =>
+    invoke<JobSubmissionResult[]>('jobs.submit_many', { sources, mode }),
   listJobEvents: (jobId: string) => invoke<JobEvent[]>('jobs.events', { job_id: jobId }),
   cancelJob: (jobId: string) => invoke<Job>('jobs.cancel', { job_id: jobId }),
   selectDirectory: (defaultPath?: string) => bridge().selectDirectory(defaultPath),

@@ -48,6 +48,18 @@ export type Job = {
   error: JobError | null
 }
 
+export type JobSubmissionCode =
+  | 'already_queued'
+  | 'existing_output'
+  | 'invalid_mode'
+  | 'outside_input'
+  | 'unavailable'
+  | 'unsupported'
+
+export type JobSubmissionResult =
+  | { source: string; status: 'queued'; job: Job }
+  | { source: string; status: 'rejected'; code: JobSubmissionCode; detail: string }
+
 export type JobEvent = {
   event: string
   job_id: string

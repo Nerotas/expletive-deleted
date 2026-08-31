@@ -1,10 +1,11 @@
 import { useEffect } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { desktopClient, type DesktopClient } from '../../services/desktop-client'
-import type { ArchiveItem, ImportResult, Job, JobEvent, Settings } from '../../types/domain'
+import type { ArchiveItem, ImportResult, Job, JobEvent, JobSubmissionResult } from '../../types/domain'
 import { errorMessage, fileName } from '../../utils/format'
 
 const TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled', 'transcribed'])
+const RUNNING_STATUSES = new Set(['transcribing', 'censoring', 'verifying'])
 
 type QueueOptions = {
   client?: DesktopClient
@@ -40,36 +41,57 @@ export function useQueue({
     if (query.error) onError(errorMessage(query.error))
   }, [onError, query.error])
 
-  const actionMutation = useMutation({
-    mutationFn: (action: () => Promise<void>) => action(),
+  const actionMutation = useMutation<unknown, unknown, () => Promise<unknown>>({
+    mutationFn: (action) => action(),
     onSuccess: async () => { await query.refetch() },
     onError: (reason) => onError(errorMessage(reason)),
   })
   const library = query.data?.library ?? []
   const jobs = query.data?.jobs ?? []
   const archive: ArchiveItem[] = query.data?.archive ?? []
-  const activeJob = jobs.find((job) => !TERMINAL_STATUSES.has(job.status))
-  const run = async (action: () => Promise<void>) => {
-    await actionMutation.mutateAsync(action).catch(() => undefined)
+  const runningJob = jobs.find((job) => RUNNING_STATUSES.has(job.status))
+  const queuedJobs = jobs.filter((job) => job.status === 'queued')
+  const nonTerminalJobs = jobs.filter((job) => !TERMINAL_STATUSES.has(job.status))
+  const run = async <T>(action: () => Promise<T>): Promise<T | undefined> => {
+    return actionMutation.mutateAsync(action).catch(() => undefined) as Promise<T | undefined>
   }
 
   return {
     library,
     jobs,
     jobEvents: query.data?.jobEvents ?? {},
-    activeJob,
+    runningJob,
+    queuedJobs,
+    queueIdle: nonTerminalJobs.length === 0,
     loading: query.isLoading,
     busy: actionMutation.isPending,
     refresh: async () => { await query.refetch() },
-    startBatch: (mode: Settings['processing']['mode']) => run(async () => {
-      const pending = library.filter((item) => item.status !== 'finished')
-      for (const item of pending) await client.submitJob(item.source, mode)
-      onNotice(`${pending.length} ${pending.length === 1 ? 'file' : 'files'} queued`)
-    }),
-    cancelActive: () => activeJob ? run(async () => {
-      await client.cancelJob(activeJob.id)
+    submitFile: (source: string, mode: Job['mode']) => run(async () => {
+      await client.submitJob(source, mode)
+      onNotice(`${fileName(source)} queued`)
+    }).then(() => undefined),
+    submitFiles: async (sources: string[], mode: Job['mode']): Promise<JobSubmissionResult[]> => {
+      const results = await run(() => client.submitJobs(sources, mode))
+      if (!results) return []
+      const queued = results.filter((result) => result.status === 'queued').length
+      const rejected = results.filter((result) => result.status === 'rejected')
+      if (rejected.length) {
+        onError(
+          `${queued} queued; ${rejected.length} could not be queued. ${rejected[0].detail}`,
+        )
+      } else {
+        onNotice(`${queued} ${queued === 1 ? 'file' : 'files'} queued`)
+      }
+      return results
+    },
+    cancelActive: () => runningJob ? run(async () => {
+      await client.cancelJob(runningJob.id)
       onNotice('Cancellation requested')
     }) : Promise.resolve(),
+    removeQueued: (job: Job) => run(async () => {
+      await client.cancelJob(job.id)
+      onNotice(`${fileName(job.source)} removed from the queue`)
+    }).then(() => undefined),
     retryJob: (job: Job) => run(async () => {
       await client.submitJob(job.source, job.mode)
       onNotice(`${fileName(job.source)} queued again`)
