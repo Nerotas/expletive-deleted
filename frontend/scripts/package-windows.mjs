@@ -38,11 +38,9 @@ function runBuilder() {
       'never',
     ], {
       cwd: process.cwd(),
-      env: {
-        ...process.env,
-        GH_TOKEN: '',
-        GITHUB_TOKEN: '',
-      },
+      env: Object.fromEntries(
+        Object.entries(process.env).filter(([key]) => key !== 'GH_TOKEN' && key !== 'GITHUB_TOKEN'),
+      ),
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
     })
