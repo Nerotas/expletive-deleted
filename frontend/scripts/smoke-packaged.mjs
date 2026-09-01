@@ -1,4 +1,4 @@
-import { access, mkdir } from 'node:fs/promises'
+import { access, mkdir, rm } from 'node:fs/promises'
 import path from 'node:path'
 
 const executable = process.env.PACKAGED_EXECUTABLE
@@ -7,7 +7,10 @@ const executable = process.env.PACKAGED_EXECUTABLE
 await access(executable)
 
 const temporaryDirectory = path.resolve('node_modules', '.tmp', 'playwright-packaged')
+const appDataDirectory = path.join(temporaryDirectory, 'fresh-app-data')
+await rm(appDataDirectory, { recursive: true, force: true })
 await mkdir(temporaryDirectory, { recursive: true })
+await mkdir(appDataDirectory, { recursive: true })
 delete process.env.ELECTRON_RUN_AS_NODE
 
 const { _electron: electron } = await import('playwright')
@@ -19,6 +22,7 @@ const packagedApp = await electron.launch({
     TMPDIR: temporaryDirectory,
     TMP: temporaryDirectory,
     TEMP: temporaryDirectory,
+    LOCALAPPDATA: appDataDirectory,
   },
 })
 
@@ -26,6 +30,17 @@ try {
   const window = await packagedApp.firstWindow()
   window.on('pageerror', (error) => console.error(`Renderer error: ${error.message}`))
   await window.waitForLoadState('domcontentloaded')
+  await window.getByRole('heading', { name: 'Welcome to Expletive Deleted', exact: true }).waitFor()
+
+  const freshSettings = await window.evaluate(() => window.expletiveDeleted.invoke('settings.get'))
+  if (freshSettings.onboarding.completed) throw new Error('Fresh packaged settings should require onboarding')
+  await window.evaluate((settings) => window.expletiveDeleted.invoke('settings.update', {
+    settings: { ...settings, onboarding: { completed: true } },
+  }), freshSettings)
+  const launchUrl = new URL(window.url())
+  launchUrl.searchParams.set('launch', 'completed')
+  launchUrl.hash = '#/'
+  await window.goto(launchUrl.toString())
   await window.getByRole('heading', { name: 'Queue', exact: true }).waitFor()
   await Promise.race([
     window.getByRole('heading', { name: 'Finish local setup', exact: true }).waitFor(),
