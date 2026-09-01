@@ -15,6 +15,12 @@ if (!/^\d+\.\d+\.\d+$/.test(version)) {
 const updates = [
   {
     file: path.join(frontendRoot, 'package-lock.json'),
+    check(contents) {
+      const lock = JSON.parse(contents)
+      if (lock.version !== version || lock.packages?.['']?.version !== version) {
+        throw new Error(`frontend/package-lock.json does not match version ${version}`)
+      }
+    },
     transform(contents) {
       const lock = JSON.parse(contents)
       lock.version = version
@@ -46,6 +52,10 @@ const updates = [
 
 for (const update of updates) {
   const original = await readFile(update.file, 'utf8')
+  if (checkOnly && update.check) {
+    update.check(original)
+    continue
+  }
   let contents = update.transform ? update.transform(original) : original
   for (const [pattern, replacement] of update.patterns ?? []) {
     if (!pattern.test(contents)) {
