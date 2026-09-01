@@ -1,9 +1,12 @@
-import { access, mkdir } from 'node:fs/promises'
+import { access, mkdir, rm } from 'node:fs/promises'
 import path from 'node:path'
 
 const electronTempDirectory = process.env.TEMP
 const tempDirectory = path.join(process.cwd(), 'node_modules', '.tmp', 'playwright')
 await mkdir(tempDirectory, { recursive: true })
+const appDataDirectory = path.join(tempDirectory, 'fresh-app-data')
+await rm(appDataDirectory, { recursive: true, force: true })
+await mkdir(appDataDirectory, { recursive: true })
 await access(path.join(process.cwd(), 'out', 'assets', 'expletive-deleted-icon.ico'))
 delete process.env.ELECTRON_RUN_AS_NODE
 process.env.TMPDIR = tempDirectory
@@ -19,6 +22,7 @@ const app = await electron.launch({
     ...(electronTempDirectory
       ? { TEMP: electronTempDirectory, TMP: electronTempDirectory, TMPDIR: electronTempDirectory }
       : {}),
+    LOCALAPPDATA: appDataDirectory,
   },
 })
 try {
@@ -28,7 +32,7 @@ try {
     if (message.type() === 'error') console.error(`Renderer console: ${message.text()}`)
   })
   await window.waitForLoadState('domcontentloaded')
-  await window.getByRole('heading', { name: 'Queue', exact: true }).waitFor()
+  await window.getByRole('heading', { name: 'Welcome to Expletive Deleted', exact: true }).waitFor()
 
   const { desktop, legacyBridgePresent } = await window.evaluate(() => ({
     desktop: window.expletiveDeleted.desktop,
@@ -36,6 +40,30 @@ try {
   }))
   if (!desktop) throw new Error('Context-isolated desktop bridge was not exposed')
   if (legacyBridgePresent) throw new Error('Obsolete preload bridge is still exposed')
+  if (await window.getByRole('dialog').count()) {
+    throw new Error('Fresh onboarding began dependency retrieval without consent')
+  }
+
+  const results = path.join(process.cwd(), 'test-results')
+  await mkdir(results, { recursive: true })
+  await window.locator('.onboarding-page').evaluate(async (element) => {
+    await Promise.all(element.getAnimations().map((animation) => animation.finished))
+  })
+  await window.screenshot({ path: path.join(results, 'desktop-onboarding.png'), fullPage: true })
+  await window.evaluate(() => { document.documentElement.dataset.theme = 'dark' })
+  await window.screenshot({ path: path.join(results, 'desktop-onboarding-dark.png'), fullPage: true })
+  await window.evaluate(() => { document.documentElement.dataset.theme = 'light' })
+
+  const freshSettings = await window.evaluate(() => window.expletiveDeleted.invoke('settings.get'))
+  if (freshSettings.onboarding.completed) throw new Error('Fresh settings should require onboarding')
+  await window.evaluate((settings) => window.expletiveDeleted.invoke('settings.update', {
+    settings: { ...settings, onboarding: { completed: true } },
+  }), freshSettings)
+  const launchUrl = new URL(window.url())
+  launchUrl.searchParams.set('launch', 'completed')
+  launchUrl.hash = '#/'
+  await window.goto(launchUrl.toString())
+  await window.getByRole('heading', { name: 'Queue', exact: true }).waitFor()
 
   const applicationMenuVisible = await app.evaluate(({ Menu }) => Menu.getApplicationMenu() !== null)
   if (applicationMenuVisible) throw new Error('Production Electron menu should be hidden')
@@ -46,8 +74,6 @@ try {
   ])
 
   await window.getByRole('link', { name: 'Settings', exact: true }).click()
-  const results = path.join(process.cwd(), 'test-results')
-  await mkdir(results, { recursive: true })
   await window.getByRole('heading', { name: 'Settings', exact: true }).waitFor()
   await window.screenshot({ path: path.join(results, 'desktop-settings.png'), fullPage: true })
 

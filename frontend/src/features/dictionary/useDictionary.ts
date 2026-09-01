@@ -170,11 +170,22 @@ export function useDictionary({
       await updateMutation.mutateAsync({ target: destination, word, action }).catch(() => undefined)
     },
     restoreDefaults: async () => {
-      await replaceMutation.mutateAsync({ operation: 'restore' }).catch(() => undefined)
+      try {
+        await replaceMutation.mutateAsync({ operation: 'restore' })
+        return true
+      } catch {
+        return false
+      }
     },
     importDictionary: async () => {
       const source = await client.selectDictionaryImport()
-      if (source) await replaceMutation.mutateAsync({ operation: 'import', source }).catch(() => undefined)
+      if (!source) return false
+      try {
+        await replaceMutation.mutateAsync({ operation: 'import', source })
+        return true
+      } catch {
+        return false
+      }
     },
     exportDictionary: async () => {
       const destination = await client.selectDictionaryExport()

@@ -86,6 +86,76 @@ describe('desktop application renderer', () => {
     expect(await screen.findByText('System ready')).toBeInTheDocument()
   })
 
+  it('opens onboarding for fresh settings and gates components on live readiness', async () => {
+    persisted.onboarding.completed = false
+    vi.mocked(desktopClient.getCapabilities).mockResolvedValue({
+      ...readyCapabilities,
+      ready: false,
+      ffmpeg: false,
+      ffprobe: false,
+    })
+    const user = userEvent.setup()
+    renderApp('/')
+
+    expect(await screen.findByRole('heading', { name: 'Welcome to Expletive Deleted' })).toBeInTheDocument()
+    expect(desktopClient.listLibrary).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: /Continue/ }))
+
+    expect(await screen.findByRole('heading', { name: 'Prepare required components' })).toBeInTheDocument()
+    expect(screen.getByText('FFmpeg and FFprobe')).toBeInTheDocument()
+    expect(screen.getByText('Speech recognition')).toBeInTheDocument()
+    expect(screen.getByText('Whisper large-v3 model')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Continue/ })).toBeDisabled()
+    expect(desktopClient.installDependencies).not.toHaveBeenCalled()
+  })
+
+  it('requires the supported large-v3 model even when aggregate capabilities are ready', async () => {
+    persisted.onboarding.completed = false
+    vi.mocked(desktopClient.getCapabilities).mockResolvedValue({
+      ...readyCapabilities,
+      whisper_model: 'medium',
+    })
+    const user = userEvent.setup()
+    renderApp('/')
+
+    await user.click(await screen.findByRole('button', { name: /Continue/ }))
+    expect(await screen.findByText('Whisper large-v3 model')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Continue/ })).toBeDisabled()
+  })
+
+  it('finishes a reopened walkthrough through the complete atomic settings update', async () => {
+    const user = userEvent.setup()
+    renderApp('/onboarding')
+
+    await user.click(await screen.findByRole('button', { name: /Continue/ }))
+    await user.click(screen.getByRole('button', { name: /Continue/ }))
+    expect(await screen.findByRole('heading', { name: 'Prepare your dictionary' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Use default censored words/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Import a dictionary/ })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /Continue/ }))
+
+    await user.click(await screen.findByRole('button', { name: 'Karaoke' }))
+    expect(screen.getByText('Not appropriate for mono audio')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /Continue/ }))
+    expect(await screen.findByDisplayValue('C:\\Media\\Ready')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /Continue/ }))
+
+    expect(await screen.findByText('Drag and drop')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /Continue/ }))
+    expect(await screen.findByText('Transcribe only')).toBeInTheDocument()
+    expect(screen.getByText('Transcribe + Transcode')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /Continue/ }))
+    await user.click(await screen.findByRole('button', { name: 'Finish setup' }))
+
+    await waitFor(() => expect(desktopClient.updateSettings).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        onboarding: { completed: true },
+        censoring: expect.objectContaining({ stereo_method: 'karaoke' }),
+      }),
+    ))
+    expect(await screen.findByText('Drop media here to add it')).toBeInTheDocument()
+  })
+
   it('keeps a Karaoke draft without running Queue polling off the Queue route', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })

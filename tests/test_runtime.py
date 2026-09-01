@@ -111,6 +111,7 @@ class RuntimeTests(unittest.TestCase):
         )
         self.assertTrue(get_profanity_censor_words_file().is_file())
         self.assertTrue(get_profanity_exclusions_file().is_file())
+        self.assertEqual(load_profanity_exclusions(get_profanity_exclusions_file()), set())
 
     def test_custom_media_root_does_not_relocate_packaged_policy_defaults(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

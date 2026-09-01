@@ -1,141 +1,111 @@
 # Expletive Deleted
 
-Expletive Deleted transcribes audio and video locally with faster-whisper, identifies configured profanity from word-level timestamps, and censors those intervals with FFmpeg. The Electron desktop interface controls the local Python application service; this is not a browser-hosted application.
+![Expletive Deleted](docs/app-icon.svg)
 
-Windows is the current application target. The processing engine remains portable, but macOS and Linux packaging are future work.
+**Create a family-friendly copy of audio or video without uploading your media.**
 
-See [QUICKSTART.md](QUICKSTART.md) for the condensed command sequence and [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for common setup failures.
+[Website](https://nerotas.github.io/expletive-deleted/) |
+[Download for Windows](https://github.com/Nerotas/expletive-deleted/releases/latest) |
+[Quick start](QUICKSTART.md) |
+[Troubleshooting](TROUBLESHOOTING.md)
 
-## Workflow
+![Expletive Deleted Queue](docs/app-queue.png)
 
-1. Put source media in the configured Ready/Input directory.
-2. Choose **Transcribe only** or **Transcribe + Transcode** for one file, or select Ready files for the serial queue.
-3. Whisper transcribes the input and atomically stores a validated reusable transcript in the configured Transcripts directory.
-4. For combined jobs, the saved transcript is re-opened and verified before FFmpeg can create the censored result in Finished/Output.
-5. The original remains in place unless archival is explicitly requested after a verified transcript or output exists.
+Expletive Deleted is a Windows desktop application that transcribes spoken language locally, finds words you have chosen to censor, and creates a separate censored copy with FFmpeg. It is designed for parents and media owners who want control over what their family hears without sending private media or transcripts to a cloud service.
 
-Outputs are never overwritten silently. Application-service jobs fail clearly on a conflict; compatibility batch runs skip the file unless overwrite is explicitly enabled.
+Version **1.0.0** is the current Windows release.
 
-## Repository Layout
+## What it does
 
-The working Python implementation now lives under `backend/`:
+- Processes supported audio and video locally on your computer.
+- Lets you maintain your own censored-word and exclusion dictionaries.
+- Offers a review-first **Transcribe only** workflow before media is changed.
+- Creates censored copies with predictable full-audio muting or optional stereo dialogue cancellation.
+- Runs queued jobs one at a time with visible status, progress, and error details.
+- Keeps source files by default and never silently overwrites output.
 
-```text
-backend/censor/engine.py       transcription, detection, and FFmpeg censoring
-backend/jobs/                  serial job manager, events, records, and batch compatibility
-backend/runtime/environment.py dependency, hardware, cache, and encoder discovery
-backend/runtime/paths.py       runtime directory ownership
-backend/settings/              validated models, persistence, and path checks
-backend/service/               settings, library, capabilities, and application boundary
-resources/                     curated profanity policy files
-scripts/                       bootstrap, diagnostics, and maintenance commands
-tests/                         backend regression tests
-backend_app.py                 local Phase 5+6 application-service entry point
-```
+Automated transcription and censorship are not perfect. Always review the transcript and finished media before sharing it.
 
-The root Python commands remain as compatibility entry points. New backend code should import package modules directly.
+## How it works
+
+1. Add media by placing it in the configured **Ready** folder or dragging it into the Queue.
+2. Choose **Transcribe only** to create and review a local transcript.
+3. Classify discovered words as **Censor** or **Ignore** in the Dictionary when needed.
+4. Choose **Transcribe + Transcode** to create a censored copy in **Finished**.
+5. Review the finished file. The original remains in Ready unless you deliberately archive it after success.
+
+Compatible transcripts can be reused. **Retranscribe** replaces an existing transcript while retaining finished media; **Retranscode** creates and verifies replacement output before removing the previous result.
+
+## Install on Windows
+
+1. Install Python 3.9 or later from a trusted Python distribution. Ensure the `py` launcher or `python` command is available.
+2. Download `Expletive-Deleted-Setup-1.0.0-x64.exe` from the [latest release](https://github.com/Nerotas/expletive-deleted/releases/latest).
+3. Run the installer, then open **Expletive Deleted** from the Start menu or desktop shortcut.
+4. Complete the first-run walkthrough. It checks required components, prepares your dictionary, and confirms working folders and censoring preferences.
+
+The installer contains the Electron application and first-party Python backend. It does **not** bundle Python, Python processing packages, the external `ffmpeg.exe`/`ffprobe.exe` runtime, or Whisper models.
+
+When a component is missing, the app shows its status and offers an inspectable setup plan. Nothing is retrieved until you choose an action, review the source and destination, and approve it. Valid existing installations can be selected instead.
 
 ## Requirements
 
+- Windows x64
 - Python 3.9 or later
 - FFmpeg and FFprobe
-- Disk space for source media, output media, and Whisper model downloads
+- `faster-whisper` and its Python dependencies
+- Whisper `large-v3`, the supported accuracy baseline
+- Disk space for the model, source media, transcripts, and finished copies
 
-The Windows installer contains the Electron application and first-party Python backend. It does not redistribute Python, Python processing packages, the external `ffmpeg.exe`/`ffprobe.exe` processing runtime, or Whisper models. Electron includes its required Chromium codec `ffmpeg.dll`; that framework DLL cannot process jobs and never satisfies the application's FFmpeg readiness check. Python 3.9 or later must be installed before first launch; the app then presents inspectable, user-approved plans for the remaining processing dependencies. Repository source builds use a local `.venv`.
+The first-run walkthrough verifies readiness. A network connection is needed only when you choose to retrieve a missing third-party component.
 
-User media and transcripts default to `Documents\Expletive Deleted`. Internal settings use `%LOCALAPPDATA%\ExpletiveDeleted\settings.ini`. Runtime assets explicitly retrieved through the desktop setup flow use `%LOCALAPPDATA%\ExpletiveDeleted\dependencies` and `%LOCALAPPDATA%\ExpletiveDeleted\models`; they are not written into the packaged application or user-media folders.
+## Privacy and file safety
 
-## Prepare the Application
+- Media, transcripts, dictionaries, and settings remain local by default.
+- The application does not require an account or upload media for processing.
+- Source files are retained after successful processing unless success-only archival is explicitly enabled.
+- Failed or cancelled jobs retain the source and remove incomplete output when safe.
+- Existing destination files are not silently replaced.
+- Dependency downloads require an explicit, reviewed approval.
 
-From the repository root:
+User media defaults to:
+
+```text
+%USERPROFILE%\Documents\Expletive Deleted\
+├── Ready
+├── Finished
+├── Processed
+└── Transcripts
+```
+
+Settings, the durable user dictionary, and explicitly retrieved runtime components are stored beneath `%LOCALAPPDATA%\ExpletiveDeleted`. Uninstalling the desktop application does not silently remove those files or user media.
+
+## Censoring choices
+
+**Drop audio** is the default and most predictable option. It silences the complete audio mix during each detected interval, including dialogue, music, and effects. It works with mono and stereo sources.
+
+**Karaoke** attempts to cancel centered dialogue in stereo audio while retaining some music and effects. Results depend on the source mix, off-center speech may remain, and it is not appropriate for mono audio.
+
+Recognized surround sources are handled separately: the front-center dialogue channel is censored before the selected surround output is preserved or downmixed.
+
+## Supported media
+
+Supported inputs include `.avi`, `.flv`, `.m4a`, `.mkv`, `.mov`, `.mp3`, `.mp4`, `.wav`, `.webm`, and `.wmv`. Audio-only jobs produce `.mp3`; video jobs produce `.mkv`.
+
+## Develop from source
+
+Source development requires:
+
+- Node.js 22.12 or later
+- Python 3.9 or later
+- A repository-local `.venv`
+
+Prepare the Python environment from the repository root:
 
 ```powershell
 python setup.py
 ```
 
-The command creates `.venv`, persists validated settings, creates the four configured working directories, and installs dependencies from `requirements.txt` into the virtual environment.
-
-Inspect application prerequisites without installing or downloading anything:
-
-```powershell
-.\.venv\Scripts\python.exe manage_dependencies.py status
-```
-
-Missing components are installed only through an inspectable plan. For example, review the pinned `large-v3` model source, revision, estimated download size, and command:
-
-```powershell
-.\.venv\Scripts\python.exe manage_dependencies.py plan --component whisper_model
-```
-
-After reviewing the plan, replace `PLAN_ID` with the exact approval ID it prints:
-
-```powershell
-.\.venv\Scripts\python.exe manage_dependencies.py install --component whisper_model --approve PLAN_ID
-```
-
-Use the same `plan` then `install --approve` flow with `--component ffmpeg` or `--component python` when either is reported missing. Nothing is retrieved silently.
-
-Windows defaults:
-
-```text
-%USERPROFILE%\Documents\Expletive Deleted\Ready
-%USERPROFILE%\Documents\Expletive Deleted\Finished
-%USERPROFILE%\Documents\Expletive Deleted\Processed
-%USERPROFILE%\Documents\Expletive Deleted\Transcripts
-```
-
-Settings are stored only at `%LOCALAPPDATA%\ExpletiveDeleted\settings.ini` by default. Missing settings are initialized from validated defaults. The generated, machine-specific file is ignored by Git; [`config.example.ini`](config.example.ini) documents its schema.
-
-The advanced CLI setup retains its repository-local `whisper-cache/` default and prints the active path and size. The desktop setup flow instead uses its per-user managed model directory unless the user selects another verified cache in Settings.
-
-When FFmpeg is missing, the approved dependency plan installs the pinned cross-platform `static-ffmpeg` runtime manager and then downloads its matching `ffmpeg` and `ffprobe` binaries. The app records their paths locally; it does not require WinGet or modify the system `PATH`.
-
-## Verify Readiness
-
-Run this non-destructive diagnostic check:
-
-```powershell
-.\.venv\Scripts\python.exe diagnostics.py
-.\.venv\Scripts\python.exe backend_app.py capabilities
-```
-
-On macOS or Linux:
-
-```bash
-.venv/bin/python diagnostics.py
-```
-
-A ready machine reports FFmpeg, FFprobe, Python dependencies, and `model_large_v3` as available. Diagnostics also verifies working folders, the selected H.264 encoder, and disk space.
-
-## Configure the Application
-
-Inspect the effective settings:
-
-```powershell
-.\.venv\Scripts\python.exe backend_app.py settings
-```
-
-Configure all processing preferences through the Settings page or validated commands; the same changes are saved to `settings.ini`:
-
-```powershell
-# Safe first pass: transcribe and report without creating media output.
-.\.venv\Scripts\python.exe manage_settings.py set-options --mode report_only
-
-# Example censor configuration.
-.\.venv\Scripts\python.exe manage_settings.py set-options --mode censor --device auto --stereo-method drop_audio --padding-before-ms 150 --padding-after-ms 150 --surround-output preserve_5_1 --video-mode h264 --keep-original
-```
-
-Supported alternatives include `karaoke`, `downmix_stereo`, `preserve_source`, and devices `cpu` or `cuda`. Archiving is off by default; `--archive-after-success` moves a source to `Processed` only after verified success.
-
-Change any working directory independently when needed:
-
-```powershell
-.\.venv\Scripts\python.exe manage_settings.py set-directories --input 'D:\Media\Ready' --output 'D:\Media\Finished' --create
-```
-
-## Use the Local Application
-
-Launch the native desktop application from the repository root:
+Start the complete Electron application from one terminal:
 
 ```powershell
 cd frontend
@@ -143,222 +113,66 @@ npm install
 npm run dev
 ```
 
-Vite is used only as Electron's renderer build and hot-reload tool. Normal users interact with the Electron window, not a browser URL.
+Electron starts and owns the private Python bridge. Vite is used only to build and hot-reload the renderer; this is not a browser-hosted application.
 
-The desktop Queue provides explicit per-file **Transcribe only**, **Transcribe + Transcode**, and **Archive** actions. Checkboxes queue an exact selection in the displayed sort order, and the backend processes one job at a time. Filters expose Ready, Queued, Active, Transcribed, and Finished rows; waiting jobs display `#1`, `#2`, and so on and can be removed independently. Files may be imported while processing continues, but imports remain Ready until the user queues them.
-
-Every censor job has a hard transcript gate. A compatible cache may be reused; otherwise Whisper must produce a transcript whose structure, profile, audio source, and word timestamps validate. New transcripts are written atomically and verified from disk before profanity detection or FFmpeg processing begins. Empty word lists are valid for media with no speech.
-
-Place a supported file in the configured `Ready` directory and inspect the Queue-equivalent library snapshot:
+Create and audit the Windows installer:
 
 ```powershell
-.\.venv\Scripts\python.exe backend_app.py library
+cd frontend
+npm run package:win
 ```
 
-Start with report-only processing:
+The package audit fails if the installer contains the external processing FFmpeg runtime, Whisper model payloads, or Python binary packages. Electron's framework-owned root `ffmpeg.dll` is Chromium codec support and cannot satisfy processing readiness.
 
-```powershell
-.\.venv\Scripts\python.exe backend_app.py process "$env:USERPROFILE\Documents\Expletive Deleted\Ready\Movie.mkv" --mode report_only
-```
+## Validation
 
-After reviewing the transcript and detections, create censored output:
-
-```powershell
-.\.venv\Scripts\python.exe backend_app.py process "$env:USERPROFILE\Documents\Expletive Deleted\Ready\Movie.mkv" --mode censor
-```
-
-The command returns the final job record and structured stage, progress, detection, completion, or error events. Jobs run serially. Press `Ctrl+C` to request cancellation; incomplete output is removed and the source remains untouched.
-
-Artifacts are written to:
-
-```text
-Ready        source media, retained by default
-Transcripts  reusable transcript and detection data
-Finished     completed censored media
-Processed    originals archived only after successful output when enabled
-```
-
-If the expected output already exists, the application-service job fails clearly instead of overwriting it. The compatibility batch command skips it unless `--overwrite` is explicitly supplied.
-
-## Compatibility Batch Processing
-
-Place supported media in the configured input directory, then run:
-
-```powershell
-.\.venv\Scripts\python.exe batch_process.py
-```
-
-The workflow always uses Whisper `large-v3` for the word-level timing accuracy required to mute only profane audio. Smaller models are not supported for censorship processing. This is enforced in the batch CLI, PowerShell wrapper, direct processor CLI, runtime validation, and model-cache management.
-
-List files without changing anything:
-
-```powershell
-.\.venv\Scripts\python.exe batch_process.py --list
-```
-
-Review potentially profane words without creating output files or moving source media:
-
-```powershell
-.\.venv\Scripts\python.exe batch_process.py --report-only
-```
-
-The report lists words detected by the broader `better-profanity` vocabulary that are not in your effective policy, with occurrence counts and timestamps. Classify reviewed words from the desktop **Dictionary** page. The live user dictionary uses `%LOCALAPPDATA%\ExpletiveDeleted\dictionary\censored.json`, `exclusions.json`, and `discovered.json` and is applied to future desktop and CLI runs.
-
-On first dictionary use, the application copies the shipped [censor defaults](resources/profanity_censor_words.txt) and [exclusions](resources/profanity_exclusions.txt) into that durable user dictionary. Later runs load only the user dictionary. The default censor run skips inputs with an existing output. Use these deliberate opt-in controls when needed:
-
-```powershell
-# Replace an existing censored output for files still in ready/.
-.\.venv\Scripts\python.exe batch_process.py --overwrite
-
-# Censor and report words found only in better-profanity's broad vocabulary,
-# unless they are excluded by the effective policy.
-.\.venv\Scripts\python.exe batch_process.py --include-undiscovered
-
-# Combine both for a full reprocess using the broad vocabulary.
-.\.venv\Scripts\python.exe batch_process.py --overwrite --include-undiscovered
-
-# Archive originals only after verified successful output.
-.\.venv\Scripts\python.exe batch_process.py --archive-original
-```
-
-Use `--report-only` first to review these undiscovered words before enabling broad-vocabulary censoring.
-
-### Censor Method
-
-For mono and stereo sources, the workflow silences audio during each profane interval by default (`--censor-method mute`). An alternative **karaoke** method is also available for stereo sources:
-
-```powershell
-.\.venv\Scripts\python.exe batch_process.py --censor-method karaoke
-```
-
-Instead of a hard silence, the karaoke method subtracts the right channel from the left (and vice-versa) during each flagged interval. Audio that is panned equally in both channels - typically centre-panned dialogue and vocals - cancels out. The stereo difference signal - music, ambient sound, and off-centre effects - is preserved, so the gap is less jarring than a clean mute.
-
-The technique relies on dialogue being centre-panned. Its effectiveness varies by mix: some audio will be attenuated rather than fully removed. If the source audio is mono, the method has no effect and the workflow automatically falls back to mute with a warning.
-
-Recognized `5.1`, `5.1(side)`, `7.1`, `7.1(wide)`, and `7.1(wide-side)` sources are handled automatically, regardless of stereo censor method. Whisper transcribes only the discrete front-center channel. During each flagged interval, FFmpeg drops that channel while preserving the other surround channels. The configured output either preserves surround or downmixes the censored result to stereo; censorship always occurs before downmixing. Existing surround transcript caches created from a full mix are regenerated once and tagged for safe reuse.
-
-Windows also has a convenience wrapper:
-
-```powershell
-.\convert-profanity-censor.ps1 -Model large
-.\convert-profanity-censor.ps1 -List
-.\convert-profanity-censor.ps1 -ReportOnly
-.\convert-profanity-censor.ps1 -Overwrite -IncludeUndiscovered
-```
-
-Supported input formats are `.avi`, `.flv`, `.m4a`, `.mkv`, `.mov`, `.mp3`, `.mp4`, `.wav`, `.webm`, and `.wmv`. Audio-only inputs produce `.mp3`; video inputs produce `.mkv`.
-
-## Single-File Processing
-
-For an explicit input/output path, call the processor directly:
-
-```powershell
-.\.venv\Scripts\python.exe censor_profanity.py input.mkv output.mkv large transcripts
-```
-
-Arguments are:
-
-```text
-censor_profanity.py INPUT OUTPUT [large] [TRANSCRIPTS_DIR]
-```
-
-Pass `--censor-method karaoke` to use centre-channel cancellation instead of hard muting:
-
-```powershell
-.\.venv\Scripts\python.exe censor_profanity.py input.mkv output.mkv --censor-method karaoke
-```
-
-## Acceleration
-
-The runtime detects FFmpeg encoders and chooses the first available option in this order:
-
-1. NVIDIA NVENC: `h264_nvenc`
-2. Intel Quick Sync Video: `h264_qsv`
-3. Apple VideoToolbox: `h264_videotoolbox`
-4. CPU fallback: `libx264`
-
-If a hardware encoder is detected but fails while processing, the workflow retries with `libx264` when it is available. WSL works with FFmpeg but does not assume GPU access; native Windows is recommended for NVIDIA acceleration.
-
-Whisper selects a profile automatically on each machine through its CTranslate2 backend. It queries CUDA availability, supported compute types, and NVIDIA GPU memory before each run. CPU-only systems use `int8`; supported GPUs use the best available compute type, such as `float16` or `int8_float32`. Whisper `large-v3` requires at least 8 GB of GPU memory. When the GPU is insufficient, the workflow safely uses CPU `int8` rather than lowering the model quality.
-
-`setup.py` installs dependencies and prints the `large-v3` profile detected through the new virtual environment. The persisted device preference is evaluated against each machine at batch time.
-
-After each completed transcription, the workflow records its throughput in a local ignored `.whisper-timing.json` file. Future preflight estimates use the median of the five most recent matching `large-v3` hardware-profile runs for that workstation. Until a matching run completes, the estimate is explicitly labeled as conservative; the live `[TX]` ETA uses the current file's observed progress.
-
-Override executable discovery or select a specific encoder with environment variables:
-
-```powershell
-$env:CENSOR_FFMPEG = 'C:\path\to\ffmpeg.exe'
-$env:CENSOR_FFPROBE = 'C:\path\to\ffprobe.exe'
-$env:CENSOR_VIDEO_ENCODER = 'libx264'
-$env:CENSOR_WHISPER_DEVICE = 'cpu' # Use cpu, cuda, or auto.
-$env:CENSOR_WHISPER_COMPUTE_TYPE = 'int8' # Or a supported CUDA type.
-```
-
-An encoder override must be listed by `ffmpeg -encoders` or processing fails clearly.
-
-## Configuration
-
-Application settings use a versioned `settings.ini` schema and atomic writes. Inspect, initialize, validate, or update working directories without a frontend:
-
-```powershell
-.\.venv\Scripts\python.exe manage_settings.py show
-.\.venv\Scripts\python.exe manage_settings.py init
-.\.venv\Scripts\python.exe manage_settings.py validate
-.\.venv\Scripts\python.exe manage_settings.py set-directories --input 'D:\Media\Ready' --create
-```
-
-Each directory can be set independently with `--input`, `--output`, `--archive`, and `--transcripts`. Duplicate, relative, malformed, inaccessible, and non-directory paths are rejected.
-
-`CENSOR_PROJECT_ROOT` remains a compatibility override for the four legacy repository-style folders. It overrides only directories for the current process; other persisted settings remain active:
-
-```powershell
-$env:CENSOR_PROJECT_ROOT = 'D:\media-censor-workflow'
-.\.venv\Scripts\python.exe batch_process.py --list
-```
-
-Whisper model downloads default to the project-relative `whisper-cache/` folder. Override it only when you intentionally want models stored outside the repo:
-
-```powershell
-$env:CENSOR_WHISPER_CACHE_DIR = 'D:\model-cache\whisper'
-.\.venv\Scripts\python.exe setup.py
-```
-
-Under `[Whisper]`, `Device = auto` and `ComputeType = auto` are the portable defaults. They are evaluated on each machine. `CENSOR_WHISPER_DEVICE` and `CENSOR_WHISPER_COMPUTE_TYPE` take precedence for a single run or a locally managed workstation policy.
-
-The application service and batch workflow apply processing mode, device, stereo censor method, before/after padding, surround output, video output, and source archival settings. Batch CLI flags such as `--report-only`, `--censor-media`, `--censor-method`, `--archive-original`, and `--keep-original` override their matching settings for one run.
-
-The workflow does not use `better-profanity`'s broad built-in dictionary for normal censoring. The text files under `resources/` are immutable factory defaults. User additions, exclusions, moves, and removals belong in the desktop **Dictionary**, which writes the independently readable `censored.json` and `exclusions.json` stores beneath `%LOCALAPPDATA%\ExpletiveDeleted\dictionary`. Discovered review words use `discovered.json`. Writes are staged, verified, and atomically replaced.
-
-Application upgrades do not merge new defaults into an existing user dictionary. The Dictionary page can import or export a complete portable JSON dictionary, and **Restore defaults** deliberately replaces the user dictionary with the defaults in the current application after confirmation. A word can be censored or excluded, but never both simultaneously.
-
-For an advanced workstation deployment, `CensorWordsFile` and `ExclusionsFile` under the legacy project `[Profanity]` configuration can replace the factory files used for initial seeding or an explicit restore. To select different factory files:
-
-```powershell
-$env:CENSOR_CENSOR_WORDS_FILE = 'D:\media-policies\strict-censor-words.txt'
-.\.venv\Scripts\python.exe batch_process.py
-```
-
-To select a different factory exclusions file, use `CENSOR_EXCLUSIONS_FILE` the same way. The three live dictionary stores remain beneath the canonical application-data directory. Each job reports the effective policy counts it loaded without logging transcript content.
-
-To inspect, migrate, or clean Whisper model caches:
-
-```powershell
-.\.venv\Scripts\python.exe manage_whisper_cache.py status
-.\.venv\Scripts\python.exe manage_whisper_cache.py migrate --clean-external
-.\.venv\Scripts\python.exe manage_whisper_cache.py prune-unused
-```
-
-## Tests
-
-Run the complete backend test suite without processing real media:
+Backend, from the repository root:
 
 ```powershell
 .\.venv\Scripts\python.exe -m unittest discover -s tests
 ```
 
-## Notes
+Desktop, from `frontend/`:
 
-- Processing never downloads `large-v3` implicitly. Review and approve its dependency plan before the first transcription.
-- Review censored output before distributing it. Whisper timestamps and profanity detection can require tuning for difficult audio.
-- Repository-relative `ready/`, `finished/`, `processed/`, and `transcripts/` remain ignored for `CENSOR_PROJECT_ROOT` compatibility.
+```powershell
+npm test
+npm run typecheck
+npm run lint
+npm run build
+npm run smoke
+```
+
+## Architecture
+
+```text
+backend/                  Python source of truth for settings, jobs, policy, and media safety
+frontend/electron/        Native window, lifecycle, preload API, and Python child process
+frontend/src/             React renderer and typed desktop client
+resources/                Factory dictionary resources
+scripts/                  Bootstrap, diagnostics, and maintenance commands
+tests/                    Backend regression tests
+docs/                     Product site and design documentation
+```
+
+The renderer uses React Router, TanStack Query, and React Hook Form. It communicates only through the context-isolated typed preload API. `nodeIntegration` remains disabled, and the renderer receives no arbitrary filesystem, process, or shell access.
+
+## Advanced command line
+
+The desktop application is the normal user experience. The compatibility CLI remains available for development, automation, diagnostics, and headless operation:
+
+```powershell
+.\.venv\Scripts\python.exe diagnostics.py
+.\.venv\Scripts\python.exe backend_app.py capabilities
+.\.venv\Scripts\python.exe batch_process.py --list
+.\.venv\Scripts\python.exe batch_process.py --report-only
+```
+
+See [QUICKSTART.md](QUICKSTART.md) for complete installed-app, source-build, and advanced CLI instructions.
+
+## Project links
+
+- [Product website](https://nerotas.github.io/expletive-deleted/)
+- [Windows releases](https://github.com/Nerotas/expletive-deleted/releases)
+- [Issue tracker](https://github.com/Nerotas/expletive-deleted/issues)
+- [Desktop developer notes](frontend/README.md)
+- [Troubleshooting](TROUBLESHOOTING.md)
