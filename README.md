@@ -14,7 +14,7 @@
 
 Expletive Deleted is a Windows desktop application that transcribes spoken language locally, finds words you have chosen to censor, and creates a separate censored copy with FFmpeg. It is designed for parents and media owners who want control over what their family hears without sending private media or transcripts to a cloud service.
 
-Version **1.0.0** is the current Windows release.
+Version **1.0.1** is the current Windows release.
 
 Expletive Deleted is free to use. [Ko-fi support](https://ko-fi.com/nicholaserotas) is optional and does not unlock features or priority service.
 
@@ -42,7 +42,7 @@ Compatible transcripts can be reused. **Retranscribe** replaces an existing tran
 ## Install on Windows
 
 1. Install Python 3.9 or later from a trusted Python distribution. Ensure the `py` launcher or `python` command is available.
-2. Download `Expletive-Deleted-Setup-1.0.0-x64.exe` from the [latest release](https://github.com/Nerotas/expletive-deleted/releases/latest).
+2. Download `Expletive-Deleted-Setup-1.0.1-x64.exe` from the [latest release](https://github.com/Nerotas/expletive-deleted/releases/latest).
 3. Run the installer, then open **Expletive Deleted** from the Start menu or desktop shortcut.
 4. Complete the first-run walkthrough. It checks required components, prepares your dictionary, and confirms working folders and censoring preferences.
 
@@ -126,6 +126,23 @@ npm run package:win
 ```
 
 The package audit fails if the installer contains the external processing FFmpeg runtime, Whisper model payloads, or Python binary packages. Electron's framework-owned root `ffmpeg.dll` is Chromium codec support and cannot satisfy processing readiness.
+
+## Releases and versioning
+
+`frontend/package.json` is the source of truth for the application version. Run the synchronizer after choosing a version locally:
+
+```powershell
+cd frontend
+npm version patch --no-git-tag-version
+npm run version:sync
+npm run version:check
+```
+
+When a pull request merges into `main`, the [Release workflow](.github/workflows/release.yml) normally increments the latest version by one patch (`1.0.1` to `1.0.2`). It synchronizes the package lock, desktop About text, README, and product website; runs backend, renderer, native, packaging, and installed-app checks; then commits the version, creates a `v<version>` tag, and publishes the Windows installer to GitHub Releases.
+
+If the merged pull request deliberately changes `frontend/package.json`, that version is preserved instead of receiving another patch bump. Use this path for minor or major releases. Manual workflow runs may choose `patch`, `minor`, `major`, or `none`.
+
+Repository Actions must have **Read and write permissions**, and the `main` branch rules must allow `github-actions[bot]` to push the synchronized version commit and release tag. A failed validation does not commit, tag, or publish the release.
 
 ## Validation
 

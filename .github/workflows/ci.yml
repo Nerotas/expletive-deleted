@@ -51,6 +51,10 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Check release metadata
+        working-directory: frontend
+        run: npm run version:check
+
       - name: Test frontend
         working-directory: frontend
         run: npm test
@@ -66,25 +70,6 @@ jobs:
       - name: Build and smoke-test Electron
         working-directory: frontend
         run: npm run smoke
-
-      - name: Build Windows installer
-        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
-        working-directory: frontend
-        run: npm run package:win
-
-      - name: Smoke-test packaged application
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        working-directory: frontend
-        run: npm run smoke:package
-
-      - name: Upload Windows installer
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@v4
-        with:
-          name: expletive-deleted-windows-x64
-          path: frontend/release/Expletive-Deleted-Setup-*-x64.exe
-          if-no-files-found: error
-          retention-days: 14
 
       - name: Upload smoke-test screenshots on failure
         if: failure()
