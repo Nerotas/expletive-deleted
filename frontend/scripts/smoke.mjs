@@ -77,6 +77,23 @@ try {
     else delete document.documentElement.dataset.theme
   }, previousTheme)
 
+  await window.getByRole('link', { name: 'Dictionary', exact: true }).click()
+  await window.getByRole('heading', { name: 'Dictionary', exact: true }).waitFor()
+  await window.getByText('User dictionary', { exact: true }).waitFor()
+  await window.screenshot({ path: path.join(results, 'desktop-dictionary.png'), fullPage: true })
+
+  await window.setViewportSize({ width: 1060, height: 720 })
+  await window.evaluate(() => { document.documentElement.dataset.theme = 'dark' })
+  await window.getByRole('button', { name: 'Restore defaults', exact: true }).click()
+  const restoreDialog = window.getByRole('dialog', { name: 'Restore default dictionary?' })
+  await restoreDialog.waitFor()
+  await window.screenshot({ path: path.join(results, 'desktop-dictionary-dark.png'), fullPage: true })
+  await restoreDialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await window.evaluate((theme) => {
+    if (theme) document.documentElement.dataset.theme = theme
+    else delete document.documentElement.dataset.theme
+  }, previousTheme)
+
   await window.getByRole('link', { name: 'Queue', exact: true }).click()
   await window.getByRole('heading', { name: 'Queue', exact: true }).waitFor()
 

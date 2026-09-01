@@ -20,12 +20,13 @@ class PolicyStoreTests(unittest.TestCase):
         censor_path.write_text(censor_words, encoding="utf-8")
         exclusions_path.write_text(exclusions, encoding="utf-8")
         return PolicyStore(
-            root / "policy.json",
+            root / "dictionary" / "profanity.json",
             censor_defaults_path=censor_path,
             exclusions_defaults_path=exclusions_path,
+            legacy_path=root / "policy.json",
         )
 
-    def test_missing_user_policy_loads_shipped_defaults_without_creating_a_file(self):
+    def test_missing_user_policy_seeds_complete_dictionary(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             store = self.create_store(root)
@@ -34,9 +35,9 @@ class PolicyStoreTests(unittest.TestCase):
 
             self.assertEqual(policy.censor_words, {"default-censor"})
             self.assertEqual(policy.exclusions, {"default-exclusion"})
-            self.assertFalse(store.path.exists())
+            self.assertTrue(store.path.exists())
 
-    def test_user_changes_are_atomic_overrides_and_do_not_mutate_defaults(self):
+    def test_user_changes_are_atomic_snapshots_and_do_not_mutate_defaults(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             store = self.create_store(root)
@@ -48,7 +49,8 @@ class PolicyStoreTests(unittest.TestCase):
             payload = json.loads(store.path.read_text(encoding="utf-8"))
             self.assertTrue(changed)
             self.assertIn("custom word", policy.censor_words)
-            self.assertEqual(payload["overrides"], {"custom word": "censor"})
+            self.assertEqual(payload["words"], ["custom word", "default-censor"])
+            self.assertEqual(payload["exclusions"], ["default-exclusion"])
             self.assertEqual(
                 store.censor_defaults_path.read_text(encoding="utf-8"),
                 censor_before,
@@ -58,7 +60,7 @@ class PolicyStoreTests(unittest.TestCase):
                 exclusions_before,
             )
 
-    def test_removed_word_stays_removed_while_new_defaults_flow_through(self):
+    def test_removed_word_and_existing_dictionary_ignore_new_defaults(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             store = self.create_store(root)
@@ -71,11 +73,8 @@ class PolicyStoreTests(unittest.TestCase):
             policy = store.load()
 
             self.assertNotIn("default-censor", policy.censor_words)
-            self.assertIn("new-default", policy.censor_words)
-            self.assertEqual(
-                json.loads(store.path.read_text(encoding="utf-8"))["overrides"],
-                {"default-censor": "none"},
-            )
+            self.assertNotIn("new-default", policy.censor_words)
+            self.assertEqual(json.loads(store.path.read_text(encoding="utf-8"))["words"], [])
 
     def test_classification_is_mutually_exclusive(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -108,9 +107,13 @@ class PolicyStoreTests(unittest.TestCase):
     def test_malformed_policy_is_actionable_and_never_silently_ignored(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             store = self.create_store(Path(temporary_directory))
-            store.path.write_text('{"schema_version":1,"overrides":[]}', encoding="utf-8")
+            store.path.parent.mkdir(parents=True)
+            store.path.write_text(
+                '{"schema_version":1,"seeded_from_default_version":1,"words":{},"exclusions":[]}',
+                encoding="utf-8",
+            )
 
-            with self.assertRaisesRegex(PolicyFileError, "overrides must be an object"):
+            with self.assertRaisesRegex(PolicyFileError, "words must be an array"):
                 store.load()
 
     def test_processing_engine_loads_the_same_effective_policy(self):

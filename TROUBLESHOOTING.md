@@ -107,7 +107,7 @@ Run report-only mode first:
 .\.venv\Scripts\python.exe batch_process.py --report-only
 ```
 
-Review the transcript under the configured Transcripts directory, then classify the term from the desktop **Dictionary** page. The shipped files under `resources/` are defaults; user decisions are stored atomically in `%LOCALAPPDATA%\ExpletiveDeleted\policy.json`.
+Review the transcript under the configured Transcripts directory, then classify the term from the desktop **Dictionary** page. The shipped files under `resources/` are factory defaults; the complete user-owned policy is stored atomically in `%LOCALAPPDATA%\ExpletiveDeleted\dictionary\profanity.json`. Use the Dictionary page to import, export, or deliberately restore it.
 
 If a surround transcript predates front-center transcription, the backend automatically rejects that cache and transcribes it again.
 

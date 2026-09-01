@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -52,12 +52,17 @@ describe('desktop application renderer', () => {
     vi.spyOn(desktopClient, 'restoreArchiveSource').mockResolvedValue({})
     vi.spyOn(desktopClient, 'selectDirectory').mockResolvedValue(undefined)
     vi.spyOn(desktopClient, 'selectFile').mockResolvedValue(undefined)
+    vi.spyOn(desktopClient, 'selectDictionaryImport').mockResolvedValue(undefined)
+    vi.spyOn(desktopClient, 'selectDictionaryExport').mockResolvedValue(undefined)
     vi.spyOn(desktopClient, 'planDependencies').mockResolvedValue({
       plan_id: 'approved-plan',
       actions: [],
     })
     vi.spyOn(desktopClient, 'installDependencies').mockResolvedValue({})
     vi.spyOn(desktopClient, 'updateDictionary').mockResolvedValue(emptyDictionary)
+    vi.spyOn(desktopClient, 'restoreDictionaryDefaults').mockResolvedValue(emptyDictionary)
+    vi.spyOn(desktopClient, 'importDictionary').mockResolvedValue(emptyDictionary)
+    vi.spyOn(desktopClient, 'exportDictionary').mockResolvedValue({ path: 'C:\\backup\\dictionary.json' })
     localStorage.clear()
   })
 
@@ -138,16 +143,15 @@ describe('desktop application renderer', () => {
     ))
   })
 
-  it('shows the shipped resource policy in the Dictionary page', async () => {
+  it('shows the durable user dictionary in the Dictionary page', async () => {
     vi.mocked(desktopClient.getDictionary).mockResolvedValueOnce({
-      words_path: 'C:\\App\\resources\\profanity_censor_words.txt',
+      dictionary_path: 'C:\\Users\\Parent\\AppData\\Local\\ExpletiveDeleted\\dictionary\\profanity.json',
+      schema_version: 1,
+      seeded_from_default_version: 1,
       words_count: 2,
       words: ['example-censor-one', 'example-censor-two'],
-      exclusions_path: 'C:\\App\\resources\\profanity_exclusions.txt',
       exclusions_count: 1,
       exclusions: ['example-exclusion'],
-      overrides_path: 'C:\\Users\\Parent\\AppData\\Local\\ExpletiveDeleted\\policy.json',
-      overrides_count: 0,
       discovered_count: 0,
       discovered: [],
     })
@@ -156,7 +160,25 @@ describe('desktop application renderer', () => {
 
     expect(await screen.findByText('example-censor-one')).toBeInTheDocument()
     expect(screen.getByText('example-censor-two')).toBeInTheDocument()
-    expect(screen.getByText('No user overrides yet')).toBeInTheDocument()
+    expect(screen.getByText('Format 1 · defaults 1')).toBeInTheDocument()
+  })
+
+  it('confirms restore and forwards selected dictionary import and export paths', async () => {
+    const user = userEvent.setup()
+    vi.mocked(desktopClient.selectDictionaryImport).mockResolvedValueOnce('C:\\backup\\import.json')
+    vi.mocked(desktopClient.selectDictionaryExport).mockResolvedValueOnce('C:\\backup\\export.json')
+    renderApp('/dictionary')
+
+    await user.click(await screen.findByRole('button', { name: 'Restore defaults' }))
+    expect(desktopClient.restoreDictionaryDefaults).not.toHaveBeenCalled()
+    const confirmation = screen.getByRole('dialog', { name: 'Restore default dictionary?' })
+    await user.click(within(confirmation).getByRole('button', { name: 'Restore defaults' }))
+    await waitFor(() => expect(desktopClient.restoreDictionaryDefaults).toHaveBeenCalledOnce())
+
+    await user.click(screen.getByRole('button', { name: 'Import' }))
+    await waitFor(() => expect(desktopClient.importDictionary).toHaveBeenCalledWith('C:\\backup\\import.json'))
+    await user.click(screen.getByRole('button', { name: 'Export' }))
+    await waitFor(() => expect(desktopClient.exportDictionary).toHaveBeenCalledWith('C:\\backup\\export.json'))
   })
 
   it('does not present a pending Dictionary request as an empty policy', () => {

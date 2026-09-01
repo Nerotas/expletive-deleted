@@ -389,7 +389,7 @@ class ProfanityCensor:
         self.last_error: str | None = None
         print(
             f"[*] Loaded {len(self.censor_words)} profanity censor word(s) "
-            f"from defaults plus {self.policy_file}"
+            f"from {self.policy_file}"
         )
         print(f"[*] Loaded {len(self.exclude_words)} profanity exclusion(s)")
 

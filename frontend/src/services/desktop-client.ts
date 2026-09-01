@@ -33,6 +33,11 @@ export const desktopClient = {
   getDictionary: () => invoke<DictionaryInfo>('dictionary.get'),
   updateDictionary: (action: DictionaryAction, target: DictionaryTarget, word: string) =>
     invoke<DictionaryInfo>(`dictionary.${action}`, { target, word }),
+  restoreDictionaryDefaults: () => invoke<DictionaryInfo>('dictionary.restore_defaults'),
+  importDictionary: (source: string) =>
+    invoke<DictionaryInfo>('dictionary.import', { source }),
+  exportDictionary: (destination: string) =>
+    invoke<{ path: string }>('dictionary.export', { destination }),
   getReview: (source: string) => invoke<ReviewResult>('reviews.list', { source }),
   planDependencies: (components: string[]) =>
     invoke<InstallPlan>('dependencies.plan', { components }),
@@ -63,6 +68,8 @@ export const desktopClient = {
   cancelJob: (jobId: string) => invoke<Job>('jobs.cancel', { job_id: jobId }),
   selectDirectory: (defaultPath?: string) => bridge().selectDirectory(defaultPath),
   selectFile: (defaultPath?: string) => bridge().selectFile(defaultPath),
+  selectDictionaryImport: () => bridge().selectDictionaryImport(),
+  selectDictionaryExport: () => bridge().selectDictionaryExport(),
   openExternal: (url: string) => bridge().openExternal(url),
   getDroppedFilePath: (file: File) => bridge().getPathForFile(file),
 }

@@ -41,7 +41,7 @@ backend/
   service/               Library, import, archive, settings, and capability boundary
   runtime/environment.py Dependency, hardware, cache, and encoder discovery
   runtime/paths.py       Runtime folder ownership
-  policy/                Versioned, atomic user-policy overlay
+  policy/                Versioned, atomic user dictionary
   settings/              Validated schema, atomic store, and path checks
 
 resources/               Curated censor and exclusion word lists
@@ -62,7 +62,7 @@ The root compatibility files remain intentionally thin. New backend code should 
 
 Settings default to `%LOCALAPPDATA%\ExpletiveDeleted\settings.ini`. It is created automatically from validated defaults, remains outside the repository, and has a tracked [`config.example.ini`](config.example.ini) schema template. When the new root is absent, known durable state is copied from the legacy `%LOCALAPPDATA%\Profanity Censor` or `%LOCALAPPDATA%\ProfanityCensor` root without deleting the source. Existing `settings.json` files migrate to INI on first load.
 
-Dictionary changes are stored separately in `%LOCALAPPDATA%\ExpletiveDeleted\policy.json`. The small versioned document records only user overrides; shipped defaults remain under `resources/`. This lets upgrades add defaults without modifying or losing the user's explicit classifications and removals.
+The complete user dictionary is stored separately in `%LOCALAPPDATA%\ExpletiveDeleted\dictionary\profanity.json`. Shipped files under `resources/` seed it on first use and supply explicit restore-defaults behavior only. Existing legacy `policy.json` overrides migrate into a complete dictionary, and upgrades do not silently merge changed defaults into an existing user's policy.
 
 User working directories default to:
 

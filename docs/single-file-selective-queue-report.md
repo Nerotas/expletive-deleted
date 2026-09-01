@@ -31,16 +31,16 @@ The configured profanity list remains the processing source of truth. Vendor dic
 
 ## Dictionary defaults
 
-The desktop Dictionary and processing pipeline use the same effective policy. Its immutable baseline is shipped in:
+The desktop Dictionary and processing pipeline use the same complete, durable policy. Its factory defaults are shipped in:
 
 - `resources/profanity_censor_words.txt` supplies the default censored words.
 - `resources/profanity_exclusions.txt` supplies the default exclusions.
 
-User decisions are stored outside the repository in `%LOCALAPPDATA%\ExpletiveDeleted\policy.json`. This versioned JSON document contains only explicit classifications and removal tombstones. It is staged, verified, and atomically replaced; the resource files are never edited by the application. New shipped defaults flow into the effective policy unless the user has explicitly overridden them.
+On first use, these files seed `%LOCALAPPDATA%\ExpletiveDeleted\dictionary\profanity.json`. This versioned JSON document contains all censored words and exclusions. It is staged, verified, and atomically replaced; the resource files are never edited by the application. Existing legacy `policy.json` deltas are materialized once, and new shipped defaults do not alter an existing user dictionary.
 
-There is no renderer-owned dictionary. The Dictionary page identifies the built-in sources and user-policy location and shows a loading state instead of temporarily presenting a pending request as an empty policy. Its query cache remains the only renderer snapshot, so reloading reflects the latest atomic backend policy.
+There is no renderer-owned dictionary. The Dictionary page identifies the durable user-policy location, supports backend-owned import/export, and confirms before copying current factory defaults over it. It shows a loading state instead of temporarily presenting a pending request as an empty policy. Its query cache remains the only renderer snapshot, so reloading reflects the latest atomic backend policy.
 
-A non-media backend regression compares the complete desktop dictionary response with the shipped resource files, and a renderer regression verifies that those returned words and source labels are visible.
+Backend regressions cover seeding, persistence, migration, reset, import/export, malformed data, and interrupted writes. Renderer regressions verify durable metadata and confirmation before restore.
 
 ## Queue and bridge architecture
 
