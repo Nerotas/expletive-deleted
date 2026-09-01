@@ -6,6 +6,7 @@
 
 [Website](https://nerotas.github.io/expletive-deleted/) |
 [Download for Windows](https://github.com/Nerotas/expletive-deleted/releases/latest) |
+[Support development](https://ko-fi.com/nicholaserotas) |
 [Quick start](QUICKSTART.md) |
 [Troubleshooting](TROUBLESHOOTING.md)
 
@@ -14,6 +15,8 @@
 Expletive Deleted is a Windows desktop application that transcribes spoken language locally, finds words you have chosen to censor, and creates a separate censored copy with FFmpeg. It is designed for parents and media owners who want control over what their family hears without sending private media or transcripts to a cloud service.
 
 Version **1.0.0** is the current Windows release.
+
+Expletive Deleted is free to use. [Ko-fi support](https://ko-fi.com/nicholaserotas) is optional and does not unlock features or priority service.
 
 ## What it does
 
@@ -174,5 +177,6 @@ See [QUICKSTART.md](QUICKSTART.md) for complete installed-app, source-build, and
 - [Product website](https://nerotas.github.io/expletive-deleted/)
 - [Windows releases](https://github.com/Nerotas/expletive-deleted/releases)
 - [Issue tracker](https://github.com/Nerotas/expletive-deleted/issues)
+- [Support development on Ko-fi](https://ko-fi.com/nicholaserotas)
 - [Desktop developer notes](frontend/README.md)
 - [Troubleshooting](TROUBLESHOOTING.md)

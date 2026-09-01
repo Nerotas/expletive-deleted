@@ -69,6 +69,7 @@ describe('desktop application renderer', () => {
     vi.spyOn(desktopClient, 'restoreDictionaryDefaults').mockResolvedValue(emptyDictionary)
     vi.spyOn(desktopClient, 'importDictionary').mockResolvedValue(emptyDictionary)
     vi.spyOn(desktopClient, 'exportDictionary').mockResolvedValue({ path: 'C:\\backup\\dictionary.json' })
+    vi.spyOn(desktopClient, 'openExternal').mockResolvedValue()
     localStorage.clear()
   })
 
@@ -218,6 +219,18 @@ describe('desktop application renderer', () => {
     )
     expect(screen.getByText(/they do not add FFmpeg command-line flags/i)).toBeInTheDocument()
     expect(screen.getByText('All required components are verified.')).toBeInTheDocument()
+  })
+
+  it('opens optional Ko-fi support only after an explicit Settings action', async () => {
+    const user = userEvent.setup()
+    renderApp('/settings')
+
+    const support = await screen.findByRole('button', { name: 'Support development' })
+    expect(screen.getByText(/does not unlock features or priority service/i)).toBeInTheDocument()
+    expect(desktopClient.openExternal).not.toHaveBeenCalled()
+
+    await user.click(support)
+    expect(desktopClient.openExternal).toHaveBeenCalledWith('https://ko-fi.com/nicholaserotas')
   })
 
   it('retains the draft and reports an error when saving fails', async () => {

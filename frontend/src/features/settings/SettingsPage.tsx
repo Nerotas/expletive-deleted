@@ -1,4 +1,4 @@
-import { AlertCircle, CheckCircle2, FileSearch, FolderOpen, RefreshCw, RotateCcw, Save } from 'lucide-react'
+import { AlertCircle, CheckCircle2, ExternalLink, FileSearch, FolderOpen, Heart, RefreshCw, RotateCcw, Save } from 'lucide-react'
 import { NumberInput } from '../../components/ui/NumberInput'
 import { PageHeading } from '../../components/ui/PageHeading'
 import { SegmentedControl } from '../../components/ui/SegmentedControl'
@@ -7,6 +7,9 @@ import { Field, SettingsSection } from './SettingsControls'
 import type { SettingsController } from './useSettingsController'
 import './settings.css'
 import { APPLICATION_DISPLAY_NAME } from '../../constants/application'
+import { desktopClient } from '../../services/desktop-client'
+
+const SUPPORT_URL = 'https://ko-fi.com/nicholaserotas'
 
 type SettingsPageProps = {
   controller: SettingsController
@@ -298,6 +301,19 @@ export function SettingsPage({ controller, capabilities, checkingSystem, onCheck
             <span>Electron desktop · local processing · Windows</span>
           </div>
           <button className="button secondary" onClick={onOpenOnboarding}>Open setup walkthrough</button>
+        </SettingsSection>
+
+        <SettingsSection title="Support" description="Help sustain future development">
+          <div className="support-setting">
+            <Heart size={20} aria-hidden="true" />
+            <div>
+              <strong>Support Expletive Deleted on Ko-fi</strong>
+              <span>Optional support does not unlock features or priority service.</span>
+            </div>
+          </div>
+          <button className="button secondary" onClick={() => void desktopClient.openExternal(SUPPORT_URL)}>
+            Support development<ExternalLink size={15} aria-hidden="true" />
+          </button>
         </SettingsSection>
       </div>
     </section>
