@@ -30,9 +30,17 @@ async function cleanGeneratedDirectories() {
 
 function runBuilder() {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [electronBuilder, '--win', target === 'dir' ? '--dir' : 'nsis'], {
+    const child = spawn(process.execPath, [
+      electronBuilder,
+      '--win',
+      target === 'dir' ? '--dir' : 'nsis',
+      '--publish',
+      'never',
+    ], {
       cwd: process.cwd(),
-      env: process.env,
+      env: Object.fromEntries(
+        Object.entries(process.env).filter(([key]) => key !== 'GH_TOKEN' && key !== 'GITHUB_TOKEN'),
+      ),
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
     })
