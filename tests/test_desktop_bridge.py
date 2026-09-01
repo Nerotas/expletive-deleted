@@ -42,7 +42,7 @@ class DesktopBridgeTests(unittest.TestCase):
                 expected_words_path = get_profanity_censor_words_file()
                 expected_exclusions_path = get_profanity_exclusions_file()
 
-        self.assertEqual(Path(result["dictionary_path"]), dictionary_path)
+        self.assertEqual(Path(result["dictionary_path"]), dictionary_path.resolve())
         self.assertEqual(result["schema_version"], 1)
         self.assertEqual(result["seeded_from_default_version"], 1)
         self.assertEqual(set(result["words"]), load_profanity_censor_words(expected_words_path))

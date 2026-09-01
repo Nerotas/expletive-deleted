@@ -581,7 +581,7 @@ class RuntimeTests(unittest.TestCase):
             with patch.dict(os.environ, {"CENSOR_PROJECT_ROOT": temporary_directory}):
                 paths = get_runtime_paths()
                 paths.create()
-            self.assertEqual(paths.root, Path(temporary_directory))
+            self.assertEqual(paths.root, Path(temporary_directory).resolve())
             self.assertTrue(paths.ready.is_dir())
             self.assertTrue(paths.finished.is_dir())
             self.assertEqual(paths.transcoded, paths.finished)
@@ -633,7 +633,7 @@ class RuntimeTests(unittest.TestCase):
             config_path = Path(temporary_directory) / "config.ini"
             config_path.write_text("[Whisper]\nCacheFolder = whisper-cache\n")
             cache_dir = get_whisper_cache_dir(Path(temporary_directory))
-            self.assertEqual(cache_dir, Path(temporary_directory) / "whisper-cache")
+            self.assertEqual(cache_dir, (Path(temporary_directory) / "whisper-cache").resolve())
 
     def test_whisper_cache_dir_honors_environment_override(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

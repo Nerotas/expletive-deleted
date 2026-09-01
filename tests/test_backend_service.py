@@ -172,7 +172,7 @@ class BackendServiceTests(unittest.TestCase):
 
                 service.jobs.list = lambda: ()
                 result = service.restore_archive_source(archived)
-                self.assertEqual(result["restored_to"], str(destination))
+                self.assertEqual(Path(result["restored_to"]), destination.resolve())
                 self.assertEqual(destination.read_bytes(), b"original")
                 self.assertFalse(archived.exists())
                 self.assertFalse(archived.parent.exists())
