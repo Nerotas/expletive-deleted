@@ -36,7 +36,10 @@ export function useCapabilities({
     mutationFn: (planId: string) => client.installDependencies(planId),
     onSuccess: async () => {
       setPendingPlan(null)
-      await query.refetch()
+      await Promise.all([
+        query.refetch(),
+        queryClient.invalidateQueries({ queryKey: ['settings'] }),
+      ])
       onNotice('Installation complete and verified')
     },
     onError: (reason) => onError(errorMessage(reason)),

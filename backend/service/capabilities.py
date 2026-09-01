@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from backend.runtime import (
     available_encoders,
-    get_whisper_cache_dir,
+    get_managed_whisper_cache_dir,
     get_whisper_device_status,
     inspect_dependencies,
 )
@@ -13,7 +13,7 @@ from backend.settings import AppSettings
 
 def get_capabilities(settings: AppSettings) -> dict[str, object]:
     settings.validate()
-    cache_dir = settings.runtime.whisper_cache or get_whisper_cache_dir()
+    cache_dir = settings.runtime.whisper_cache or get_managed_whisper_cache_dir()
     inventory = inspect_dependencies(
         cache_dir,
         ffmpeg_bin=settings.runtime.ffmpeg_path,

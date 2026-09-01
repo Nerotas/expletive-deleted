@@ -1,9 +1,11 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from backend.jobs import JobRecord
 from backend.service import ArchiveSourceError, BackendService, ServiceBusyError
+from backend.service.capabilities import get_capabilities
 from backend.settings import AppSettings, DirectorySettings, SettingsStore
 
 
@@ -53,6 +55,31 @@ class BackendServiceTests(unittest.TestCase):
         self.assertEqual(persisted.processing.mode, "report_only")
         self.assertTrue(managers[0].closed)
         self.assertTrue(managers[1].closed)
+
+    def test_capabilities_without_configured_cache_inspect_managed_cache(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            service = BackendService(
+                self.create_store(Path(temporary_directory)),
+                manager_factory=StubManager,
+            )
+            managed_cache = Path(temporary_directory) / "models" / "whisper"
+            try:
+                with (
+                    patch(
+                        "backend.service.capabilities.get_managed_whisper_cache_dir",
+                        return_value=managed_cache,
+                    ),
+                    patch(
+                        "backend.service.capabilities.inspect_dependencies",
+                        side_effect=RuntimeError("inspection stopped"),
+                    ) as inspect,
+                    self.assertRaisesRegex(RuntimeError, "inspection stopped"),
+                ):
+                    get_capabilities(service.settings)
+            finally:
+                service.close()
+
+        self.assertEqual(inspect.call_args.args[0], managed_cache)
 
     def test_library_uses_configured_directories(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

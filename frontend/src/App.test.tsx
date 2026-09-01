@@ -128,6 +128,29 @@ describe('desktop application renderer', () => {
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled()
   })
 
+  it('refreshes the persisted cache path after installing a Whisper model', async () => {
+    const managedCache = 'C:\\Users\\Parent\\AppData\\Local\\ExpletiveDeleted\\models\\whisper'
+    vi.mocked(desktopClient.getCapabilities).mockImplementation(async () => ({
+      ...readyCapabilities,
+      ready: persisted.runtime.whisper_cache !== null,
+      whisper_model_ready: persisted.runtime.whisper_cache !== null,
+    }))
+    vi.mocked(desktopClient.installDependencies).mockImplementationOnce(async () => {
+      persisted.runtime.whisper_cache = managedCache
+      return {}
+    })
+    const user = userEvent.setup()
+    renderApp('/')
+
+    await user.click(await screen.findByRole('button', { name: 'Get' }))
+    await user.click(screen.getByRole('button', { name: 'Continue' }))
+    await screen.findByText('Installation complete and verified')
+    await user.click(screen.getByRole('link', { name: 'Settings' }))
+
+    expect(await screen.findByDisplayValue(managedCache)).toBeInTheDocument()
+    expect(desktopClient.getSettings).toHaveBeenCalledTimes(2)
+  })
+
   it('renders the empty Queue and performs a Dictionary add through typed actions', async () => {
     const user = userEvent.setup()
     renderApp('/')
