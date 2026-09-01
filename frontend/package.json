@@ -20,8 +20,8 @@
     "preview": "electron-vite preview",
     "smoke": "npm run build && node scripts/smoke.mjs",
     "audit:package": "node scripts/audit-package.mjs",
-    "package:dir": "npm run build && electron-builder --win --dir && npm run audit:package",
-    "package:win": "npm run build && electron-builder --win nsis && npm run audit:package",
+    "package:dir": "npm run build && node scripts/package-windows.mjs dir && npm run audit:package",
+    "package:win": "npm run build && node scripts/package-windows.mjs nsis && npm run audit:package",
     "smoke:package": "node scripts/smoke-packaged.mjs"
   },
   "dependencies": {
