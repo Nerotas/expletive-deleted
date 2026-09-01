@@ -2,7 +2,7 @@
 
 ## Context
 
-The Profanity Censor application currently has bundled/default profanity resources in the repository.
+The Expletive Deleted application currently has bundled/default profanity resources in the repository.
 
 The current implementation appears to use files under:
 

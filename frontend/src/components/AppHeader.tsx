@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import appIconUrl from '../assets/profanity-censor-icon.svg'
+import { APPLICATION_DISPLAY_NAME } from '../constants/application'
 import type { Capabilities, Theme } from '../types/domain'
 
 type AppHeaderProps = {
@@ -27,7 +28,7 @@ export function AppHeader({
       <div className="brand-lockup">
         <img className="brand-mark" src={appIconUrl} alt="" />
         <div>
-          <strong>Expletive Deleted</strong>
+          <strong>{APPLICATION_DISPLAY_NAME}</strong>
           <small>Censor profanity in local files.</small>
         </div>
       </div>

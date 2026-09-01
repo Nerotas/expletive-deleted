@@ -36,7 +36,7 @@ The desktop Dictionary and processing pipeline use the same effective policy. It
 - `resources/profanity_censor_words.txt` supplies the default censored words.
 - `resources/profanity_exclusions.txt` supplies the default exclusions.
 
-User decisions are stored outside the repository in `%LOCALAPPDATA%\ProfanityCensor\policy.json`. This versioned JSON document contains only explicit classifications and removal tombstones. It is staged, verified, and atomically replaced; the resource files are never edited by the application. New shipped defaults flow into the effective policy unless the user has explicitly overridden them.
+User decisions are stored outside the repository in `%LOCALAPPDATA%\ExpletiveDeleted\policy.json`. This versioned JSON document contains only explicit classifications and removal tombstones. It is staged, verified, and atomically replaced; the resource files are never edited by the application. New shipped defaults flow into the effective policy unless the user has explicitly overridden them.
 
 There is no renderer-owned dictionary. The Dictionary page identifies the built-in sources and user-policy location and shows a loading state instead of temporarily presenting a pending request as an empty policy. Its query cache remains the only renderer snapshot, so reloading reflects the latest atomic backend policy.
 

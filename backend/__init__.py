@@ -1,1 +1,1 @@
-"""Python backend for the Profanity Censor application."""
+"""Python backend for the Expletive Deleted application."""

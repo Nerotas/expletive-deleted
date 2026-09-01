@@ -9,6 +9,8 @@ import tempfile
 from collections.abc import Mapping
 from pathlib import Path
 
+from backend.application_identity import get_app_data_root, prepare_app_data_root
+
 from .models import AppSettings, SettingsValidationError
 from .serialization import settings_from_dict, settings_to_dict
 
@@ -27,19 +29,7 @@ def default_app_data_root(
     home: Path | None = None,
 ) -> Path:
     """Return the internal application-data root for this machine."""
-    environment = os.environ if environment is None else environment
-    configured = environment.get("CENSOR_APP_DATA_DIR", "").strip()
-    if configured:
-        return Path(configured).expanduser().resolve()
-
-    local_app_data = environment.get("LOCALAPPDATA", "").strip()
-    if local_app_data:
-        return (Path(local_app_data).expanduser() / "ProfanityCensor").resolve()
-
-    home = (home or Path.home()).expanduser()
-    xdg_config_home = environment.get("XDG_CONFIG_HOME", "").strip()
-    config_root = Path(xdg_config_home).expanduser() if xdg_config_home else home / ".config"
-    return (config_root / "profanity-censor").resolve()
+    return get_app_data_root(environment, home)
 
 
 def default_settings_path(
@@ -53,7 +43,7 @@ class SettingsStore:
     """Load and atomically save one user-editable INI settings document."""
 
     def __init__(self, path: Path | None = None, defaults: AppSettings | None = None):
-        self.path = (path or default_settings_path()).expanduser().resolve()
+        self.path = (path or prepare_app_data_root() / "settings.ini").expanduser().resolve()
         self.defaults = defaults or AppSettings.defaults()
 
     def load(self) -> AppSettings:

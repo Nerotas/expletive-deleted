@@ -1,4 +1,4 @@
-# Profanity Censor Project Summary
+# Expletive Deleted Project Summary
 
 ## Current Status
 
@@ -60,17 +60,17 @@ The root compatibility files remain intentionally thin. New backend code should 
 
 ## Persistent Settings
 
-Settings default to `%LOCALAPPDATA%\ProfanityCensor\settings.ini`. It is created automatically from validated defaults, remains outside the repository, and has a tracked [`config.example.ini`](config.example.ini) schema template. Existing `settings.json` files migrate on first launch.
+Settings default to `%LOCALAPPDATA%\ExpletiveDeleted\settings.ini`. It is created automatically from validated defaults, remains outside the repository, and has a tracked [`config.example.ini`](config.example.ini) schema template. When the new root is absent, known durable state is copied from the legacy `%LOCALAPPDATA%\Profanity Censor` or `%LOCALAPPDATA%\ProfanityCensor` root without deleting the source. Existing `settings.json` files migrate to INI on first load.
 
-Dictionary changes are stored separately in `%LOCALAPPDATA%\ProfanityCensor\policy.json`. The small versioned document records only user overrides; shipped defaults remain under `resources/`. This lets upgrades add defaults without modifying or losing the user's explicit classifications and removals.
+Dictionary changes are stored separately in `%LOCALAPPDATA%\ExpletiveDeleted\policy.json`. The small versioned document records only user overrides; shipped defaults remain under `resources/`. This lets upgrades add defaults without modifying or losing the user's explicit classifications and removals.
 
 User working directories default to:
 
 ```text
-Documents\Profanity Censor\Ready
-Documents\Profanity Censor\Finished
-Documents\Profanity Censor\Processed
-Documents\Profanity Censor\Transcripts
+Documents\Expletive Deleted\Ready
+Documents\Expletive Deleted\Finished
+Documents\Expletive Deleted\Processed
+Documents\Expletive Deleted\Transcripts
 ```
 
 All four paths are independently configurable and validated. The application keeps source media by default. Manual archival is available after a verified transcript or output exists and only while the processing queue is idle.

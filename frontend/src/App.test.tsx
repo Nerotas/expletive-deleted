@@ -146,7 +146,7 @@ describe('desktop application renderer', () => {
       exclusions_path: 'C:\\App\\resources\\profanity_exclusions.txt',
       exclusions_count: 1,
       exclusions: ['example-exclusion'],
-      overrides_path: 'C:\\Users\\Parent\\AppData\\Local\\ProfanityCensor\\policy.json',
+      overrides_path: 'C:\\Users\\Parent\\AppData\\Local\\ExpletiveDeleted\\policy.json',
       overrides_count: 0,
       discovered_count: 0,
       discovered: [],

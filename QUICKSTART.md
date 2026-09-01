@@ -1,6 +1,6 @@
 # Quick Start
 
-Profanity Censor has two ways to work:
+Expletive Deleted has two ways to work:
 
 - **Desktop application (recommended):** start Electron only. It starts the private Python processing bridge automatically and stops it when the app closes; use its setup screen to review, approve, install, and verify required components.
 - **Backend and command line (advanced):** use the Python commands for development, automation, diagnostics, or a headless workflow.
@@ -47,7 +47,7 @@ Whisper `large-v3` is required for reliable word-level censor timing. Smaller mo
 
 ### Process media
 
-1. In **Settings**, confirm the working folders and processing preferences. The default input folder is `%USERPROFILE%\Documents\Profanity Censor\Ready`.
+1. In **Settings**, confirm the working folders and processing preferences. The default input folder is `%USERPROFILE%\Documents\Expletive Deleted\Ready`.
 2. Add supported audio or video files to the configured Ready/Input folder.
 3. Return to **Queue** and choose an action for one file:
    - **Transcribe only** creates and verifies a transcript without creating media output.
@@ -105,8 +105,8 @@ The FFmpeg plan installs the pinned cross-platform `static-ffmpeg` runtime manag
 Run one file through the application service:
 
 ```powershell
-.\.venv\Scripts\python.exe backend_app.py process "$env:USERPROFILE\Documents\Profanity Censor\Ready\Movie.mkv" --mode report_only
-.\.venv\Scripts\python.exe backend_app.py process "$env:USERPROFILE\Documents\Profanity Censor\Ready\Movie.mkv" --mode censor
+.\.venv\Scripts\python.exe backend_app.py process "$env:USERPROFILE\Documents\Expletive Deleted\Ready\Movie.mkv" --mode report_only
+.\.venv\Scripts\python.exe backend_app.py process "$env:USERPROFILE\Documents\Expletive Deleted\Ready\Movie.mkv" --mode censor
 ```
 
 For compatibility batch processing:

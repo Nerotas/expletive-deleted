@@ -13,6 +13,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Iterable
 
+from backend.application_identity import get_app_data_root, prepare_app_data_root
 from backend.runtime.paths import (
     PROJECT_ROOT,
     RuntimePaths,
@@ -91,15 +92,9 @@ def get_application_runtime_root(
     configured = environment.get("CENSOR_RUNTIME_ASSETS_DIR", "").strip()
     if configured:
         return Path(configured).expanduser().resolve()
-
-    local_app_data = environment.get("LOCALAPPDATA", "").strip()
-    if local_app_data:
-        return (Path(local_app_data).expanduser() / "ExpletiveDeleted").resolve()
-
-    home = (home or Path.home()).expanduser()
-    data_home = environment.get("XDG_DATA_HOME", "").strip()
-    base = Path(data_home).expanduser() if data_home else home / ".local" / "share"
-    return (base / "expletive-deleted").resolve()
+    if environment is None:
+        return prepare_app_data_root(home=home)
+    return get_app_data_root(environment, home)
 
 
 def get_managed_whisper_cache_dir(root: Path | None = None) -> Path:

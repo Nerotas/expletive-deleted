@@ -1,1 +1,1 @@
-"""Bootstrap and maintenance commands for Profanity Censor."""
+"""Bootstrap and maintenance commands for Expletive Deleted."""
