@@ -233,13 +233,13 @@ export function SettingsPage({ controller, capabilities, checkingSystem, onCheck
           </small>
         </SettingsSection>
 
-        <SettingsSection title="Runtime components" description="Inspect or change local processing tools">
+        <SettingsSection title="Runtime components" description="Automatic discovery and optional path overrides">
           <label className="path-field">
-            <span>FFmpeg</span>
+            <span>FFmpeg path override</span>
             <div>
               <input
                 value={settings.runtime.ffmpeg_path ?? ''}
-                placeholder="Not configured"
+                placeholder="Using automatic detection"
                 onChange={(event) => setGroup('runtime', {
                   ...settings.runtime,
                   ffmpeg_path: event.target.value || null,
@@ -251,10 +251,10 @@ export function SettingsPage({ controller, capabilities, checkingSystem, onCheck
             </div>
           </label>
           <label className="path-field">
-            <span>FFprobe</span>
+            <span>FFprobe path override</span>
             <input
               value={settings.runtime.ffprobe_path ?? ''}
-              placeholder="Located beside FFmpeg"
+              placeholder="Using automatic detection"
               onChange={(event) => setGroup('runtime', {
                 ...settings.runtime,
                 ffprobe_path: event.target.value || null,
@@ -262,11 +262,11 @@ export function SettingsPage({ controller, capabilities, checkingSystem, onCheck
             />
           </label>
           <label className="path-field">
-            <span>Whisper model cache</span>
+            <span>Whisper cache override</span>
             <div>
               <input
                 value={settings.runtime.whisper_cache ?? ''}
-                placeholder="Application-managed cache"
+                placeholder="Using application-managed cache"
                 onChange={(event) => setGroup('runtime', {
                   ...settings.runtime,
                   whisper_cache: event.target.value || null,
@@ -285,8 +285,9 @@ export function SettingsPage({ controller, capabilities, checkingSystem, onCheck
             </button>
           </div>
           <small className="whisper-library-note">
-            Save changed paths before checking. The backend verifies readiness and processing uses
-            the configured absolute paths; the application does not change the global PATH.
+            Leave overrides blank to use automatically detected components. These fields select
+            executable or cache locations; they do not add FFmpeg command-line flags. Save changed
+            paths before checking again.
           </small>
         </SettingsSection>
 

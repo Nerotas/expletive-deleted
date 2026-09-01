@@ -115,6 +115,21 @@ describe('desktop application renderer', () => {
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
   })
 
+  it('presents blank runtime paths as automatic detection rather than missing setup', async () => {
+    renderApp('/settings')
+
+    expect(await screen.findByLabelText('FFmpeg path override')).toHaveAttribute(
+      'placeholder',
+      'Using automatic detection',
+    )
+    expect(screen.getByLabelText('FFprobe path override')).toHaveAttribute(
+      'placeholder',
+      'Using automatic detection',
+    )
+    expect(screen.getByText(/they do not add FFmpeg command-line flags/i)).toBeInTheDocument()
+    expect(screen.getByText('All required components are verified.')).toBeInTheDocument()
+  })
+
   it('retains the draft and reports an error when saving fails', async () => {
     vi.mocked(desktopClient.updateSettings).mockRejectedValueOnce(new Error('Disk is read-only'))
     const user = userEvent.setup()
