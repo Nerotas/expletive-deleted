@@ -1,6 +1,7 @@
-"""Versioned user profanity policy layered over shipped defaults."""
+"""Versioned, durable user profanity dictionary."""
 
 from .store import (
+    DEFAULT_DICTIONARY_VERSION,
     POLICY_SCHEMA_VERSION,
     PolicyFileError,
     PolicyStore,
@@ -9,6 +10,7 @@ from .store import (
 )
 
 __all__ = [
+    "DEFAULT_DICTIONARY_VERSION",
     "POLICY_SCHEMA_VERSION",
     "PolicyFileError",
     "PolicyStore",

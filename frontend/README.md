@@ -40,7 +40,8 @@ npm run smoke
 ## Dictionary behavior
 
 - The resource text files are built-in defaults and are never edited by the renderer.
-- User classifications and removals are stored atomically in the backend-managed `%LOCALAPPDATA%\ExpletiveDeleted\policy.json` overlay.
+- The complete policy is stored atomically in the backend-managed `%LOCALAPPDATA%\ExpletiveDeleted\dictionary\profanity.json` file.
+- Import, export, migration, validation, and restore-defaults behavior remain backend-owned. Restore requires explicit renderer confirmation.
 
 The existing `com.profanity-censor.desktop` Windows AppUserModelID, private `profanity-censor:*` IPC channels, and `window.profanityCensor` preload API remain stable compatibility identifiers. They are not displayed as the product name and changing them would split existing OS/protocol identity without a functional benefit.
-- The Dictionary displays both built-in source paths and the user-policy path; processing resolves the same effective policy at job start.
+- The Dictionary displays the durable user path and policy metadata; processing loads the same complete policy at job start.

@@ -101,14 +101,13 @@ export type DictionaryTarget = 'censor' | 'exclude'
 export type DictionaryAction = 'add' | 'remove'
 
 export type DictionaryInfo = {
-  words_path: string
+  dictionary_path: string
+  schema_version: number
+  seeded_from_default_version: number
   words_count: number
   words: string[]
-  exclusions_path: string
   exclusions_count: number
   exclusions: string[]
-  overrides_path: string
-  overrides_count: number
   discovered_count: number
   discovered: string[]
   changed?: boolean

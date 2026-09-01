@@ -202,9 +202,9 @@ Review potentially profane words without creating output files or moving source 
 .\.venv\Scripts\python.exe batch_process.py --report-only
 ```
 
-The report lists words detected by the broader `better-profanity` vocabulary that are not in your effective policy, with occurrence counts and timestamps. Classify reviewed words from the desktop **Dictionary** page. User decisions are stored locally in `%LOCALAPPDATA%\ExpletiveDeleted\policy.json` and are applied to future desktop and CLI runs.
+The report lists words detected by the broader `better-profanity` vocabulary that are not in your effective policy, with occurrence counts and timestamps. Classify reviewed words from the desktop **Dictionary** page. The complete user dictionary is stored locally in `%LOCALAPPDATA%\ExpletiveDeleted\dictionary\profanity.json` and is applied to future desktop and CLI runs.
 
-The default censor run combines the shipped [censor defaults](resources/profanity_censor_words.txt), shipped [exclusions](resources/profanity_exclusions.txt), and the local user-policy overlay. It skips inputs with an existing output. Use these deliberate opt-in controls when needed:
+On first dictionary use, the application copies the shipped [censor defaults](resources/profanity_censor_words.txt) and [exclusions](resources/profanity_exclusions.txt) into that durable user dictionary. Later runs load only the user dictionary. The default censor run skips inputs with an existing output. Use these deliberate opt-in controls when needed:
 
 ```powershell
 # Replace an existing censored output for files still in ready/.
@@ -328,18 +328,18 @@ Under `[Whisper]`, `Device = auto` and `ComputeType = auto` are the portable def
 
 The application service and batch workflow apply processing mode, device, stereo censor method, before/after padding, surround output, video output, and source archival settings. Batch CLI flags such as `--report-only`, `--censor-media`, `--censor-method`, `--archive-original`, and `--keep-original` override their matching settings for one run.
 
-The workflow does not use `better-profanity`'s broad built-in dictionary for normal censoring. The text files under `resources/` are immutable product defaults. User additions, exclusions, moves, and removals belong in the desktop **Dictionary**, which writes a versioned override document to `%LOCALAPPDATA%\ExpletiveDeleted\policy.json`. Writes are staged, verified, and atomically replaced.
+The workflow does not use `better-profanity`'s broad built-in dictionary for normal censoring. The text files under `resources/` are immutable factory defaults. User additions, exclusions, moves, and removals belong in the desktop **Dictionary**, which writes the complete versioned policy to `%LOCALAPPDATA%\ExpletiveDeleted\dictionary\profanity.json`. Writes are staged, verified, and atomically replaced. Existing legacy `policy.json` overrides are materialized into this file on first use and retained unchanged as migration source data.
 
-The effective policy is recalculated whenever a job starts. New defaults shipped in an upgrade appear automatically, while explicit user removals remain removed. A word can be classified as censored, excluded, or removed, but never censored and excluded simultaneously.
+Application upgrades do not merge new defaults into an existing user dictionary. The Dictionary page can import or export a complete portable JSON dictionary, and **Restore defaults** deliberately replaces the user dictionary with the defaults in the current application after confirmation. A word can be censored or excluded, but never both simultaneously.
 
-For an advanced workstation deployment, `CensorWordsFile` and `ExclusionsFile` under the legacy project `[Profanity]` configuration can replace the shipped baseline. To inject a different baseline for one run:
+For an advanced workstation deployment, `CensorWordsFile` and `ExclusionsFile` under the legacy project `[Profanity]` configuration can replace the factory files used for initial seeding or an explicit restore. To select different factory files:
 
 ```powershell
 $env:CENSOR_CENSOR_WORDS_FILE = 'D:\media-policies\strict-censor-words.txt'
 .\.venv\Scripts\python.exe batch_process.py
 ```
 
-To inject a different exclusions baseline, use `CENSOR_EXCLUSIONS_FILE` the same way. `CENSOR_POLICY_FILE` can select a different user-policy overlay. Each job reports the effective policy counts it loaded without logging transcript content.
+To select a different factory exclusions file, use `CENSOR_EXCLUSIONS_FILE` the same way. `CENSOR_POLICY_FILE` can select a different complete user dictionary. Each job reports the effective policy counts it loaded without logging transcript content.
 
 To inspect, migrate, or clean Whisper model caches:
 

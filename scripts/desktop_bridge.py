@@ -65,6 +65,19 @@ class DesktopBridge:
             result = self._dictionary(policy)
             result["changed"] = changed
             return result
+        if method == "dictionary.restore_defaults":
+            return self._dictionary(self.policy_store.restore_defaults())
+        if method == "dictionary.import":
+            source = params.get("source")
+            if not isinstance(source, str) or not source.strip():
+                raise ValueError("Dictionary import requires a source file")
+            return self._dictionary(self.policy_store.import_dictionary(Path(source)))
+        if method == "dictionary.export":
+            destination = params.get("destination")
+            if not isinstance(destination, str) or not destination.strip():
+                raise ValueError("Dictionary export requires a destination file")
+            exported = self.policy_store.export_dictionary(Path(destination))
+            return {"path": str(exported)}
         if method == "reviews.list":
             source = Path(params["source"]).expanduser().resolve()
             transcript = transcript_path(source, self.service.settings.directories.transcripts)
@@ -259,14 +272,13 @@ class DesktopBridge:
         exclusions = sorted(policy.exclusions)
         discovered = self._discovered_words(set(words), set(exclusions))
         return {
-            "words_path": str(policy.censor_defaults_path),
+            "dictionary_path": str(policy.overrides_path),
+            "schema_version": policy.schema_version,
+            "seeded_from_default_version": policy.seeded_from_default_version,
             "words_count": len(words),
             "words": words,
-            "exclusions_path": str(policy.exclusions_defaults_path),
             "exclusions_count": len(exclusions),
             "exclusions": exclusions,
-            "overrides_path": str(policy.overrides_path),
-            "overrides_count": policy.overrides_count,
             "discovered_count": len(discovered),
             "discovered": discovered,
         }

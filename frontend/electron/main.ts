@@ -127,6 +127,20 @@ app.whenReady().then(() => {
     })
     return result.canceled ? undefined : result.filePaths[0]
   })
+  ipcMain.handle('profanity-censor:select-dictionary-import', async () => {
+    const result = await dialog.showOpenDialog(window!, {
+      properties: ['openFile'],
+      filters: [{ name: 'Expletive Deleted dictionary', extensions: ['json'] }],
+    })
+    return result.canceled ? undefined : result.filePaths[0]
+  })
+  ipcMain.handle('profanity-censor:select-dictionary-export', async () => {
+    const result = await dialog.showSaveDialog(window!, {
+      defaultPath: 'expletive-deleted-dictionary.json',
+      filters: [{ name: 'Expletive Deleted dictionary', extensions: ['json'] }],
+    })
+    return result.canceled ? undefined : result.filePath
+  })
   ipcMain.handle('profanity-censor:open-external', async (_event: IpcMainInvokeEvent, value: string) => {
     const url = new URL(value)
     if (url.protocol !== 'https:') throw new Error('Only secure project links can be opened')

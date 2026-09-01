@@ -34,14 +34,13 @@ export const readyCapabilities: Capabilities = {
 }
 
 export const emptyDictionary: DictionaryInfo = {
-  words_path: 'censor.txt',
+  dictionary_path: 'profanity.json',
+  schema_version: 1,
+  seeded_from_default_version: 1,
   words_count: 0,
   words: [],
-  exclusions_path: 'exclude.txt',
   exclusions_count: 0,
   exclusions: [],
-  overrides_path: 'policy.json',
-  overrides_count: 0,
   discovered_count: 0,
   discovered: [],
 }

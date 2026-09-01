@@ -21,10 +21,14 @@
 .dictionary-total { border: 1px solid var(--line); border-radius: 999px; background: white; padding: 8px 12px; color: var(--muted); font-size: 11px; font-weight: 800; }
 .dictionary-workspace { border: 1px solid var(--line); background: white; padding: 20px; }
 .dictionary-page .dictionary-add { max-width: 760px; margin-bottom: 20px; }
-.policy-storage { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; margin-bottom: 16px; border: 1px solid var(--line); background: var(--soft); padding: 10px 12px; font-size: 11px; }
+.policy-storage { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 10px; align-items: center; margin-bottom: 16px; border: 1px solid var(--line); background: var(--soft); padding: 10px 12px; font-size: 11px; }
 .policy-storage strong { font-size: 11px; }
 .policy-storage span { overflow: hidden; color: var(--muted); font: 11px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
 .policy-storage small { color: var(--muted); }
+.dictionary-actions { display: flex; gap: 6px; }
+.dictionary-actions .button { white-space: nowrap; }
+.restore-dictionary-dialog { width: min(480px, 100%); }
+.restore-dictionary-dialog p { color: var(--muted); font-size: 12px; line-height: 1.6; }
 .dictionary-page .policy-lists { gap: 16px; }
 .dictionary-page .policy-list { border: 1px solid var(--line); padding: 16px; background: white; }
 .dictionary-page .policy-list > strong { font-size: 13px; margin-bottom: 4px; }

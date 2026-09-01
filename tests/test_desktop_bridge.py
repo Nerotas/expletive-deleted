@@ -32,17 +32,19 @@ class DesktopBridgeTests(unittest.TestCase):
             overrides_count=0,
         )
 
-    def test_dictionary_inventory_uses_shipped_resource_defaults(self):
+    def test_dictionary_inventory_seeds_complete_user_dictionary_from_defaults(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
+            dictionary_path = Path(temporary_directory) / "dictionary" / "profanity.json"
             with patch.dict("os.environ", {}, clear=True):
-                policy_store = PolicyStore(Path(temporary_directory) / "policy.json")
+                policy_store = PolicyStore(dictionary_path)
                 bridge = DesktopBridge(MagicMock(), policy_store)
                 result = bridge.handle("dictionary.get")
                 expected_words_path = get_profanity_censor_words_file()
                 expected_exclusions_path = get_profanity_exclusions_file()
 
-        self.assertEqual(Path(result["words_path"]), expected_words_path)
-        self.assertEqual(Path(result["exclusions_path"]), expected_exclusions_path)
+        self.assertEqual(Path(result["dictionary_path"]), dictionary_path)
+        self.assertEqual(result["schema_version"], 1)
+        self.assertEqual(result["seeded_from_default_version"], 1)
         self.assertEqual(set(result["words"]), load_profanity_censor_words(expected_words_path))
         self.assertEqual(
             set(result["exclusions"]),
@@ -64,7 +66,30 @@ class DesktopBridgeTests(unittest.TestCase):
 
         self.assertEqual(result["words_count"], 2)
         self.assertEqual(result["exclusions_count"], 1)
-        self.assertEqual(result["overrides_path"], str(Path("C:/policy/policy.json")))
+        self.assertEqual(result["dictionary_path"], str(Path("C:/policy/policy.json")))
+
+    def test_dictionary_portability_methods_use_policy_store(self):
+        service = MagicMock()
+        policy_store = MagicMock()
+        policy = self.policy(Path("C:/policy"), {"word"}, {"allowed"})
+        policy_store.restore_defaults.return_value = policy
+        policy_store.import_dictionary.return_value = policy
+        policy_store.export_dictionary.return_value = Path("C:/backup/dictionary.json")
+        bridge = DesktopBridge(service, policy_store)
+
+        restored = bridge.handle("dictionary.restore_defaults")
+        imported = bridge.handle("dictionary.import", {"source": "C:/backup/import.json"})
+        exported = bridge.handle(
+            "dictionary.export",
+            {"destination": "C:/backup/dictionary.json"},
+        )
+
+        policy_store.restore_defaults.assert_called_once_with()
+        policy_store.import_dictionary.assert_called_once_with(Path("C:/backup/import.json"))
+        policy_store.export_dictionary.assert_called_once_with(Path("C:/backup/dictionary.json"))
+        self.assertEqual(restored["words"], ["word"])
+        self.assertEqual(imported["exclusions"], ["allowed"])
+        self.assertEqual(exported, {"path": str(Path("C:/backup/dictionary.json"))})
 
     def test_dictionary_update_persists_through_policy_store(self):
         service = MagicMock()

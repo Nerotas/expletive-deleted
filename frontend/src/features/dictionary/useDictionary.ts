@@ -59,6 +59,24 @@ export function useDictionary({
     onError: (reason) => onError(errorMessage(reason)),
   })
 
+  const replaceMutation = useMutation({
+    mutationFn: ({ operation, source }: { operation: 'restore' | 'import'; source?: string }) =>
+      operation === 'restore'
+        ? client.restoreDictionaryDefaults()
+        : client.importDictionary(source!),
+    onSuccess: (dictionary, { operation }) => {
+      queryClient.setQueryData(['dictionary'], dictionary)
+      onNotice(operation === 'restore' ? 'Restored the default dictionary' : 'Imported dictionary')
+    },
+    onError: (reason) => onError(errorMessage(reason)),
+  })
+
+  const exportMutation = useMutation({
+    mutationFn: (destination: string) => client.exportDictionary(destination),
+    onSuccess: ({ path }) => onNotice(`Exported dictionary to ${path}`),
+    onError: (reason) => onError(errorMessage(reason)),
+  })
+
   return {
     // The query cache is the single renderer snapshot. Mutation responses update
     // it above, while a later reload can still reveal policy-file changes.
@@ -66,7 +84,8 @@ export function useDictionary({
     review,
     loading: query.isLoading,
     loadFailed: query.isError,
-    busy: query.isFetching || updateMutation.isPending || reviewMutation.isPending,
+    busy: query.isFetching || updateMutation.isPending || reviewMutation.isPending
+      || replaceMutation.isPending || exportMutation.isPending,
     reload: async () => {
       await query.refetch()
     },
@@ -76,6 +95,21 @@ export function useDictionary({
       action: DictionaryAction = 'add',
     ) => {
       await updateMutation.mutateAsync({ target, word, action }).catch(() => undefined)
+    },
+    restoreDefaults: async () => {
+      await replaceMutation.mutateAsync({ operation: 'restore' }).catch(() => undefined)
+    },
+    importDictionary: async () => {
+      const source = await client.selectDictionaryImport()
+      if (source) {
+        await replaceMutation.mutateAsync({ operation: 'import', source }).catch(() => undefined)
+      }
+    },
+    exportDictionary: async () => {
+      const destination = await client.selectDictionaryExport()
+      if (destination) {
+        await exportMutation.mutateAsync(destination).catch(() => undefined)
+      }
     },
     openReview: async (source: string) => {
       await reviewMutation.mutateAsync(source).catch(() => undefined)
