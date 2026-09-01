@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Eye, EyeOff } from 'lucide-react'
 import { LoadingRow } from '../../components/ui/LoadingRow'
 import { PageHeading } from '../../components/ui/PageHeading'
 import type { DictionaryInfo, DictionaryTarget } from '../../types/domain'
@@ -50,6 +51,8 @@ function DictionaryEditor({ dictionary, busy, updateDictionary, controller }: Di
   const [word, setWord] = useState('')
   const [target, setTarget] = useState<DictionaryTarget>('censor')
   const [confirmRestore, setConfirmRestore] = useState(false)
+  const [confirmReveal, setConfirmReveal] = useState(false)
+  const [showCensoredWords, setShowCensoredWords] = useState(false)
   const add = async () => {
     if (!word.trim()) return
     await updateDictionary(target, word)
@@ -57,8 +60,6 @@ function DictionaryEditor({ dictionary, busy, updateDictionary, controller }: Di
   }
 
   return (
-  const [confirmReveal, setConfirmReveal] = useState(false)
-  const [showCensoredWords, setShowCensoredWords] = useState(false)
     <>
       <div className="dictionary-add">
         <input
@@ -106,13 +107,6 @@ function DictionaryEditor({ dictionary, busy, updateDictionary, controller }: Di
           words={dictionary?.words ?? []}
           busy={busy}
           onRemove={(item) => updateDictionary('censor', item, 'remove')}
-        />
-        <PolicyList
-          title={`Exclusions (${dictionary?.exclusions_count ?? '—'})`}
-          words={dictionary?.exclusions ?? []}
-          busy={busy}
-          onRemove={(item) => updateDictionary('exclude', item, 'remove')}
-        />
           concealed={!showCensoredWords}
           action={showCensoredWords ? (
             <button className="button secondary policy-visibility" onClick={() => setShowCensoredWords(false)}>
@@ -123,6 +117,13 @@ function DictionaryEditor({ dictionary, busy, updateDictionary, controller }: Di
               <Eye size={14} /> Reveal words
             </button>
           )}
+        />
+        <PolicyList
+          title={`Exclusions (${dictionary?.exclusions_count ?? '—'})`}
+          words={dictionary?.exclusions ?? []}
+          busy={busy}
+          onRemove={(item) => updateDictionary('exclude', item, 'remove')}
+        />
       </div>
       {confirmRestore && (
         <div className="modal-backdrop" role="presentation">
@@ -139,13 +140,6 @@ function DictionaryEditor({ dictionary, busy, updateDictionary, controller }: Di
           </section>
         </div>
       )}
-    </>
-  )
-}
-
-type DiscoveredListProps = {
-  words: string[]
-  count?: number
       {confirmReveal && (
         <div className="modal-backdrop" role="presentation">
           <section className="modal reveal-words-dialog" role="dialog" aria-modal="true" aria-labelledby="reveal-words-title">
@@ -161,6 +155,13 @@ type DiscoveredListProps = {
           </section>
         </div>
       )}
+    </>
+  )
+}
+
+type DiscoveredListProps = {
+  words: string[]
+  count?: number
   busy: boolean
   onClassify: (word: string, target: DictionaryTarget) => Promise<void>
 }
@@ -171,19 +172,13 @@ function DiscoveredList({ words, count, busy, onClassify }: DiscoveredListProps)
       <div>
         <strong>{`Discovered words (${count ?? '—'})`}</strong>
         <small>Potential profanity found in saved transcripts but not yet classified.</small>
-  concealed?: boolean
-  action?: React.ReactNode
       </div>
       {words.length ? (
         <div className="discovered-words">
           {words.map((word) => (
             <div key={word}>
-      <div className="policy-list-heading">
-        <strong>{title}</strong>
-        {action}
-      </div>
               <span>{word}</span>
-        {concealed ? <small>Censored words are hidden.</small> : words.length ? words.map((word) => (
+              <button disabled={busy} onClick={() => void onClassify(word, 'censor')}>Censor</button>
               <button disabled={busy} onClick={() => void onClassify(word, 'exclude')}>Ignore</button>
             </div>
           ))}
@@ -199,15 +194,20 @@ type PolicyListProps = {
   words: string[]
   busy: boolean
   onRemove: (word: string) => Promise<void>
+  concealed?: boolean
+  action?: React.ReactNode
 }
 
 
-function PolicyList({ title, words, busy, onRemove }: PolicyListProps) {
+function PolicyList({ title, words, busy, onRemove, concealed = false, action }: PolicyListProps) {
   return (
     <div className="policy-list">
-      <strong>{title}</strong>
+      <div className="policy-list-heading">
+        <strong>{title}</strong>
+        {action}
+      </div>
       <div>
-        {words.length ? words.map((word) => (
+        {concealed ? <small>Censored words are hidden.</small> : words.length ? words.map((word) => (
           <span key={word}>
             {word}
             <button disabled={busy} aria-label={`Remove ${word}`} onClick={() => void onRemove(word)}>

@@ -80,6 +80,7 @@ try {
   await window.getByRole('link', { name: 'Dictionary', exact: true }).click()
   await window.getByRole('heading', { name: 'Dictionary', exact: true }).waitFor()
   await window.getByText('User dictionary', { exact: true }).waitFor()
+  await window.getByText('Censored words are hidden.', { exact: true }).waitFor()
   await window.screenshot({ path: path.join(results, 'desktop-dictionary.png'), fullPage: true })
 
   await window.setViewportSize({ width: 1060, height: 720 })

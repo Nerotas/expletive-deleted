@@ -73,7 +73,7 @@ describe('desktop application renderer', () => {
     )
     renderApp('/')
 
-  it('requires confirmation to reveal censored words while leaving exclusions visible', async () => {
+    expect(screen.getByText('Checking system')).toBeInTheDocument()
     expect(screen.queryByText('Setup required')).not.toBeInTheDocument()
 
     await act(async () => completeCheck?.(readyCapabilities))
@@ -88,10 +88,8 @@ describe('desktop application renderer', () => {
     const karaoke = await screen.findByRole('button', { name: 'Karaoke' })
     await user.click(karaoke)
     expect(karaoke).toHaveAttribute('aria-pressed', 'true')
-    expect(await screen.findByText('Censored words are hidden.')).toBeInTheDocument()
-    expect(screen.queryByText('example-censor-one')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Remove example-censor-one' })).not.toBeInTheDocument()
-    expect(screen.getByText('example-exclusion')).toBeInTheDocument()
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(3_200) })
 
     expect(karaoke).toHaveAttribute('aria-pressed', 'true')
     expect(desktopClient.getSettings).toHaveBeenCalledTimes(1)
@@ -197,7 +195,7 @@ describe('desktop application renderer', () => {
     ))
   })
 
-  it('shows the durable user dictionary in the Dictionary page', async () => {
+  it('requires confirmation to reveal censored words while leaving exclusions visible', async () => {
     vi.mocked(desktopClient.getDictionary).mockResolvedValueOnce({
       dictionary_path: 'C:\\Users\\Parent\\AppData\\Local\\ExpletiveDeleted\\dictionary\\profanity.json',
       schema_version: 1,
@@ -210,11 +208,29 @@ describe('desktop application renderer', () => {
       discovered: [],
     })
 
+    const user = userEvent.setup()
     renderApp('/dictionary')
 
-    expect(await screen.findByText('example-censor-one')).toBeInTheDocument()
-    expect(screen.getByText('example-censor-two')).toBeInTheDocument()
+    expect(await screen.findByText('Censored words are hidden.')).toBeInTheDocument()
+    expect(screen.queryByText('example-censor-one')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Remove example-censor-one' })).not.toBeInTheDocument()
+    expect(screen.getByText('example-exclusion')).toBeInTheDocument()
     expect(screen.getByText('Format 1 · defaults 1')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Reveal words' }))
+    let confirmation = screen.getByRole('dialog', { name: 'Reveal censored words?' })
+    expect(screen.queryByText('example-censor-one')).not.toBeInTheDocument()
+    await user.click(within(confirmation).getByRole('button', { name: 'Cancel' }))
+
+    await user.click(screen.getByRole('button', { name: 'Reveal words' }))
+    confirmation = screen.getByRole('dialog', { name: 'Reveal censored words?' })
+    await user.click(within(confirmation).getByRole('button', { name: 'Reveal words' }))
+    expect(screen.getByText('example-censor-one')).toBeInTheDocument()
+    expect(screen.getByText('example-censor-two')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Hide words' }))
+    expect(screen.queryByText('example-censor-one')).not.toBeInTheDocument()
+    expect(screen.getByText('example-exclusion')).toBeInTheDocument()
   })
 
   it('confirms restore and forwards selected dictionary import and export paths', async () => {
