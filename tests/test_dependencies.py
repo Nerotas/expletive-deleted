@@ -27,7 +27,7 @@ from backend.runtime.environment import get_managed_ffmpeg_manifest_path, get_ma
 
 
 class DependencyInventoryTests(unittest.TestCase):
-    def test_managed_ffmpeg_manifest_is_discovered_without_path_changes(self):
+    def test_managed_ffmpeg_manifest_paths_are_canonicalized(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             binaries = root / "binaries"
@@ -42,7 +42,9 @@ class DependencyInventoryTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            self.assertEqual(get_managed_ffmpeg_paths(root), (str(ffmpeg), str(ffprobe)))
+            discovered_ffmpeg, discovered_ffprobe = get_managed_ffmpeg_paths(root)
+            self.assertEqual(Path(discovered_ffmpeg), ffmpeg.resolve())
+            self.assertEqual(Path(discovered_ffprobe), ffprobe.resolve())
 
     def test_missing_executable_is_reported_without_running_a_command(self):
         with patch("backend.runtime.dependencies.subprocess.run") as run:

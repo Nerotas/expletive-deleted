@@ -36,7 +36,7 @@ class SettingsModelTests(unittest.TestCase):
             home = Path(temporary_directory)
             settings = AppSettings.defaults(home)
 
-        root = home / "Documents" / "Expletive Deleted"
+        root = (home / "Documents" / "Expletive Deleted").resolve()
         self.assertEqual(settings.directories.input, root / "Ready")
         self.assertEqual(settings.directories.output, root / "Finished")
         self.assertEqual(settings.directories.archive, root / "Processed")
@@ -149,7 +149,7 @@ class SettingsStoreTests(unittest.TestCase):
 
             root = prepare_app_data_root({"LOCALAPPDATA": str(local_app_data)})
 
-            self.assertEqual(root, local_app_data / "ExpletiveDeleted")
+            self.assertEqual(root, (local_app_data / "ExpletiveDeleted").resolve())
             self.assertEqual((root / "settings.ini").read_text(encoding="utf-8"), "settings")
             self.assertEqual((root / "policy.json").read_text(encoding="utf-8"), '{"overrides": {"word": "censor"}}')
             self.assertTrue((legacy_root / "settings.ini").exists())
@@ -167,7 +167,7 @@ class SettingsStoreTests(unittest.TestCase):
 
             root = prepare_app_data_root({"LOCALAPPDATA": str(local_app_data)})
 
-            self.assertEqual(root, new_root)
+            self.assertEqual(root, new_root.resolve())
             self.assertEqual((root / "settings.ini").read_text(encoding="utf-8"), "current")
 
     def test_failed_migration_does_not_delete_legacy_data(self):
@@ -324,8 +324,8 @@ class SettingsResolutionTests(unittest.TestCase):
             ):
                 effective = load_effective_settings(store)
 
-            self.assertEqual(effective.directories.input, legacy_root / "ready")
-            self.assertEqual(effective.directories.output, legacy_root / "finished")
+            self.assertEqual(effective.directories.input, (legacy_root / "ready").resolve())
+            self.assertEqual(effective.directories.output, (legacy_root / "finished").resolve())
             self.assertEqual(effective.processing.mode, "report_only")
 
 
