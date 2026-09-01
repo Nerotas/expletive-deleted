@@ -138,7 +138,7 @@ npm run version:sync
 npm run version:check
 ```
 
-When a pull request merges into `main`, the [Release workflow](.github/workflows/release.yml) normally increments the latest version by one patch (`1.0.1` to `1.0.2`). It synchronizes the package lock, desktop About text, README, and product website; runs backend, renderer, native, packaging, and installed-app checks; then commits the version, creates a `v<version>` tag, and publishes the Windows installer to GitHub Releases.
+When a pull request merges into `main`, the [Release workflow](.github/workflows/release.yml) publishes the current package version when it has no GitHub Release yet. Otherwise, it increments the version by one patch (`1.0.1` to `1.0.2`). It synchronizes the package lock, desktop About text, README, and product website; runs backend, renderer, native, packaging, and installed-app checks; then commits the version when needed, creates a `v<version>` tag, and publishes the Windows installer to GitHub Releases.
 
 If the merged pull request deliberately changes `frontend/package.json`, that version is preserved instead of receiving another patch bump. Use this path for minor or major releases. Manual workflow runs may choose `patch`, `minor`, `major`, or `none`.
 
