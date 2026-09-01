@@ -66,6 +66,20 @@ describe('desktop application renderer', () => {
     localStorage.clear()
   })
 
+  it('shows a system check in progress before reporting readiness', async () => {
+    let completeCheck: ((value: typeof readyCapabilities) => void) | undefined
+    vi.mocked(desktopClient.getCapabilities).mockImplementationOnce(
+      () => new Promise((resolve) => { completeCheck = resolve }),
+    )
+    renderApp('/')
+
+    expect(screen.getByText('Checking system')).toBeInTheDocument()
+    expect(screen.queryByText('Setup required')).not.toBeInTheDocument()
+
+    await act(async () => completeCheck?.(readyCapabilities))
+    expect(await screen.findByText('System ready')).toBeInTheDocument()
+  })
+
   it('keeps a Karaoke draft while Queue polling continues and never refetches settings', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
@@ -115,6 +129,21 @@ describe('desktop application renderer', () => {
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
   })
 
+  it('presents blank runtime paths as automatic detection rather than missing setup', async () => {
+    renderApp('/settings')
+
+    expect(await screen.findByLabelText('FFmpeg path override')).toHaveAttribute(
+      'placeholder',
+      'Using automatic detection',
+    )
+    expect(screen.getByLabelText('FFprobe path override')).toHaveAttribute(
+      'placeholder',
+      'Using automatic detection',
+    )
+    expect(screen.getByText(/they do not add FFmpeg command-line flags/i)).toBeInTheDocument()
+    expect(screen.getByText('All required components are verified.')).toBeInTheDocument()
+  })
+
   it('retains the draft and reports an error when saving fails', async () => {
     vi.mocked(desktopClient.updateSettings).mockRejectedValueOnce(new Error('Disk is read-only'))
     const user = userEvent.setup()
@@ -126,6 +155,29 @@ describe('desktop application renderer', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Disk is read-only')
     expect(karaoke).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled()
+  })
+
+  it('refreshes the persisted cache path after installing a Whisper model', async () => {
+    const managedCache = 'C:\\Users\\Parent\\AppData\\Local\\ExpletiveDeleted\\models\\whisper'
+    vi.mocked(desktopClient.getCapabilities).mockImplementation(async () => ({
+      ...readyCapabilities,
+      ready: persisted.runtime.whisper_cache !== null,
+      whisper_model_ready: persisted.runtime.whisper_cache !== null,
+    }))
+    vi.mocked(desktopClient.installDependencies).mockImplementationOnce(async () => {
+      persisted.runtime.whisper_cache = managedCache
+      return {}
+    })
+    const user = userEvent.setup()
+    renderApp('/')
+
+    await user.click(await screen.findByRole('button', { name: 'Get' }))
+    await user.click(screen.getByRole('button', { name: 'Continue' }))
+    await screen.findByText('Installation complete and verified')
+    await user.click(screen.getByRole('link', { name: 'Settings' }))
+
+    expect(await screen.findByDisplayValue(managedCache)).toBeInTheDocument()
+    expect(desktopClient.getSettings).toHaveBeenCalledTimes(2)
   })
 
   it('renders the empty Queue and performs a Dictionary add through typed actions', async () => {

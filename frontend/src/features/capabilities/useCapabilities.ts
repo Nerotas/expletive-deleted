@@ -36,7 +36,10 @@ export function useCapabilities({
     mutationFn: (planId: string) => client.installDependencies(planId),
     onSuccess: async () => {
       setPendingPlan(null)
-      await query.refetch()
+      await Promise.all([
+        query.refetch(),
+        queryClient.invalidateQueries({ queryKey: ['settings'] }),
+      ])
       onNotice('Installation complete and verified')
     },
     onError: (reason) => onError(errorMessage(reason)),
@@ -63,6 +66,7 @@ export function useCapabilities({
   return {
     capabilities: query.data ?? null,
     loading: query.isLoading,
+    checking: query.isFetching,
     busy: planMutation.isPending || installMutation.isPending || locateMutation.isPending || query.isFetching,
     installing: installMutation.isPending,
     pendingPlan,
