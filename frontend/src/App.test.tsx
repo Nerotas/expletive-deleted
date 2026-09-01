@@ -73,7 +73,7 @@ describe('desktop application renderer', () => {
     )
     renderApp('/')
 
-    expect(screen.getByText('Checking system')).toBeInTheDocument()
+  it('requires confirmation to reveal censored words while leaving exclusions visible', async () => {
     expect(screen.queryByText('Setup required')).not.toBeInTheDocument()
 
     await act(async () => completeCheck?.(readyCapabilities))
@@ -88,8 +88,10 @@ describe('desktop application renderer', () => {
     const karaoke = await screen.findByRole('button', { name: 'Karaoke' })
     await user.click(karaoke)
     expect(karaoke).toHaveAttribute('aria-pressed', 'true')
-
-    await act(async () => { await vi.advanceTimersByTimeAsync(3_200) })
+    expect(await screen.findByText('Censored words are hidden.')).toBeInTheDocument()
+    expect(screen.queryByText('example-censor-one')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Remove example-censor-one' })).not.toBeInTheDocument()
+    expect(screen.getByText('example-exclusion')).toBeInTheDocument()
 
     expect(karaoke).toHaveAttribute('aria-pressed', 'true')
     expect(desktopClient.getSettings).toHaveBeenCalledTimes(1)

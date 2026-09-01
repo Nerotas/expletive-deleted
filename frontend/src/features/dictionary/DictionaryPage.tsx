@@ -57,6 +57,8 @@ function DictionaryEditor({ dictionary, busy, updateDictionary, controller }: Di
   }
 
   return (
+  const [confirmReveal, setConfirmReveal] = useState(false)
+  const [showCensoredWords, setShowCensoredWords] = useState(false)
     <>
       <div className="dictionary-add">
         <input
@@ -111,6 +113,16 @@ function DictionaryEditor({ dictionary, busy, updateDictionary, controller }: Di
           busy={busy}
           onRemove={(item) => updateDictionary('exclude', item, 'remove')}
         />
+          concealed={!showCensoredWords}
+          action={showCensoredWords ? (
+            <button className="button secondary policy-visibility" onClick={() => setShowCensoredWords(false)}>
+              <EyeOff size={14} /> Hide words
+            </button>
+          ) : (
+            <button className="button secondary policy-visibility" onClick={() => setConfirmReveal(true)}>
+              <Eye size={14} /> Reveal words
+            </button>
+          )}
       </div>
       {confirmRestore && (
         <div className="modal-backdrop" role="presentation">
@@ -134,6 +146,21 @@ function DictionaryEditor({ dictionary, busy, updateDictionary, controller }: Di
 type DiscoveredListProps = {
   words: string[]
   count?: number
+      {confirmReveal && (
+        <div className="modal-backdrop" role="presentation">
+          <section className="modal reveal-words-dialog" role="dialog" aria-modal="true" aria-labelledby="reveal-words-title">
+            <h2 id="reveal-words-title">Reveal censored words?</h2>
+            <p>The censored-word list may contain language you do not want visible on screen.</p>
+            <div className="modal-actions">
+              <button className="button secondary" onClick={() => setConfirmReveal(false)}>Cancel</button>
+              <button className="button primary" onClick={() => {
+                setConfirmReveal(false)
+                setShowCensoredWords(true)
+              }}>Reveal words</button>
+            </div>
+          </section>
+        </div>
+      )}
   busy: boolean
   onClassify: (word: string, target: DictionaryTarget) => Promise<void>
 }
@@ -144,13 +171,19 @@ function DiscoveredList({ words, count, busy, onClassify }: DiscoveredListProps)
       <div>
         <strong>{`Discovered words (${count ?? '—'})`}</strong>
         <small>Potential profanity found in saved transcripts but not yet classified.</small>
+  concealed?: boolean
+  action?: React.ReactNode
       </div>
       {words.length ? (
         <div className="discovered-words">
           {words.map((word) => (
             <div key={word}>
+      <div className="policy-list-heading">
+        <strong>{title}</strong>
+        {action}
+      </div>
               <span>{word}</span>
-              <button disabled={busy} onClick={() => void onClassify(word, 'censor')}>Censor</button>
+        {concealed ? <small>Censored words are hidden.</small> : words.length ? words.map((word) => (
               <button disabled={busy} onClick={() => void onClassify(word, 'exclude')}>Ignore</button>
             </div>
           ))}

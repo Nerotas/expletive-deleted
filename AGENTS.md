@@ -37,9 +37,11 @@ When priorities compete, use this order:
 
 ## Required dependencies and first-run setup
 
-The processing workflow requires Python, required Python packages, FFmpeg/FFprobe, and the supported Whisper model. These third-party components are not distributed with the application. The customer is responsible for obtaining and installing them on their system.
+The processing workflow requires Python, required Python packages, the external FFmpeg/FFprobe processing runtime, and the supported Whisper model. These processing components are not distributed with the application. The customer is responsible for obtaining and installing them on their system.
 
-The desktop application must make this setup process as easy as practical without bundling or redistributing those components.
+Electron itself requires and distributes its framework-owned root `ffmpeg.dll` for Chromium codec support. That DLL is allowed as part of Electron, is not the external processing runtime, and must never satisfy FFmpeg/FFprobe readiness checks. The installer must contain no `ffmpeg.exe`, `ffprobe.exe`, Whisper model payload, or Python processing package.
+
+The desktop application must make this setup process as easy as practical without bundling or redistributing those processing components.
 
 - Detect missing, incompatible, or unverified components automatically.
 - Explain what each component does, why it is required, approximate download/disk impact when known, and what action the user needs to take.

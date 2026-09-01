@@ -8,6 +8,12 @@ export type BackendRuntime = {
   args: string[]
 }
 
+export function backendEnvironment(
+  environment: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv {
+  return { ...environment, CENSOR_PROJECT_ROOT: '' }
+}
+
 type BackendRootOptions = {
   isPackaged: boolean
   resourcesPath: string

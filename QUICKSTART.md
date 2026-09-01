@@ -14,7 +14,7 @@ Normal users should follow the desktop application workflow. Do not start `backe
 3. Start **Expletive Deleted** from the Start menu or desktop shortcut.
 4. Complete the explicit dependency plans shown by **Finish local setup**.
 
-The installer contains the application and its first-party backend, but does not bundle or silently retrieve Python, FFmpeg, Python speech-recognition packages, or Whisper models. Uninstalling the application does not delete settings, downloaded runtime components, models, or user media beneath `%LOCALAPPDATA%\ExpletiveDeleted` and `%USERPROFILE%\Documents\Expletive Deleted`.
+The installer contains the application and its first-party backend, but does not bundle or silently retrieve Python, the external `ffmpeg.exe`/`ffprobe.exe` processing runtime, Python speech-recognition packages, or Whisper models. Electron's required Chromium codec `ffmpeg.dll` is part of the desktop framework, cannot process jobs, and does not count as an installed FFmpeg dependency. Uninstalling the application does not delete settings, downloaded runtime components, models, or user media beneath `%LOCALAPPDATA%\ExpletiveDeleted` and `%USERPROFILE%\Documents\Expletive Deleted`.
 
 ## Desktop source build (developers)
 

@@ -32,7 +32,12 @@
 .dictionary-page .policy-lists { gap: 16px; }
 .dictionary-page .policy-list { border: 1px solid var(--line); padding: 16px; background: white; }
 .dictionary-page .policy-list > strong { font-size: 13px; margin-bottom: 4px; }
+.policy-list-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.policy-list-heading > strong { font-size: 13px; }
+.policy-visibility { display: inline-flex; align-items: center; gap: 5px; flex: none; }
 .dictionary-page .policy-source { display: block; margin-bottom: 12px; overflow-wrap: anywhere; }
+.restore-dictionary-dialog p, .reveal-words-dialog p { color: var(--muted); font-size: 12px; line-height: 1.6; }
+.reveal-words-dialog { width: min(440px, 100%); }
 .dictionary-page .policy-list > div, .dictionary-page .discovered-words { max-height: none; overflow: visible; }
 .dictionary-page .discovered-list { padding: 16px; }
 .dictionary-page .discovered-list strong { font-size: 13px; }

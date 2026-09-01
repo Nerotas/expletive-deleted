@@ -41,7 +41,7 @@ The root Python commands remain as compatibility entry points. New backend code 
 - FFmpeg and FFprobe
 - Disk space for source media, output media, and Whisper model downloads
 
-The Windows installer contains the Electron application and first-party Python backend. It does not redistribute Python, Python packages, FFmpeg, or Whisper models. Python 3.9 or later must be installed before first launch; the app then presents inspectable, user-approved plans for the remaining processing dependencies. Repository source builds use a local `.venv`.
+The Windows installer contains the Electron application and first-party Python backend. It does not redistribute Python, Python processing packages, the external `ffmpeg.exe`/`ffprobe.exe` processing runtime, or Whisper models. Electron includes its required Chromium codec `ffmpeg.dll`; that framework DLL cannot process jobs and never satisfies the application's FFmpeg readiness check. Python 3.9 or later must be installed before first launch; the app then presents inspectable, user-approved plans for the remaining processing dependencies. Repository source builds use a local `.venv`.
 
 User media and transcripts default to `Documents\Expletive Deleted`. Internal settings use `%LOCALAPPDATA%\ExpletiveDeleted\settings.ini`. Runtime assets explicitly retrieved through the desktop setup flow use `%LOCALAPPDATA%\ExpletiveDeleted\dependencies` and `%LOCALAPPDATA%\ExpletiveDeleted\models`; they are not written into the packaged application or user-media folders.
 

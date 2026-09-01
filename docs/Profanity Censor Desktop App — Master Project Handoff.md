@@ -382,7 +382,14 @@ After required dependencies and models are installed, normal processing should b
 
 This is a major revision from the earlier packaging plan.
 
-The project should **not bundle FFmpeg or Whisper directly into the repository/application distribution**.
+The project should **not bundle the external FFmpeg/FFprobe processing runtime, Python
+processing packages, or Whisper models into the repository/application distribution**.
+
+Electron's framework-owned root `ffmpeg.dll` is an explicit exception. Chromium requires
+that codec library for the Electron renderer; it is not `ffmpeg.exe`, cannot run the
+censorship pipeline, and must never satisfy backend FFmpeg/FFprobe capability checks.
+Packaging validation must reject `ffmpeg.exe`, `ffprobe.exe`, Whisper model payloads,
+and Python binary packages.
 
 Instead:
 

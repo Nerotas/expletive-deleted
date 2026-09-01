@@ -26,6 +26,8 @@ npm run package:win
 
 `package:dir` creates `release/win-unpacked` for packaged-runtime testing. `package:win` creates the assisted x64 NSIS installer in `release/`. The package contains Electron and first-party Python sources only; required third-party runtimes and models remain under the explicit setup policy. The installed app locates Python 3.9+ through `CENSOR_PYTHON`, the Windows `py` launcher, or `python`.
 
+Both package commands audit `win-unpacked` and fail if it contains `ffmpeg.exe`, `ffprobe.exe`, Whisper model payloads, or Python binary packages. Electron's single root `ffmpeg.dll` is framework-owned Chromium codec support and is the only allowed FFmpeg-named binary in the installer.
+
 ## Renderer architecture
 
 - `src/App.tsx` composes the shell, global status, and routes.

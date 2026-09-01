@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { findBackendRoot } from './backend-runtime.js'
+import { backendEnvironment, findBackendRoot } from './backend-runtime.js'
 
 describe('backend runtime resolution', () => {
   it('uses first-party backend resources in a packaged application', () => {
@@ -28,5 +28,10 @@ describe('backend runtime resolution', () => {
       moduleDirectory: path.resolve('installed', 'resources', 'app.asar', 'out', 'main'),
       exists: () => false,
     })).toThrow('Reinstall Expletive Deleted')
+  })
+
+  it('does not treat the installed backend as a writable media root', () => {
+    expect(backendEnvironment({ CENSOR_PROJECT_ROOT: String.raw`D:\Program Files\Expletive Deleted\resources\app-backend` }))
+      .toMatchObject({ CENSOR_PROJECT_ROOT: '' })
   })
 })

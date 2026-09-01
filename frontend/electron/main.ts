@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, shell, type IpcMainInvokeEve
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
-import { findBackendRoot, findPythonRuntime } from './backend-runtime.js'
+import { backendEnvironment, findBackendRoot, findPythonRuntime } from './backend-runtime.js'
 
 type BridgeResponse = { id: number; ok: true; result: unknown } | { id: number; ok: false; error: { message?: string } }
 
@@ -47,7 +47,7 @@ function startBridge(): void {
   }
   bridge = spawn(runtime.command, runtime.args, {
     cwd: root,
-    env: { ...process.env, CENSOR_PROJECT_ROOT: root },
+    env: backendEnvironment(),
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
   })
