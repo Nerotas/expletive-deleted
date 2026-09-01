@@ -9,8 +9,6 @@ import './dictionary.css'
 const SOURCE_LABELS = { default: 'Default', user: 'User', imported: 'Imported' } as const
 
 export function DictionaryPage({ controller }: { controller: DictionaryController }) {
-  const unavailable = !controller.loading && controller.loadFailed && !controller.info
-
   return (
     <section className="page dictionary-page">
       <PageHeading title="Dictionary" subtitle="Review discoveries and manage the policy used for future jobs">
@@ -19,14 +17,7 @@ export function DictionaryPage({ controller }: { controller: DictionaryControlle
         </span>
       </PageHeading>
       <div className="dictionary-workspace">
-        {controller.loading && !controller.info ? (
-          <LoadingRow>Loading dictionary</LoadingRow>
-        ) : unavailable ? (
-          <div className="dictionary-unavailable">
-            <p>The dictionary could not be loaded. Review the error above, then retry.</p>
-            <button className="button secondary" onClick={() => void controller.reload()}>Retry</button>
-          </div>
-        ) : <DictionaryEditor controller={controller} />}
+        <DictionaryEditor controller={controller} />
       </div>
     </section>
   )
@@ -147,7 +138,17 @@ function DictionaryEditor({ controller }: { controller: DictionaryController }) 
 
 function DictionaryTable({ controller }: { controller: DictionaryController }) {
   const entries = controller.entries
-  if (controller.loading && !entries) return <LoadingRow>Loading dictionary entries</LoadingRow>
+  if (controller.tableLoading && !entries) {
+    return <div className="dictionary-table-loading"><LoadingRow>Loading dictionary entries</LoadingRow></div>
+  }
+  if (controller.tableFailed && !entries) {
+    return (
+      <div className="dictionary-table-loading dictionary-unavailable">
+        <p>The selected dictionary entries could not be loaded.</p>
+        <button className="button secondary" onClick={() => void controller.reload()}>Retry</button>
+      </div>
+    )
+  }
 
   return (
     <div className="dictionary-table-region">

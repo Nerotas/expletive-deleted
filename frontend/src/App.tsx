@@ -39,7 +39,11 @@ function App() {
     onNotice: reportNotice,
     onSaved: capabilities.refresh,
   })
-  const queue = useQueue({ onError: reportError, onNotice: reportNotice })
+  const queue = useQueue({
+    enabled: location.pathname === '/',
+    onError: reportError,
+    onNotice: reportNotice,
+  })
   const dictionary = useDictionary({
     enabled: location.pathname === '/dictionary',
     onError: reportError,

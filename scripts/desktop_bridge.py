@@ -7,8 +7,10 @@ import json
 import math
 import sys
 from collections.abc import Mapping
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
 from pathlib import Path
+from threading import Lock
 from typing import Any, TextIO
 
 from backend.policy import PolicyStore, ProfanityPolicy
@@ -368,24 +370,30 @@ def serve(
     bridge = bridge or DesktopBridge()
     input_stream = input_stream or sys.stdin
     output_stream = output_stream or sys.stdout
-    try:
-        for line in input_stream:
-            if not line.strip():
-                continue
-            request_id: object = None
-            try:
-                request = json.loads(line)
-                request_id = request.get("id")
-                result = bridge.handle(request["method"], request.get("params"))
-                response = {"id": request_id, "ok": True, "result": result}
-            except Exception as exc:
-                response = {
-                    "id": request_id,
-                    "ok": False,
-                    "error": {"type": type(exc).__name__, "message": str(exc)},
-                }
+    output_lock = Lock()
+
+    def dispatch(line: str) -> None:
+        request_id: object = None
+        try:
+            request = json.loads(line)
+            request_id = request.get("id")
+            result = bridge.handle(request["method"], request.get("params"))
+            response = {"id": request_id, "ok": True, "result": result}
+        except Exception as exc:
+            response = {
+                "id": request_id,
+                "ok": False,
+                "error": {"type": type(exc).__name__, "message": str(exc)},
+            }
+        with output_lock:
             output_stream.write(json.dumps(response, separators=(",", ":")) + "\n")
             output_stream.flush()
+
+    try:
+        with ThreadPoolExecutor(max_workers=4, thread_name_prefix="desktop-bridge") as executor:
+            for line in input_stream:
+                if line.strip():
+                    executor.submit(dispatch, line)
     finally:
         bridge.close()
     return 0

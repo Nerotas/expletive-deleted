@@ -25,7 +25,6 @@ POLICY_SCHEMA_VERSION = 2
 DEFAULT_DICTIONARY_VERSION = 1
 PolicyTarget = Literal["censor", "exclude"]
 PolicyAction = Literal["add", "remove"]
-PolicyClassification = Literal["censor", "exclude", "none"]
 PolicySource = Literal["default", "user", "imported"]
 EPOCH_TIMESTAMP = "1970-01-01T00:00:00Z"
 
@@ -95,7 +94,6 @@ class PolicyStore:
         *,
         censor_defaults_path: Path | None = None,
         exclusions_defaults_path: Path | None = None,
-        legacy_path: Path | None = None,
     ):
         self.path = (path or default_policy_path()).expanduser().resolve()
         self.censor_path = self.path.with_name("censored.json")
@@ -107,11 +105,6 @@ class PolicyStore:
         self.exclusions_defaults_path = (
             exclusions_defaults_path or get_profanity_exclusions_file()
         ).expanduser().resolve()
-        self.legacy_path = (
-            legacy_path.expanduser().resolve()
-            if legacy_path is not None
-            else self.path.parent.parent / "policy.json"
-        )
 
     def load(self) -> ProfanityPolicy:
         self._ensure_split_stores()
@@ -155,7 +148,7 @@ class PolicyStore:
     def load_entries(self, target: PolicyTarget) -> tuple[PolicyEntry, ...]:
         if target not in ("censor", "exclude"):
             raise ValueError("Policy target must be censor or exclude")
-        self._ensure_split_stores()
+        self._ensure_entry_store(target)
         path = self.censor_path if target == "censor" else self.exclusions_path
         _default_version, entries = self._read_entry_store(path)
         return tuple(entries.values())
@@ -260,40 +253,23 @@ class PolicyStore:
         return destination
 
     def _ensure_split_stores(self) -> None:
-        if self.censor_path.exists() and self.exclusions_path.exists():
-            return
-        if not self.censor_path.exists() and not self.exclusions_path.exists() and self.path.exists():
-            policy = self._read_dictionary(self.path)
-            self._write_dictionary(
-                set(policy.censor_words),
-                set(policy.exclusions),
-                seeded_from_default_version=policy.seeded_from_default_version,
-                censor_entries=policy.censor_entries,
-                exclusion_entries=policy.exclusion_entries,
-            )
-            return
-        if not self.censor_path.exists() and not self.exclusions_path.exists():
-            self._initialize()
-            return
-        censor_words, exclusions = self._load_defaults()
-        if not self.censor_path.exists():
-            entries = {word: PolicyEntry(word, EPOCH_TIMESTAMP, "default") for word in censor_words}
-            self._write_entry_store(self.censor_path, entries, DEFAULT_DICTIONARY_VERSION)
-        if not self.exclusions_path.exists():
-            entries = {word: PolicyEntry(word, EPOCH_TIMESTAMP, "default") for word in exclusions}
-            self._write_entry_store(self.exclusions_path, entries, DEFAULT_DICTIONARY_VERSION)
+        self._ensure_entry_store("censor")
+        self._ensure_entry_store("exclude")
 
-    def _initialize(self) -> None:
-        censor_words, exclusions = self._load_defaults()
-        if self.legacy_path.is_file():
-            overrides = self._read_legacy_overrides()
-            censor_words, exclusions = self._materialize(censor_words, exclusions, overrides)
-        self._write_dictionary(
-            censor_words,
-            exclusions,
-            seeded_from_default_version=DEFAULT_DICTIONARY_VERSION,
-            source="default",
-        )
+    def _ensure_entry_store(self, target: PolicyTarget) -> None:
+        path = self.censor_path if target == "censor" else self.exclusions_path
+        if path.exists():
+            return
+        try:
+            if target == "exclude":
+                words = load_profanity_exclusions(self.exclusions_defaults_path)
+            else:
+                exclusions = load_profanity_exclusions(self.exclusions_defaults_path)
+                words = load_profanity_censor_words(self.censor_defaults_path) - exclusions
+        except (OSError, ValueError) as exc:
+            raise PolicyFileError(path, f"could not load bundled defaults: {exc}") from exc
+        entries = {word: PolicyEntry(word, EPOCH_TIMESTAMP, "default") for word in words}
+        self._write_entry_store(path, entries, DEFAULT_DICTIONARY_VERSION)
 
     def _load_defaults(self) -> tuple[set[str], set[str]]:
         try:
@@ -303,61 +279,6 @@ class PolicyStore:
             raise PolicyFileError(self.path, f"could not load bundled defaults: {exc}") from exc
         return censor_words, exclusions
 
-    @staticmethod
-    def _materialize(
-        censor_defaults: set[str],
-        exclusion_defaults: set[str],
-        overrides: dict[str, PolicyClassification],
-    ) -> tuple[set[str], set[str]]:
-        censor_words = set(censor_defaults) - exclusion_defaults
-        exclusions = set(exclusion_defaults)
-        for word, classification in overrides.items():
-            censor_words.discard(word)
-            exclusions.discard(word)
-            if classification == "censor":
-                censor_words.add(word)
-            elif classification == "exclude":
-                exclusions.add(word)
-        return censor_words, exclusions
-
-    def _read_legacy_overrides(self) -> dict[str, PolicyClassification]:
-        payload = self._read_json(self.legacy_path)
-        if not isinstance(payload, dict) or set(payload) != {"schema_version", "overrides"}:
-            raise PolicyFileError(
-                self.legacy_path,
-                "must contain only schema_version and overrides",
-            )
-        if payload["schema_version"] != 1:
-            raise PolicyFileError(
-                self.legacy_path,
-                f"unsupported schema version {payload['schema_version']!r}",
-            )
-        raw_overrides = payload["overrides"]
-        if not isinstance(raw_overrides, dict):
-            raise PolicyFileError(self.legacy_path, "overrides must be an object")
-
-        overrides: dict[str, PolicyClassification] = {}
-        for raw_word, classification in raw_overrides.items():
-            if not isinstance(raw_word, str) or classification not in (
-                "censor",
-                "exclude",
-                "none",
-            ):
-                raise PolicyFileError(
-                    self.legacy_path,
-                    "contains an invalid word classification",
-                )
-            try:
-                word = normalize_policy_word(raw_word)
-            except ValueError as exc:
-                raise PolicyFileError(self.legacy_path, str(exc)) from exc
-            if word != raw_word:
-                raise PolicyFileError(
-                    self.legacy_path,
-                    f"contains a non-normalized word: {raw_word!r}",
-                )
-            overrides[word] = classification
-        return overrides
 
     def _read_dictionary(self, path: Path) -> ProfanityPolicy:
         payload = self._validated_payload(path)
@@ -396,7 +317,7 @@ class PolicyStore:
             raise PolicyFileError(path, f"must contain only {', '.join(sorted(required_keys))}")
         schema_version = payload["schema_version"]
         default_version = payload["seeded_from_default_version"]
-        if isinstance(schema_version, bool) or schema_version not in (1, POLICY_SCHEMA_VERSION):
+        if isinstance(schema_version, bool) or schema_version != POLICY_SCHEMA_VERSION:
             raise PolicyFileError(path, f"unsupported schema version {schema_version!r}")
         if isinstance(default_version, bool) or not isinstance(default_version, int) or default_version < 1:
             raise PolicyFileError(path, "seeded_from_default_version must be a positive integer")
@@ -414,11 +335,7 @@ class PolicyStore:
             raise PolicyFileError(path, f"{name} must be an array")
         entries: dict[str, PolicyEntry] = {}
         for raw_entry in value:
-            if schema_version == 1:
-                raw_word = raw_entry
-                added_at = EPOCH_TIMESTAMP
-                source: PolicySource = "default"
-            elif isinstance(raw_entry, dict) and set(raw_entry) == {"value", "added_at", "source"}:
+            if isinstance(raw_entry, dict) and set(raw_entry) == {"value", "added_at", "source"}:
                 raw_word = raw_entry["value"]
                 added_at = raw_entry["added_at"]
                 source = raw_entry["source"]

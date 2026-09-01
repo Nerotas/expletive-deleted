@@ -23,7 +23,6 @@ class PolicyStoreTests(unittest.TestCase):
             root / "dictionary" / "profanity.json",
             censor_defaults_path=censor_path,
             exclusions_defaults_path=exclusions_path,
-            legacy_path=root / "policy.json",
         )
 
     def test_missing_user_policy_seeds_complete_dictionary(self):
@@ -115,14 +114,14 @@ class PolicyStoreTests(unittest.TestCase):
     def test_malformed_policy_is_actionable_and_never_silently_ignored(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             store = self.create_store(Path(temporary_directory))
-            store.path.parent.mkdir(parents=True)
-            store.path.write_text(
-                '{"schema_version":1,"seeded_from_default_version":1,"words":{},"exclusions":[]}',
+            store.censor_path.parent.mkdir(parents=True)
+            store.censor_path.write_text(
+                '{"schema_version":2,"seeded_from_default_version":1,"entries":{}}',
                 encoding="utf-8",
             )
 
-            with self.assertRaisesRegex(PolicyFileError, "words must be an array"):
-                store.load()
+            with self.assertRaisesRegex(PolicyFileError, "entries must be an array"):
+                store.load_entries("censor")
 
     def test_processing_engine_loads_the_same_effective_policy(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

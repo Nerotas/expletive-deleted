@@ -86,7 +86,7 @@ describe('desktop application renderer', () => {
     expect(await screen.findByText('System ready')).toBeInTheDocument()
   })
 
-  it('keeps a Karaoke draft while Queue polling continues and never refetches settings', async () => {
+  it('keeps a Karaoke draft without running Queue polling off the Queue route', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     renderApp('/settings')
@@ -99,7 +99,7 @@ describe('desktop application renderer', () => {
 
     expect(karaoke).toHaveAttribute('aria-pressed', 'true')
     expect(desktopClient.getSettings).toHaveBeenCalledTimes(1)
-    expect(desktopClient.listLibrary).toHaveBeenCalledTimes(3)
+    expect(desktopClient.listLibrary).not.toHaveBeenCalled()
     vi.useRealTimers()
   })
 
@@ -231,6 +231,9 @@ describe('desktop application renderer', () => {
     expect(screen.getByText('User')).toBeInTheDocument()
     expect(desktopClient.getDictionaryExclusions).toHaveBeenCalledOnce()
     expect(desktopClient.getCensoredWords).not.toHaveBeenCalled()
+    expect(desktopClient.listLibrary).not.toHaveBeenCalled()
+    expect(desktopClient.listArchive).not.toHaveBeenCalled()
+    expect(desktopClient.listJobs).not.toHaveBeenCalled()
 
     await user.click(screen.getByRole('button', { name: 'Censored words' }))
     let confirmation = screen.getByRole('dialog', { name: 'Reveal censored words?' })
@@ -272,13 +275,15 @@ describe('desktop application renderer', () => {
 
   it('turns a stalled Dictionary request into a retryable error', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
-    vi.mocked(desktopClient.getDictionaryInfo).mockImplementationOnce(
+    vi.mocked(desktopClient.getDictionaryExclusions).mockImplementationOnce(
       () => new Promise(() => undefined),
     )
 
     renderApp('/dictionary')
 
-    expect(screen.getByText('Loading dictionary')).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Word or phrase' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Censored words' })).toBeInTheDocument()
+    expect(screen.getByText('Loading dictionary entries')).toBeInTheDocument()
     expect(screen.queryByText('No matching entries.')).not.toBeInTheDocument()
     await act(() => vi.advanceTimersByTimeAsync(15_000))
     expect(await screen.findByRole('button', { name: 'Retry' })).toBeInTheDocument()

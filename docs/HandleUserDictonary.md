@@ -89,8 +89,7 @@ Durable stores:
 
 `censored.json` and `exclusions.json` are independently readable policy stores.
 `discovered.json` is an independently persisted review queue. The combined
-`profanity.json` format is retained only for migration and portable import/export;
-it is not the live source of truth.
+`profanity.json` format is used only for portable import/export; it is not a live store.
 
 This is application configuration/state rather than user media, so LocalAppData is appropriate.
 
@@ -112,20 +111,17 @@ Do not continue storing only deltas from the bundled defaults.
 
 The durable user dictionary should contain the **complete effective policy**.
 
-Conceptual schema:
+Conceptual schema for each policy store:
 
 ```json
 {
       "schema_version": 2,
   "seeded_from_default_version": 1,
-  "words": [
-            {
-                  "value": "example",
-                  "added_at": "1970-01-01T00:00:00Z",
-                  "source": "default"
-            }
-  ],
-      "exclusions": []
+      "entries": [{
+            "value": "example",
+            "added_at": "1970-01-01T00:00:00Z",
+            "source": "default"
+      }]
 }
 ```
 
@@ -134,23 +130,7 @@ Additional useful metadata may be included where justified, but do not over-engi
 The important distinction is:
 
 ```text
-OLD
-
-bundled defaults
-+
-policy.json deltas
-=
-effective dictionary
-```
-
-becomes:
-
-```text
-NEW
-
-user profanity.json
-=
-effective dictionary
+user censored.json + exclusions.json = effective policy
 ```
 
 ---
@@ -168,53 +148,20 @@ Do split dictionary stores exist?
         │
         └── NO
               ↓
-        check for legacy configuration
+        seed the requested store from its bundled default
               ↓
-        migrate if necessary
+        write only the requested store
               ↓
-        otherwise seed from bundled defaults
-              ↓
-      write censored.json and exclusions.json
-              ↓
-        load user dictionary
+        load that store
 ```
 
 Initialization should be deterministic and safe.
 
 ---
 
-# 6. Legacy `policy.json` Migration
-
-Existing users must not lose their custom profanity choices.
-
-The current behavior reportedly stores changes in `policy.json` as deltas while rereading the two bundled resource files.
-
-Implement a one-time migration.
-
-For an existing installation:
-
-1. Read the bundled/default dictionary used by the legacy system.
-2. Read the existing `policy.json`.
-3. Apply all legacy additions/removals/exclusions exactly as the old application does.
-4. Materialize the resulting **complete effective dictionary**.
-5. Save it to:
-
-```text
-%LOCALAPPDATA%\ExpletiveDeleted\dictionary\profanity.json
-```
-
-6. Validate the new file.
-7. Only after successful migration should the new dictionary become authoritative.
-
-Do not discard legacy data before successful migration.
-
-If appropriate, preserve the old file as a backup or leave it untouched once it is no longer used.
-
----
-
 # 7. Runtime Source of Truth
 
-After initialization/migration, all normal dictionary operations must use the user dictionary.
+After initialization, all normal dictionary operations must use the split user stores.
 
 This includes:
 
@@ -247,7 +194,7 @@ user customizes dictionary
     ↓
 Application v2 installed
     ↓
-existing user profanity.json remains unchanged
+existing censored.json and exclusions.json remain unchanged
 ```
 
 A newer bundled default dictionary must not silently add or remove words from an existing user's policy.
@@ -371,7 +318,6 @@ Persistence
 Import
 Export
 Default seeding
-Migration
 ```
 
 The Electron frontend should not independently maintain another dictionary implementation.
@@ -404,7 +350,7 @@ Example metadata:
   "default_version": 1,
   "word_count": 123,
   "exclusion_count": 12,
-  "path": "C:\\Users\\...\\AppData\\Local\\ExpletiveDeleted\\dictionary\\profanity.json"
+      "path": "C:\\Users\\...\\AppData\\Local\\ExpletiveDeleted\\dictionary"
 }
 ```
 
@@ -414,7 +360,7 @@ The dictionary page defaults to exclusions. Censored entries must not be request
 displayed until the user accepts the profanity warning. Paginate in the backend so the
 renderer receives only the selected category and page. Entry metadata uses:
 
-- `added_at`: an ISO 8601 UTC timestamp; bundled and migrated schema-1 entries use the Unix epoch.
+- `added_at`: an ISO 8601 UTC timestamp; bundled entries use the Unix epoch.
 - `source`: `default`, `user`, or `imported`.
 
 ---
@@ -427,9 +373,9 @@ Handle at minimum:
 LocalAppData unavailable
 Dictionary directory cannot be created
 Bundled defaults missing
-Legacy migration failure
-Malformed policy.json
-Malformed user profanity.json
+Malformed censored.json
+Malformed exclusions.json
+Malformed discovered.json
 Write failure
 Import validation failure
 Permission error
@@ -464,16 +410,6 @@ application default changes do not silently modify existing user dictionary
 
 restore defaults uses current bundled defaults
 
-legacy policy.json migrates correctly
-
-legacy additions survive migration
-
-legacy removals survive migration
-
-legacy exclusions survive migration
-
-migration does not destroy source data on failure
-
 malformed dictionary is handled safely
 
 import valid dictionary
@@ -495,14 +431,13 @@ This task is complete when:
 2. A fresh user receives a complete durable dictionary under LocalAppData.
 3. The durable user dictionary becomes the runtime source of truth.
 4. Normal dictionary loads no longer depend on repository resource files.
-5. Existing `policy.json` users are migrated without losing customizations.
-6. User changes survive application restart.
-7. User changes survive normal application upgrades.
-8. Bundled-default updates do not silently alter existing user policies.
-9. Restore Defaults deliberately reseeds the user-owned dictionary.
-10. Import/Export operate on complete dictionaries.
-11. The Electron UI does not duplicate backend dictionary persistence logic.
-12. Tests cover first-run initialization, persistence, migration, reset, and failure behavior.
+5. User changes survive application restart.
+6. User changes survive normal application upgrades.
+7. Bundled-default updates do not silently alter existing user policies.
+8. Restore Defaults deliberately reseeds the user-owned dictionary.
+9. Import/Export operate on complete dictionaries.
+10. The Electron UI does not duplicate backend dictionary persistence logic.
+11. Tests cover first-run initialization, persistence, reset, and failure behavior.
 
 ---
 
@@ -521,7 +456,7 @@ as:
 and:
 
 ```text
-%LOCALAPPDATA%\ExpletiveDeleted\dictionary\profanity.json
+%LOCALAPPDATA%\ExpletiveDeleted\dictionary\
 ```
 
 as:
@@ -530,7 +465,6 @@ as:
 
 Once the split user stores exist, they are authoritative until the user explicitly changes,
 imports, or resets them. Loading exclusions must not read or validate censored entries, and
-loading censored entries must not read or validate exclusions. Existing combined
-`profanity.json` files are migrated once into both stores. `discovered.json` starts empty
-when absent; processing and explicit transcript review add candidates directly without a
-dictionary-page transcript scan.
+loading censored entries must not read or validate exclusions. `discovered.json` starts
+empty when absent; processing and explicit transcript review add candidates directly
+without a dictionary-page transcript scan.
