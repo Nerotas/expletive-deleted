@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from backend.policy import PolicyStore, ProfanityPolicy
+from backend.policy import PolicyEntry, PolicyStore, ProfanityPolicy
 from backend.runtime import (
     DependencyStatus,
     get_profanity_censor_words_file,
@@ -30,6 +30,14 @@ class DesktopBridgeTests(unittest.TestCase):
             exclusions_defaults_path=root / "exclusions.txt",
             overrides_path=root / "policy.json",
             overrides_count=0,
+            censor_entries={
+                word: PolicyEntry(word, "1970-01-01T00:00:00Z", "default")
+                for word in censor_words
+            },
+            exclusion_entries={
+                word: PolicyEntry(word, "2026-09-01T12:00:00Z", "user")
+                for word in exclusions
+            },
         )
 
     def test_dictionary_inventory_seeds_complete_user_dictionary_from_defaults(self):
@@ -43,7 +51,7 @@ class DesktopBridgeTests(unittest.TestCase):
                 expected_exclusions_path = get_profanity_exclusions_file()
 
         self.assertEqual(Path(result["dictionary_path"]), dictionary_path.resolve())
-        self.assertEqual(result["schema_version"], 1)
+        self.assertEqual(result["schema_version"], 2)
         self.assertEqual(result["seeded_from_default_version"], 1)
         self.assertEqual(set(result["words"]), load_profanity_censor_words(expected_words_path))
         self.assertEqual(
@@ -87,8 +95,8 @@ class DesktopBridgeTests(unittest.TestCase):
         policy_store.restore_defaults.assert_called_once_with()
         policy_store.import_dictionary.assert_called_once_with(Path("C:/backup/import.json"))
         policy_store.export_dictionary.assert_called_once_with(Path("C:/backup/dictionary.json"))
-        self.assertEqual(restored["words"], ["word"])
-        self.assertEqual(imported["exclusions"], ["allowed"])
+        self.assertEqual(restored["words_count"], 1)
+        self.assertEqual(imported["exclusions_count"], 1)
         self.assertEqual(exported, {"path": str(Path("C:/backup/dictionary.json"))})
 
     def test_dictionary_update_persists_through_policy_store(self):
@@ -105,7 +113,43 @@ class DesktopBridgeTests(unittest.TestCase):
 
         policy_store.update.assert_called_once_with("censor", "new-word", "add")
         self.assertTrue(result["changed"])
-        self.assertEqual(result["words"], ["new-word"])
+        self.assertEqual(result["words_count"], 1)
+
+    def test_dictionary_entries_are_filtered_sorted_and_paginated(self):
+        service = MagicMock()
+        policy_store = MagicMock()
+        policy_store.load.return_value = self.policy(
+            Path("C:/policy"),
+            set(),
+            {"allowed-z", "allowed-a", "other"},
+        )
+        bridge = DesktopBridge(service, policy_store)
+
+        result = bridge.handle("dictionary.entries", {
+            "target": "exclude",
+            "page": 1,
+            "page_size": 10,
+            "sort": "value",
+            "direction": "desc",
+            "search": "allowed",
+        })
+
+        self.assertEqual([item["value"] for item in result["items"]], ["allowed-z", "allowed-a"])
+        self.assertEqual(result["total"], 2)
+        self.assertEqual(result["total_pages"], 1)
+        self.assertEqual(result["items"][0]["source"], "user")
+
+    def test_dictionary_summary_does_not_scan_transcripts(self):
+        policy_store = MagicMock()
+        policy_store.load.return_value = self.policy(Path("C:/policy"), {"word"}, {"allowed"})
+        bridge = DesktopBridge(MagicMock(), policy_store)
+
+        with patch.object(bridge, "_discovered_words") as discover:
+            result = bridge.handle("dictionary.summary")
+
+        discover.assert_not_called()
+        self.assertEqual(result["words_count"], 1)
+        self.assertEqual(result["exclusions_count"], 1)
 
     def test_protocol_returns_library_and_correlates_request(self):
         service = MagicMock()

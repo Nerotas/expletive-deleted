@@ -34,11 +34,49 @@ class DurablePolicyStoreTests(unittest.TestCase):
             self.assertEqual(
                 payload,
                 {
+                    "schema_version": 2,
+                    "seeded_from_default_version": 1,
+                    "words": [{
+                        "value": "default-censor",
+                        "added_at": "1970-01-01T00:00:00Z",
+                        "source": "default",
+                    }],
+                    "exclusions": [
+                        {
+                            "value": "default-exclusion",
+                            "added_at": "1970-01-01T00:00:00Z",
+                            "source": "default",
+                        },
+                        {
+                            "value": "shared",
+                            "added_at": "1970-01-01T00:00:00Z",
+                            "source": "default",
+                        },
+                    ],
+                },
+            )
+
+    def test_schema_one_dictionary_is_migrated_with_default_metadata(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            store = self.create_store(Path(temporary_directory))
+            store.path.parent.mkdir(parents=True)
+            store.path.write_text(
+                json.dumps({
                     "schema_version": 1,
                     "seeded_from_default_version": 1,
-                    "words": ["default-censor"],
-                    "exclusions": ["default-exclusion", "shared"],
-                },
+                    "words": ["existing-censor"],
+                    "exclusions": ["existing-exclusion"],
+                }),
+                encoding="utf-8",
+            )
+
+            policy = store.load()
+
+            self.assertEqual(policy.schema_version, 2)
+            self.assertEqual(policy.censor_entries["existing-censor"].source, "default")
+            self.assertEqual(
+                policy.exclusion_entries["existing-exclusion"].added_at,
+                "1970-01-01T00:00:00Z",
             )
 
     def test_existing_dictionary_does_not_reread_changed_or_missing_defaults(self):
@@ -66,6 +104,11 @@ class DurablePolicyStoreTests(unittest.TestCase):
 
             self.assertEqual(loaded.censor_words, {"custom-censor"})
             self.assertEqual(loaded.exclusions, {"custom-exclusion", "shared"})
+            self.assertEqual(loaded.censor_entries["custom-censor"].source, "user")
+            self.assertNotEqual(
+                loaded.censor_entries["custom-censor"].added_at,
+                "1970-01-01T00:00:00Z",
+            )
 
     def test_legacy_overrides_are_materialized_without_modifying_source(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -146,10 +189,18 @@ class DurablePolicyStoreTests(unittest.TestCase):
             self.assertEqual(
                 json.loads(exported.read_text(encoding="utf-8")),
                 {
-                    "schema_version": 1,
+                    "schema_version": 2,
                     "seeded_from_default_version": 1,
-                    "words": ["portable-censor"],
-                    "exclusions": ["portable-exclusion"],
+                    "words": [{
+                        "value": "portable-censor",
+                        "added_at": store.load().censor_entries["portable-censor"].added_at,
+                        "source": "imported",
+                    }],
+                    "exclusions": [{
+                        "value": "portable-exclusion",
+                        "added_at": store.load().exclusion_entries["portable-exclusion"].added_at,
+                        "source": "imported",
+                    }],
                 },
             )
 

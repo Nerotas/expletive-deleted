@@ -6,7 +6,8 @@ import json
 import os
 import tempfile
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
@@ -20,11 +21,13 @@ from backend.runtime import (
 )
 
 
-POLICY_SCHEMA_VERSION = 1
+POLICY_SCHEMA_VERSION = 2
 DEFAULT_DICTIONARY_VERSION = 1
 PolicyTarget = Literal["censor", "exclude"]
 PolicyAction = Literal["add", "remove"]
 PolicyClassification = Literal["censor", "exclude", "none"]
+PolicySource = Literal["default", "user", "imported"]
+EPOCH_TIMESTAMP = "1970-01-01T00:00:00Z"
 
 
 class PolicyFileError(RuntimeError):
@@ -37,6 +40,13 @@ class PolicyFileError(RuntimeError):
 
 
 @dataclass(frozen=True)
+class PolicyEntry:
+    value: str
+    added_at: str
+    source: PolicySource
+
+
+@dataclass(frozen=True)
 class ProfanityPolicy:
     censor_words: frozenset[str]
     exclusions: frozenset[str]
@@ -46,6 +56,8 @@ class ProfanityPolicy:
     overrides_count: int
     schema_version: int = POLICY_SCHEMA_VERSION
     seeded_from_default_version: int = DEFAULT_DICTIONARY_VERSION
+    censor_entries: Mapping[str, PolicyEntry] = field(default_factory=dict)
+    exclusion_entries: Mapping[str, PolicyEntry] = field(default_factory=dict)
 
     def classification(self, word: str) -> PolicyTarget | None:
         if word in self.exclusions:
@@ -53,6 +65,14 @@ class ProfanityPolicy:
         if word in self.censor_words:
             return "censor"
         return None
+
+    def entries(self, target: PolicyTarget) -> tuple[PolicyEntry, ...]:
+        metadata = self.censor_entries if target == "censor" else self.exclusion_entries
+        words = self.censor_words if target == "censor" else self.exclusions
+        return tuple(
+            metadata.get(word, PolicyEntry(word, EPOCH_TIMESTAMP, "default"))
+            for word in words
+        )
 
 
 def default_policy_path(
@@ -93,7 +113,11 @@ class PolicyStore:
     def load(self) -> ProfanityPolicy:
         if not self.path.exists():
             self._initialize()
-        return self._read_dictionary(self.path)
+        policy = self._read_dictionary(self.path)
+        if policy.schema_version < POLICY_SCHEMA_VERSION:
+            self._write_policy(policy)
+            return self._read_dictionary(self.path)
+        return policy
 
     def update(
         self,
@@ -114,16 +138,24 @@ class PolicyStore:
 
         censor_words = set(before.censor_words)
         exclusions = set(before.exclusions)
+        censor_entries = dict(before.censor_entries)
+        exclusion_entries = dict(before.exclusion_entries)
         censor_words.discard(word)
         exclusions.discard(word)
+        censor_entries.pop(word, None)
+        exclusion_entries.pop(word, None)
         if desired == "censor":
             censor_words.add(word)
+            censor_entries[word] = self._entry(word, "user")
         elif desired == "exclude":
             exclusions.add(word)
+            exclusion_entries[word] = self._entry(word, "user")
         self._write_dictionary(
             censor_words,
             exclusions,
             seeded_from_default_version=before.seeded_from_default_version,
+            censor_entries=censor_entries,
+            exclusion_entries=exclusion_entries,
         )
         return self.load(), True
 
@@ -133,6 +165,7 @@ class PolicyStore:
             censor_words,
             exclusions,
             seeded_from_default_version=DEFAULT_DICTIONARY_VERSION,
+            source="default",
         )
         return self.load()
 
@@ -142,6 +175,7 @@ class PolicyStore:
             set(imported.censor_words),
             set(imported.exclusions),
             seeded_from_default_version=imported.seeded_from_default_version,
+            source="imported",
         )
         return self.load()
 
@@ -160,6 +194,7 @@ class PolicyStore:
             censor_words,
             exclusions,
             seeded_from_default_version=DEFAULT_DICTIONARY_VERSION,
+            source="default",
         )
 
     def _load_defaults(self) -> tuple[set[str], set[str]]:
@@ -194,7 +229,7 @@ class PolicyStore:
                 self.legacy_path,
                 "must contain only schema_version and overrides",
             )
-        if payload["schema_version"] != POLICY_SCHEMA_VERSION:
+        if payload["schema_version"] != 1:
             raise PolicyFileError(
                 self.legacy_path,
                 f"unsupported schema version {payload['schema_version']!r}",
@@ -238,12 +273,14 @@ class PolicyStore:
             raise PolicyFileError(path, f"must contain only {', '.join(sorted(required_keys))}")
         schema_version = payload["schema_version"]
         default_version = payload["seeded_from_default_version"]
-        if isinstance(schema_version, bool) or schema_version != POLICY_SCHEMA_VERSION:
+        if isinstance(schema_version, bool) or schema_version not in (1, POLICY_SCHEMA_VERSION):
             raise PolicyFileError(path, f"unsupported schema version {schema_version!r}")
         if isinstance(default_version, bool) or not isinstance(default_version, int) or default_version < 1:
             raise PolicyFileError(path, "seeded_from_default_version must be a positive integer")
-        censor_words = self._validate_word_array(path, "words", payload["words"])
-        exclusions = self._validate_word_array(path, "exclusions", payload["exclusions"])
+        censor_entries = self._validate_entries(path, "words", payload["words"], schema_version)
+        exclusion_entries = self._validate_entries(path, "exclusions", payload["exclusions"], schema_version)
+        censor_words = set(censor_entries)
+        exclusions = set(exclusion_entries)
         overlap = censor_words & exclusions
         if overlap:
             raise PolicyFileError(path, f"words and exclusions overlap: {sorted(overlap)[0]!r}")
@@ -256,14 +293,32 @@ class PolicyStore:
             overrides_count=0,
             schema_version=schema_version,
             seeded_from_default_version=default_version,
+            censor_entries=censor_entries,
+            exclusion_entries=exclusion_entries,
         )
 
-    @staticmethod
-    def _validate_word_array(path: Path, name: str, value: object) -> set[str]:
+    @classmethod
+    def _validate_entries(
+        cls,
+        path: Path,
+        name: str,
+        value: object,
+        schema_version: int,
+    ) -> dict[str, PolicyEntry]:
         if not isinstance(value, list):
             raise PolicyFileError(path, f"{name} must be an array")
-        words: set[str] = set()
-        for raw_word in value:
+        entries: dict[str, PolicyEntry] = {}
+        for raw_entry in value:
+            if schema_version == 1:
+                raw_word = raw_entry
+                added_at = EPOCH_TIMESTAMP
+                source: PolicySource = "default"
+            elif isinstance(raw_entry, dict) and set(raw_entry) == {"value", "added_at", "source"}:
+                raw_word = raw_entry["value"]
+                added_at = raw_entry["added_at"]
+                source = raw_entry["source"]
+            else:
+                raise PolicyFileError(path, f"{name} must contain dictionary entries")
             if not isinstance(raw_word, str):
                 raise PolicyFileError(path, f"{name} must contain only strings")
             try:
@@ -272,10 +327,22 @@ class PolicyStore:
                 raise PolicyFileError(path, str(exc)) from exc
             if word != raw_word:
                 raise PolicyFileError(path, f"contains a non-normalized word: {raw_word!r}")
-            if word in words:
+            if word in entries:
                 raise PolicyFileError(path, f"{name} contains duplicate word: {word!r}")
-            words.add(word)
-        return words
+            if not isinstance(added_at, str) or not cls._valid_timestamp(added_at):
+                raise PolicyFileError(path, f"{name} contains an invalid added_at timestamp")
+            if source not in ("default", "user", "imported"):
+                raise PolicyFileError(path, f"{name} contains an invalid source")
+            entries[word] = PolicyEntry(word, added_at, source)
+        return entries
+
+    @staticmethod
+    def _valid_timestamp(value: str) -> bool:
+        try:
+            datetime.fromisoformat(value.replace("Z", "+00:00"))
+            return True
+        except ValueError:
+            return False
 
     @staticmethod
     def _read_json(path: Path) -> object:
@@ -295,7 +362,16 @@ class PolicyStore:
         exclusions: set[str],
         *,
         seeded_from_default_version: int,
+        source: PolicySource | None = None,
+        censor_entries: Mapping[str, PolicyEntry] | None = None,
+        exclusion_entries: Mapping[str, PolicyEntry] | None = None,
     ) -> None:
+        censor_entries = dict(censor_entries or {})
+        exclusion_entries = dict(exclusion_entries or {})
+        if source is not None:
+            added_at = EPOCH_TIMESTAMP if source == "default" else self._timestamp()
+            censor_entries = {word: PolicyEntry(word, added_at, source) for word in censor_words}
+            exclusion_entries = {word: PolicyEntry(word, added_at, source) for word in exclusions}
         policy = ProfanityPolicy(
             censor_words=frozenset(censor_words),
             exclusions=frozenset(exclusions),
@@ -304,16 +380,41 @@ class PolicyStore:
             overrides_path=self.path,
             overrides_count=0,
             seeded_from_default_version=seeded_from_default_version,
+            censor_entries=censor_entries,
+            exclusion_entries=exclusion_entries,
         )
         self._write_payload(self.path, self._payload(policy))
+
+    def _write_policy(self, policy: ProfanityPolicy) -> None:
+        self._write_dictionary(
+            set(policy.censor_words),
+            set(policy.exclusions),
+            seeded_from_default_version=policy.seeded_from_default_version,
+            censor_entries=policy.censor_entries,
+            exclusion_entries=policy.exclusion_entries,
+        )
+
+    @staticmethod
+    def _timestamp() -> str:
+        return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+    @classmethod
+    def _entry(cls, value: str, source: PolicySource) -> PolicyEntry:
+        return PolicyEntry(value, cls._timestamp(), source)
 
     @staticmethod
     def _payload(policy: ProfanityPolicy) -> dict[str, object]:
         return {
-            "schema_version": policy.schema_version,
+            "schema_version": POLICY_SCHEMA_VERSION,
             "seeded_from_default_version": policy.seeded_from_default_version,
-            "words": sorted(policy.censor_words),
-            "exclusions": sorted(policy.exclusions),
+            "words": [
+                {"value": entry.value, "added_at": entry.added_at, "source": entry.source}
+                for entry in sorted(policy.entries("censor"), key=lambda item: item.value)
+            ],
+            "exclusions": [
+                {"value": entry.value, "added_at": entry.added_at, "source": entry.source}
+                for entry in sorted(policy.entries("exclude"), key=lambda item: item.value)
+            ],
         }
 
     def _write_payload(self, path: Path, payload: dict[str, object]) -> None:

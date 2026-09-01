@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import math
 import sys
 from collections.abc import Mapping
 from dataclasses import asdict
@@ -47,13 +48,25 @@ class DesktopBridge:
             return self.service.get_capabilities()
         if method == "dictionary.get":
             return self._dictionary()
+        if method == "dictionary.summary":
+            return self._dictionary_summary()
+        if method == "dictionary.entries":
+            return self._dictionary_entries(params)
+        if method == "dictionary.discovered":
+            policy = self.policy_store.load()
+            return {
+                "words": self._discovered_words(
+                    set(policy.censor_words),
+                    set(policy.exclusions),
+                )
+            }
         if method == "dictionary.add":
             target = params.get("target")
             word = params.get("word")
             if target not in ("censor", "exclude") or not isinstance(word, str):
                 raise ValueError("Dictionary updates require a censor/exclude target and a word")
             policy, changed = self.policy_store.update(target, word, "add")
-            result = self._dictionary(policy)
+            result = self._dictionary_summary(policy)
             result["changed"] = changed
             return result
         if method == "dictionary.remove":
@@ -62,16 +75,16 @@ class DesktopBridge:
             if target not in ("censor", "exclude") or not isinstance(word, str):
                 raise ValueError("Dictionary updates require a censor/exclude target and a word")
             policy, changed = self.policy_store.update(target, word, "remove")
-            result = self._dictionary(policy)
+            result = self._dictionary_summary(policy)
             result["changed"] = changed
             return result
         if method == "dictionary.restore_defaults":
-            return self._dictionary(self.policy_store.restore_defaults())
+            return self._dictionary_summary(self.policy_store.restore_defaults())
         if method == "dictionary.import":
             source = params.get("source")
             if not isinstance(source, str) or not source.strip():
                 raise ValueError("Dictionary import requires a source file")
-            return self._dictionary(self.policy_store.import_dictionary(Path(source)))
+            return self._dictionary_summary(self.policy_store.import_dictionary(Path(source)))
         if method == "dictionary.export":
             destination = params.get("destination")
             if not isinstance(destination, str) or not destination.strip():
@@ -281,6 +294,53 @@ class DesktopBridge:
             "exclusions": exclusions,
             "discovered_count": len(discovered),
             "discovered": discovered,
+        }
+
+    def _dictionary_summary(self, policy: ProfanityPolicy | None = None) -> dict[str, object]:
+        policy = policy or self.policy_store.load()
+        return {
+            "dictionary_path": str(policy.overrides_path),
+            "schema_version": policy.schema_version,
+            "seeded_from_default_version": policy.seeded_from_default_version,
+            "words_count": len(policy.censor_words),
+            "exclusions_count": len(policy.exclusions),
+        }
+
+    def _dictionary_entries(self, params: Mapping[str, Any]) -> dict[str, object]:
+        target = params.get("target")
+        if target not in ("censor", "exclude"):
+            raise ValueError("Dictionary entries require a censor/exclude target")
+        page = params.get("page", 1)
+        page_size = params.get("page_size", 25)
+        sort = params.get("sort", "value")
+        direction = params.get("direction", "asc")
+        search = params.get("search", "")
+        if isinstance(page, bool) or not isinstance(page, int) or page < 1:
+            raise ValueError("Dictionary page must be a positive integer")
+        if isinstance(page_size, bool) or not isinstance(page_size, int) or not 10 <= page_size <= 100:
+            raise ValueError("Dictionary page size must be between 10 and 100")
+        if sort not in ("value", "added_at", "source") or direction not in ("asc", "desc"):
+            raise ValueError("Dictionary sort is not supported")
+        if not isinstance(search, str):
+            raise ValueError("Dictionary search must be text")
+
+        entries = list(self.policy_store.load().entries(target))
+        normalized_search = search.strip().lower()
+        if normalized_search:
+            entries = [entry for entry in entries if normalized_search in entry.value]
+        entries.sort(
+            key=lambda entry: (getattr(entry, sort), entry.value),
+            reverse=direction == "desc",
+        )
+        total = len(entries)
+        start = (page - 1) * page_size
+        return {
+            "target": target,
+            "items": [asdict(entry) for entry in entries[start:start + page_size]],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": math.ceil(total / page_size),
         }
 
     @staticmethod

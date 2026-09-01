@@ -49,8 +49,14 @@ class PolicyStoreTests(unittest.TestCase):
             payload = json.loads(store.path.read_text(encoding="utf-8"))
             self.assertTrue(changed)
             self.assertIn("custom word", policy.censor_words)
-            self.assertEqual(payload["words"], ["custom word", "default-censor"])
-            self.assertEqual(payload["exclusions"], ["default-exclusion"])
+            self.assertEqual(
+                [(entry["value"], entry["source"]) for entry in payload["words"]],
+                [("custom word", "user"), ("default-censor", "default")],
+            )
+            self.assertEqual(
+                [(entry["value"], entry["source"]) for entry in payload["exclusions"]],
+                [("default-exclusion", "default")],
+            )
             self.assertEqual(
                 store.censor_defaults_path.read_text(encoding="utf-8"),
                 censor_before,

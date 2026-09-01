@@ -109,14 +109,16 @@ Conceptual schema:
 
 ```json
 {
-  "schema_version": 1,
+      "schema_version": 2,
   "seeded_from_default_version": 1,
   "words": [
-    "example"
+            {
+                  "value": "example",
+                  "added_at": "1970-01-01T00:00:00Z",
+                  "source": "default"
+            }
   ],
-  "exclusions": [
-    "example exclusion"
-  ]
+      "exclusions": []
 }
 ```
 
@@ -376,7 +378,9 @@ Electron should request and update dictionary data through the backend/service b
 Do not create API endpoints unnecessarily, but the service layer should conceptually support:
 
 ```text
-Get effective dictionary
+Get dictionary summary and counts
+Get one filtered, sorted, paginated category
+Discover unclassified transcript words independently
 Add/update/remove words
 Add/update/remove exclusions
 Restore defaults
@@ -389,7 +393,7 @@ Example metadata:
 
 ```json
 {
-  "schema_version": 1,
+      "schema_version": 2,
   "default_version": 1,
   "word_count": 123,
   "exclusion_count": 12,
@@ -398,6 +402,13 @@ Example metadata:
 ```
 
 The exact API contract should follow the project's existing service design.
+
+The dictionary page defaults to exclusions. Censored entries must not be requested or
+displayed until the user accepts the profanity warning. Paginate in the backend so the
+renderer receives only the selected category and page. Entry metadata uses:
+
+- `added_at`: an ISO 8601 UTC timestamp; bundled and migrated schema-1 entries use the Unix epoch.
+- `source`: `default`, `user`, or `imported`.
 
 ---
 
