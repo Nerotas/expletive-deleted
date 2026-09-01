@@ -66,6 +66,7 @@ export function useCapabilities({
   return {
     capabilities: query.data ?? null,
     loading: query.isLoading,
+    checking: query.isFetching,
     busy: planMutation.isPending || installMutation.isPending || locateMutation.isPending || query.isFetching,
     installing: installMutation.isPending,
     pendingPlan,

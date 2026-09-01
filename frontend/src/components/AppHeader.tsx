@@ -2,6 +2,7 @@ import {
   AlertCircle,
   BookOpen,
   ListVideo,
+  LoaderCircle,
   MoonIcon,
   Settings as SettingsIcon,
   ShieldCheck,
@@ -14,12 +15,14 @@ import type { Capabilities, Theme } from '../types/domain'
 
 type AppHeaderProps = {
   capabilities: Capabilities | null
+  checking: boolean
   theme: Theme
   toggleTheme: () => void
 }
 
 export function AppHeader({
   capabilities,
+  checking,
   theme,
   toggleTheme,
 }: AppHeaderProps) {
@@ -46,9 +49,13 @@ export function AppHeader({
         >
           {theme === 'light' ? <MoonIcon size={16} /> : <SunIcon size={16} />}
         </button>
-        <div className={`runtime-pill ${capabilities?.ready ? 'ready' : 'attention'}`}>
-          {capabilities?.ready ? <ShieldCheck size={16} /> : <AlertCircle size={16} />}
-          {capabilities?.ready ? 'System ready' : 'Setup required'}
+        <div className={`runtime-pill ${checking ? 'checking' : capabilities?.ready ? 'ready' : 'attention'}`}>
+          {checking
+            ? <LoaderCircle className="spin" size={16} />
+            : capabilities?.ready
+              ? <ShieldCheck size={16} />
+              : <AlertCircle size={16} />}
+          {checking ? 'Checking system' : capabilities?.ready ? 'System ready' : 'Setup required'}
         </div>
       </div>
     </header>

@@ -66,6 +66,20 @@ describe('desktop application renderer', () => {
     localStorage.clear()
   })
 
+  it('shows a system check in progress before reporting readiness', async () => {
+    let completeCheck: ((value: typeof readyCapabilities) => void) | undefined
+    vi.mocked(desktopClient.getCapabilities).mockImplementationOnce(
+      () => new Promise((resolve) => { completeCheck = resolve }),
+    )
+    renderApp('/')
+
+    expect(screen.getByText('Checking system')).toBeInTheDocument()
+    expect(screen.queryByText('Setup required')).not.toBeInTheDocument()
+
+    await act(async () => completeCheck?.(readyCapabilities))
+    expect(await screen.findByText('System ready')).toBeInTheDocument()
+  })
+
   it('keeps a Karaoke draft while Queue polling continues and never refetches settings', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })

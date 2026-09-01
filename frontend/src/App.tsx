@@ -50,6 +50,7 @@ function App() {
     <div className="app-shell">
       <AppHeader
         capabilities={capabilities.capabilities}
+        checking={capabilities.checking}
         theme={theme}
         toggleTheme={toggleTheme}
       />

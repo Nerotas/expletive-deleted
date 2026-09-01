@@ -9,6 +9,7 @@
 .top-nav a { border: 0; background: transparent; color: var(--muted); padding: 0 18px; display: flex; align-items: center; gap: 7px; font: 600 13px var(--sans); border-radius: 4px; text-decoration: none; }
 .top-nav a.active { background: white; color: var(--ink); box-shadow: 0 1px 3px rgba(24, 30, 31, .08); }
 .runtime-pill { justify-self: end; display: flex; align-items: center; gap: 7px; border: 1px solid var(--line); border-radius: 999px; padding: 7px 11px; font-size: 12px; font-weight: 700; background: white; }
+.runtime-pill.checking { color: var(--muted); }
 .runtime-pill.ready { color: var(--success); }
 .runtime-pill.attention { color: var(--warning); }
 main { max-width: 1480px; margin: 0 auto; padding: 28px 34px 56px; }
