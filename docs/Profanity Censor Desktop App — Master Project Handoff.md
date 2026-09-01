@@ -33,18 +33,18 @@ Generic media transcoding remains useful only where it supports the profanity-ce
 The core user-facing objectives are:
 
 ```text
-Find media
+Choose a video
     ↓
-Transcribe
+Start profanity censorship
     ↓
-Detect profanity
-    ↓
-Censor when requested
-    ↓
-Produce finished output
+Receive a separate censored video
 ```
 
-The application should make this workflow visible, configurable, and easy to manage without requiring the user to operate the existing CLI manually.
+Transcription, timestamp detection, and FFmpeg processing are implementation stages. The
+normal user should not need to understand or manage them to obtain a censored file.
+
+The application should make this workflow accessible, trustworthy, and easy to manage
+without requiring the user to operate the existing CLI manually.
 
 ---
 
@@ -246,7 +246,6 @@ The major architectural change is moving orchestration away from CLI-only contro
 │ • Configuration                       │
 │ • Error display                       │
 │ • Cancellation                        │
-│ • Future review tools                 │
 └───────────────────┬───────────────────┘
                     │
                     │ Structured JSON
@@ -1006,44 +1005,14 @@ Video may be stream-copied, so transcoding does not necessarily describe what ha
 
 ---
 
-# 30. Review/Detailed Detection Workflow
+# 30. Core Workflow Scope
 
-The earlier project plan included manual detection review as an important feature.
+The production application is intentionally centered on producing profanity-censored
+media. Queue and Settings are sufficient top-level pages for that workflow.
 
-Phase 1 now has only two **top-level** pages:
-
-```text
-Queue
-Settings
-```
-
-This does not require permanently abandoning detection review.
-
-If included in Phase 1, detection review should appear as a workflow launched from a Queue item rather than becoming a third top-level navigation page.
-
-Possible future presentation:
-
-```text
-Queue
-  ↓
-Select Transcribed item
-  ↓
-Review modal / job detail / secondary workflow
-```
-
-Review capabilities remain useful:
-
-```text
-View detected profanity
-Enable/disable individual detection
-Adjust start time
-Adjust end time
-Seek/play around detection
-Add missed interval
-Approve censorship
-```
-
-The backend should therefore continue storing structured timestamps/detections even if the first minimal UI does not expose the complete review experience immediately.
+Structured transcripts and timestamps remain backend artifacts because reliable
+censorship requires them. Their existence does not create a requirement for transcript
+editing, a detection-review workflow, or media playback in the desktop application.
 
 ---
 
@@ -2109,7 +2078,6 @@ The application clearly requires a transcript artifact at least long enough to s
 Transcribed state
 Report Only mode
 Profanity detections
-Possible review
 Censoring
 ```
 
@@ -2127,55 +2095,40 @@ The existence of the user-visible `Transcripts` directory suggests retention is 
 
 ---
 
-# 66. Detection Review
+# 66. Potential-Ideas Backlog
 
-The original plan treated review as a significant product feature.
-
-Capabilities to preserve in the data model:
+These ideas are not committed features, release requirements, or current roadmap phases:
 
 ```text
-Detected word
-Timestamp
-Start/end interval
-Enabled/disabled
-Manual adjustment
-Manual interval creation
-Playback around detection
-Approval
+Detection occurrence review
+Enable/disable individual detections
+Manual timestamp adjustment
+Manual censor interval creation
+Transcript editing
+Media playback or seeking
+Graphical censor timeline
+Approval workflow
 ```
 
-A full editing timeline is not required for Phase 1.
+They should be considered only if user evidence shows that they materially improve the
+core censorship outcome. Do not delay packaging, distribution, or core workflow fixes to
+implement them. Any future proposal requires its own product decision, privacy review,
+interaction design, and acceptance criteria.
 
-Future graphical timeline:
-
-```text
-00:00 ───────────────────────────────────── 01:45:00
-            ▲        ▲            ▲
-          censor   censor       censor
-```
-
-The backend's timestamp data should remain structured so such UI can be added later without redesigning the engine.
+The current structured transcript and timestamp data may support some of these ideas,
+but the backend should not be made more complex solely to anticipate them.
 
 ---
 
 # 67. Automatic Processing
 
-The earlier plan included both:
-
-```text
-Automatic
-Review First
-```
-
-The newer folder-batch approach introduces a useful Phase 1 processing model:
+The folder-batch approach uses this processing model:
 
 ```text
 Report Only
 or
 Censor Media
 ```
-
-Manual review can be layered onto the `Transcribed` state.
 
 Do not tightly couple transcription and FFmpeg censorship into one irreversible function call.
 
@@ -2755,29 +2708,13 @@ Goal:
 
 ---
 
-## Phase 8 — Detection-review UX
-
-If not completed during the initial Queue implementation:
-
-- Open Transcribed job
-- Show detected profanity
-- Toggle censor
-- Adjust timing
-- Add missed interval
-- Playback/seek
-- Approve
-
-This does not need to become a third permanent navigation page.
-
-Goal:
-
-> Allow human verification before expensive censorship processing.
-
----
-
-## Phase 9 — Windows packaging
+## Phase 8 — Windows production packaging
 
 Produce a downloadable Windows application.
+
+Freeze the current feature scope for this phase. The application accepts media and
+produces a censored file; it does not add transcript editing, detection-review, or
+media playback features.
 
 Application package should contain the Profanity Censor application itself, but not bundled FFmpeg/Whisper model assets under the current dependency policy.
 
@@ -2796,7 +2733,7 @@ uninstall
 
 ---
 
-## Phase 10 — Public release / portfolio polish
+## Phase 9 — Public release / portfolio polish
 
 Prepare:
 
@@ -3019,23 +2956,14 @@ Do not simply download arbitrary "latest" builds.
 
 ## Python runtime packaging
 
-Determine the best relationship between:
+Phase 8 uses this relationship:
 
 ```text
-Electron installer
-Python backend/runtime
-post-install Python dependencies
+Electron installer contains Electron and first-party Python backend sources
+Python 3.9+ is installed separately by the user and detected at application startup
+post-install Python dependencies remain inspectable and user-approved in the setup UI
+FFmpeg and Whisper model assets remain outside the application package
 ```
-
-through a packaging proof-of-concept.
-
----
-
-## Detection review timing
-
-The data architecture should support review.
-
-Whether the complete review interface ships in the very first Phase 1 UI milestone or immediately after Queue/Settings remains a scope-management decision.
 
 ---
 
@@ -3157,7 +3085,6 @@ progress
 cancellation
 dependency setup
 audio/video preferences
-review capability
 desktop packaging
 usable distribution
 ```

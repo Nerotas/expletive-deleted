@@ -7,7 +7,16 @@ Expletive Deleted has two ways to work:
 
 Normal users should follow the desktop application workflow. Do not start `backend_app.py` or `scripts/desktop_bridge.py` in a second terminal when using the desktop app.
 
-## Desktop application (recommended)
+## Installed Windows application (recommended)
+
+1. Install Python 3.9 or later from an approved Python distribution and ensure the `py` launcher or `python` command is available.
+2. Run `Expletive-Deleted-Setup-<version>-x64.exe` and choose the installation directory.
+3. Start **Expletive Deleted** from the Start menu or desktop shortcut.
+4. Complete the explicit dependency plans shown by **Finish local setup**.
+
+The installer contains the application and its first-party backend, but does not bundle or silently retrieve Python, FFmpeg, Python speech-recognition packages, or Whisper models. Uninstalling the application does not delete settings, downloaded runtime components, models, or user media beneath `%LOCALAPPDATA%\ExpletiveDeleted` and `%USERPROFILE%\Documents\Expletive Deleted`.
+
+## Desktop source build (developers)
 
 The desktop source build requires Node.js 22.12 or later. Confirm it before installing frontend packages:
 

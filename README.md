@@ -1,6 +1,6 @@
 # Expletive Deleted
 
-Expletive Deleted transcribes audio and video locally with faster-whisper, identifies configured profanity from word-level timestamps, and censors those intervals with FFmpeg. The Phase 7 Electron desktop interface controls the local Python application service; this is not a browser-hosted application.
+Expletive Deleted transcribes audio and video locally with faster-whisper, identifies configured profanity from word-level timestamps, and censors those intervals with FFmpeg. The Electron desktop interface controls the local Python application service; this is not a browser-hosted application.
 
 Windows is the current application target. The processing engine remains portable, but macOS and Linux packaging are future work.
 
@@ -41,7 +41,7 @@ The root Python commands remain as compatibility entry points. New backend code 
 - FFmpeg and FFprobe
 - Disk space for source media, output media, and Whisper model downloads
 
-The repository bootstrap installs Python packages in a local `.venv`. FFmpeg and the Whisper model follow the reviewed dependency-plan workflow described below.
+The Windows installer contains the Electron application and first-party Python backend. It does not redistribute Python, Python packages, FFmpeg, or Whisper models. Python 3.9 or later must be installed before first launch; the app then presents inspectable, user-approved plans for the remaining processing dependencies. Repository source builds use a local `.venv`.
 
 User media and transcripts default to `Documents\Expletive Deleted`. Internal settings use `%LOCALAPPDATA%\ExpletiveDeleted\settings.ini`. Runtime assets explicitly retrieved through the desktop setup flow use `%LOCALAPPDATA%\ExpletiveDeleted\dependencies` and `%LOCALAPPDATA%\ExpletiveDeleted\models`; they are not written into the packaged application or user-media folders.
 

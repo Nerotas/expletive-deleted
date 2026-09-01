@@ -1,0 +1,37 @@
+appId: com.profanity-censor.desktop
+productName: Expletive Deleted
+asar: true
+directories:
+  output: release
+files:
+  - out/**/*
+  - package.json
+extraResources:
+  - from: ../backend
+    to: app-backend/backend
+    filter:
+      - "**/*.py"
+  - from: ../scripts
+    to: app-backend/scripts
+    filter:
+      - "**/*.py"
+  - from: ../resources
+    to: app-backend/resources
+    filter:
+      - "*.txt"
+  - from: ../requirements.txt
+    to: app-backend/requirements.txt
+win:
+  icon: src/assets/profanity-censor-icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+  artifactName: Expletive-Deleted-Setup-${version}-${arch}.${ext}
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Expletive Deleted
+  deleteAppDataOnUninstall: false

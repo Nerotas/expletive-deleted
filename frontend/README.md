@@ -19,7 +19,12 @@ npm run typecheck
 npm run lint
 npm run build
 npm run smoke
+npm run package:dir
+npm run smoke:package
+npm run package:win
 ```
+
+`package:dir` creates `release/win-unpacked` for packaged-runtime testing. `package:win` creates the assisted x64 NSIS installer in `release/`. The package contains Electron and first-party Python sources only; required third-party runtimes and models remain under the explicit setup policy. The installed app locates Python 3.9+ through `CENSOR_PYTHON`, the Windows `py` launcher, or `python`.
 
 ## Renderer architecture
 
@@ -44,4 +49,5 @@ npm run smoke
 - Import, export, migration, validation, and restore-defaults behavior remain backend-owned. Restore requires explicit renderer confirmation.
 
 The existing `com.profanity-censor.desktop` Windows AppUserModelID, private `profanity-censor:*` IPC channels, and `window.profanityCensor` preload API remain stable compatibility identifiers. They are not displayed as the product name and changing them would split existing OS/protocol identity without a functional benefit.
+
 - The Dictionary displays the durable user path and policy metadata; processing loads the same complete policy at job start.
