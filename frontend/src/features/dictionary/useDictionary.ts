@@ -4,6 +4,18 @@ import { desktopClient, type DesktopClient } from '../../services/desktop-client
 import type { DictionaryAction, DictionaryTarget, ReviewResult } from '../../types/domain'
 import { errorMessage } from '../../utils/format'
 
+const DICTIONARY_LOAD_TIMEOUT_MS = 15_000
+
+function loadDictionary(client: DesktopClient) {
+  return new Promise<Awaited<ReturnType<DesktopClient['getDictionary']>>>((resolve, reject) => {
+    const timeout = globalThis.setTimeout(() => {
+      reject(new Error('The censor dictionary did not respond. Retry, or restart the desktop application.'))
+    }, DICTIONARY_LOAD_TIMEOUT_MS)
+
+    client.getDictionary().then(resolve, reject).finally(() => globalThis.clearTimeout(timeout))
+  })
+}
+
 type DictionaryOptions = {
   client?: DesktopClient
   enabled?: boolean
@@ -21,7 +33,7 @@ export function useDictionary({
   const queryClient = useQueryClient()
   const query = useQuery({
     queryKey: ['dictionary'],
-    queryFn: () => client.getDictionary(),
+    queryFn: () => loadDictionary(client),
     enabled,
   })
 

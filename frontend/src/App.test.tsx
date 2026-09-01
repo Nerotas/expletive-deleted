@@ -251,7 +251,8 @@ describe('desktop application renderer', () => {
     await waitFor(() => expect(desktopClient.exportDictionary).toHaveBeenCalledWith('C:\\backup\\export.json'))
   })
 
-  it('does not present a pending Dictionary request as an empty policy', () => {
+  it('turns a stalled Dictionary request into a retryable error', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
     vi.mocked(desktopClient.getDictionary).mockImplementationOnce(
       () => new Promise(() => undefined),
     )
@@ -260,6 +261,9 @@ describe('desktop application renderer', () => {
 
     expect(screen.getByText('Loading censor dictionary')).toBeInTheDocument()
     expect(screen.queryByText('No words configured.')).not.toBeInTheDocument()
+    await act(() => vi.advanceTimersByTimeAsync(15_000))
+    expect(await screen.findByRole('button', { name: 'Retry' })).toBeInTheDocument()
+    expect(screen.getByText(/censor dictionary did not respond/i)).toBeInTheDocument()
   })
 
   it('submits each explicit row action with its required mode', async () => {
