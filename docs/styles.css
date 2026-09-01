@@ -44,6 +44,7 @@ h1 { max-width: 620px; margin: 0; font-size: clamp(54px, 8vw, 96px); line-height
 .button.secondary { border-color: rgba(255, 255, 255, .58); color: white; }
 .button.secondary:hover { border-color: white; background: rgba(255, 255, 255, .1); }
 .hero-note { margin: 14px 0 0; color: #9bb5c3; font-size: 12px; }
+.hero-note a { margin-left: 8px; color: white; font-weight: 800; text-underline-offset: 3px; }
 .promise { width: min(1180px, calc(100% - 40px)); min-height: 128px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); border-bottom: 1px solid var(--line); }
 .promise div { padding: 30px clamp(18px, 3vw, 38px); display: flex; flex-direction: column; gap: 3px; border-right: 1px solid var(--line); }
 .promise div:last-child { border-right: 0; }
@@ -84,7 +85,9 @@ h1 { max-width: 620px; margin: 0; font-size: clamp(54px, 8vw, 96px); line-height
 .closing { padding: clamp(84px, 12vw, 150px) 24px; display: flex; flex-direction: column; align-items: center; text-align: center; background: var(--blue); }
 .closing img { margin-bottom: 22px; }
 .closing h2 { max-width: 760px; }
-.closing .button { margin-top: 18px; }
+.closing-actions { margin-top: 18px; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+.button.support { border-color: var(--ink); background: transparent; color: var(--ink); }
+.button.support:hover { background: var(--ink); color: white; }
 footer { min-height: 100px; padding: 24px max(24px, calc((100vw - 1180px) / 2)); display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 24px; background: var(--navy-deep); color: white; }
 footer > p { color: #8faab8; font-size: 11px; }
 footer nav { justify-self: end; }
@@ -115,6 +118,8 @@ footer nav { justify-self: end; }
   h1 { font-size: 50px; }
   .hero-copy { font-size: 18px; }
   .hero-actions { flex-direction: column; align-items: stretch; }
+  .hero-note a { display: block; width: max-content; margin: 7px 0 0; }
+  .closing-actions { width: 100%; flex-direction: column; }
   .privacy-points p { grid-template-columns: 1fr; gap: 4px; }
   .product-view { padding-left: 20px; padding-right: 20px; }
   footer nav { gap: 18px; }
