@@ -19,7 +19,6 @@ on:
 
 permissions:
   contents: write
-  pull-requests: read
 
 concurrency:
   group: release-main
@@ -59,9 +58,9 @@ jobs:
           $bump = $env:MANUAL_BUMP
 
           if ('${{ github.event_name }}' -eq 'pull_request') {
-            $versionChanged = gh pr view '${{ github.event.pull_request.number }}' --repo '${{ github.repository }}' --json files --jq 'any(.files[]; .path == "frontend/package.json")'
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            $bump = if ($versionChanged -eq 'true') { 'none' } else { 'patch' }
+            $currentVersion = node -p "require('./frontend/package.json').version"
+            gh release view "v$currentVersion" --repo '${{ github.repository }}' *> $null
+            $bump = if ($LASTEXITCODE -eq 0) { 'patch' } else { 'none' }
           }
 
           Push-Location frontend
@@ -84,6 +83,7 @@ jobs:
             "published=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
             Write-Host "Preparing version $version with bump mode $bump."
           }
+          exit 0
 
       - name: Set up Python
         if: steps.version.outputs.published != 'true'
