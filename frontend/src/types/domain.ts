@@ -99,19 +99,40 @@ export type Capabilities = {
 
 export type DictionaryTarget = 'censor' | 'exclude'
 export type DictionaryAction = 'add' | 'remove'
+export type DictionarySource = 'default' | 'user' | 'imported'
+export type DictionarySort = 'value' | 'added_at' | 'source'
+export type SortDirection = 'asc' | 'desc'
 
-export type DictionaryInfo = {
+export type DictionarySummary = {
   dictionary_path: string
   schema_version: number
   seeded_from_default_version: number
   words_count: number
-  words: string[]
   exclusions_count: number
-  exclusions: string[]
-  discovered_count: number
-  discovered: string[]
   changed?: boolean
 }
+
+export type DictionaryInfo = Pick<
+  DictionarySummary,
+  'dictionary_path' | 'schema_version' | 'seeded_from_default_version'
+>
+
+export type DictionaryEntry = {
+  value: string
+  added_at: string
+  source: DictionarySource
+}
+
+export type DictionaryEntryPage = {
+  target: DictionaryTarget
+  items: DictionaryEntry[]
+  total: number
+  page: number
+  page_size: number
+  total_pages: number
+}
+
+export type DiscoveredWords = { words: string[] }
 
 export type ReviewCandidate = {
   word: string

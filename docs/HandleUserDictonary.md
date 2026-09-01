@@ -79,11 +79,18 @@ Store the user's durable profanity configuration beneath:
 %LOCALAPPDATA%\ExpletiveDeleted\dictionary\
 ```
 
-Recommended file:
+Durable stores:
 
 ```text
-%LOCALAPPDATA%\ExpletiveDeleted\dictionary\profanity.json
+%LOCALAPPDATA%\ExpletiveDeleted\dictionary\censored.json
+%LOCALAPPDATA%\ExpletiveDeleted\dictionary\exclusions.json
+%LOCALAPPDATA%\ExpletiveDeleted\dictionary\discovered.json
 ```
+
+`censored.json` and `exclusions.json` are independently readable policy stores.
+`discovered.json` is an independently persisted review queue. The combined
+`profanity.json` format is retained only for migration and portable import/export;
+it is not the live source of truth.
 
 This is application configuration/state rather than user media, so LocalAppData is appropriate.
 
@@ -109,14 +116,16 @@ Conceptual schema:
 
 ```json
 {
-  "schema_version": 1,
+      "schema_version": 2,
   "seeded_from_default_version": 1,
   "words": [
-    "example"
+            {
+                  "value": "example",
+                  "added_at": "1970-01-01T00:00:00Z",
+                  "source": "default"
+            }
   ],
-  "exclusions": [
-    "example exclusion"
-  ]
+      "exclusions": []
 }
 ```
 
@@ -151,7 +160,7 @@ effective dictionary
 When the application needs the profanity dictionary:
 
 ```text
-Does user profanity.json exist?
+Do split dictionary stores exist?
         │
         ├── YES
         │     ↓
@@ -165,7 +174,7 @@ Does user profanity.json exist?
               ↓
         otherwise seed from bundled defaults
               ↓
-        write user profanity.json
+      write censored.json and exclusions.json
               ↓
         load user dictionary
 ```
@@ -376,7 +385,9 @@ Electron should request and update dictionary data through the backend/service b
 Do not create API endpoints unnecessarily, but the service layer should conceptually support:
 
 ```text
-Get effective dictionary
+Get dictionary summary and counts
+Get one filtered, sorted, paginated category
+Discover unclassified transcript words independently
 Add/update/remove words
 Add/update/remove exclusions
 Restore defaults
@@ -389,7 +400,7 @@ Example metadata:
 
 ```json
 {
-  "schema_version": 1,
+      "schema_version": 2,
   "default_version": 1,
   "word_count": 123,
   "exclusion_count": 12,
@@ -398,6 +409,13 @@ Example metadata:
 ```
 
 The exact API contract should follow the project's existing service design.
+
+The dictionary page defaults to exclusions. Censored entries must not be requested or
+displayed until the user accepts the profanity warning. Paginate in the backend so the
+renderer receives only the selected category and page. Entry metadata uses:
+
+- `added_at`: an ISO 8601 UTC timestamp; bundled and migrated schema-1 entries use the Unix epoch.
+- `source`: `default`, `user`, or `imported`.
 
 ---
 
@@ -510,4 +528,9 @@ as:
 
 > **the user's dictionary**
 
-Once the user dictionary exists, it is authoritative until the user explicitly changes, imports, or resets it.
+Once the split user stores exist, they are authoritative until the user explicitly changes,
+imports, or resets them. Loading exclusions must not read or validate censored entries, and
+loading censored entries must not read or validate exclusions. Existing combined
+`profanity.json` files are migrated once into both stores. `discovered.json` starts empty
+when absent; processing and explicit transcript review add candidates directly without a
+dictionary-page transcript scan.

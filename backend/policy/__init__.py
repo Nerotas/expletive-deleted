@@ -3,6 +3,7 @@
 from .store import (
     DEFAULT_DICTIONARY_VERSION,
     POLICY_SCHEMA_VERSION,
+    PolicyEntry,
     PolicyFileError,
     PolicyStore,
     ProfanityPolicy,
@@ -12,6 +13,7 @@ from .store import (
 __all__ = [
     "DEFAULT_DICTIONARY_VERSION",
     "POLICY_SCHEMA_VERSION",
+    "PolicyEntry",
     "PolicyFileError",
     "PolicyStore",
     "ProfanityPolicy",

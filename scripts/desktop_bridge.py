@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import math
 import sys
 from collections.abc import Mapping
 from dataclasses import asdict
@@ -45,15 +46,29 @@ class DesktopBridge:
             return self.service.update_settings(params["settings"])
         if method == "capabilities.get":
             return self.service.get_capabilities()
-        if method == "dictionary.get":
-            return self._dictionary()
+        if method == "dictionary.summary":
+            return self._dictionary_summary()
+        if method == "dictionary.info":
+            return self.policy_store.info()
+        if method == "dictionary.entries":
+            target = params.get("target")
+            if target not in ("censor", "exclude"):
+                raise ValueError("Dictionary entries require a censor/exclude target")
+            return self._dictionary_entries(target, params)
+        if method == "dictionary.exclusions":
+            return self._dictionary_entries("exclude", params)
+        if method == "dictionary.censored":
+            return self._dictionary_entries("censor", params)
+        if method == "dictionary.discovered":
+            self.policy_store.initialize_discovered()
+            return {"words": list(self.policy_store.load_discovered())}
         if method == "dictionary.add":
             target = params.get("target")
             word = params.get("word")
             if target not in ("censor", "exclude") or not isinstance(word, str):
                 raise ValueError("Dictionary updates require a censor/exclude target and a word")
             policy, changed = self.policy_store.update(target, word, "add")
-            result = self._dictionary(policy)
+            result = self._dictionary_summary(policy)
             result["changed"] = changed
             return result
         if method == "dictionary.remove":
@@ -62,16 +77,16 @@ class DesktopBridge:
             if target not in ("censor", "exclude") or not isinstance(word, str):
                 raise ValueError("Dictionary updates require a censor/exclude target and a word")
             policy, changed = self.policy_store.update(target, word, "remove")
-            result = self._dictionary(policy)
+            result = self._dictionary_summary(policy)
             result["changed"] = changed
             return result
         if method == "dictionary.restore_defaults":
-            return self._dictionary(self.policy_store.restore_defaults())
+            return self._dictionary_summary(self.policy_store.restore_defaults())
         if method == "dictionary.import":
             source = params.get("source")
             if not isinstance(source, str) or not source.strip():
                 raise ValueError("Dictionary import requires a source file")
-            return self._dictionary(self.policy_store.import_dictionary(Path(source)))
+            return self._dictionary_summary(self.policy_store.import_dictionary(Path(source)))
         if method == "dictionary.export":
             destination = params.get("destination")
             if not isinstance(destination, str) or not destination.strip():
@@ -93,6 +108,7 @@ class DesktopBridge:
                 set(policy.censor_words),
                 set(policy.exclusions),
             )
+            self.policy_store.add_discovered({candidate["word"] for candidate in candidates})
             return {"source": str(source), "candidates": candidates}
         if method == "dependencies.plan":
             runtime_root = get_application_runtime_root()
@@ -266,21 +282,53 @@ class DesktopBridge:
     def close(self) -> None:
         self.service.close()
 
-    def _dictionary(self, policy: ProfanityPolicy | None = None) -> dict[str, object]:
-        policy = policy or self.policy_store.load()
-        words = sorted(policy.censor_words)
-        exclusions = sorted(policy.exclusions)
-        discovered = self._discovered_words(set(words), set(exclusions))
+    def _dictionary_summary(self, policy: ProfanityPolicy | None = None) -> dict[str, object]:
+        if policy is None:
+            return self.policy_store.summary()
         return {
             "dictionary_path": str(policy.overrides_path),
             "schema_version": policy.schema_version,
             "seeded_from_default_version": policy.seeded_from_default_version,
-            "words_count": len(words),
-            "words": words,
-            "exclusions_count": len(exclusions),
-            "exclusions": exclusions,
-            "discovered_count": len(discovered),
-            "discovered": discovered,
+            "words_count": len(policy.censor_words),
+            "exclusions_count": len(policy.exclusions),
+        }
+
+    def _dictionary_entries(
+        self,
+        target: str,
+        params: Mapping[str, Any],
+    ) -> dict[str, object]:
+        page = params.get("page", 1)
+        page_size = params.get("page_size", 25)
+        sort = params.get("sort", "value")
+        direction = params.get("direction", "asc")
+        search = params.get("search", "")
+        if isinstance(page, bool) or not isinstance(page, int) or page < 1:
+            raise ValueError("Dictionary page must be a positive integer")
+        if isinstance(page_size, bool) or not isinstance(page_size, int) or not 10 <= page_size <= 100:
+            raise ValueError("Dictionary page size must be between 10 and 100")
+        if sort not in ("value", "added_at", "source") or direction not in ("asc", "desc"):
+            raise ValueError("Dictionary sort is not supported")
+        if not isinstance(search, str):
+            raise ValueError("Dictionary search must be text")
+
+        entries = list(self.policy_store.load_entries(target))
+        normalized_search = search.strip().lower()
+        if normalized_search:
+            entries = [entry for entry in entries if normalized_search in entry.value]
+        entries.sort(
+            key=lambda entry: (getattr(entry, sort), entry.value),
+            reverse=direction == "desc",
+        )
+        total = len(entries)
+        start = (page - 1) * page_size
+        return {
+            "target": target,
+            "items": [asdict(entry) for entry in entries[start:start + page_size]],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": math.ceil(total / page_size),
         }
 
     @staticmethod
@@ -311,32 +359,6 @@ class DesktopBridge:
             "ffprobe_path": str(ffprobe_path),
             "version": ffmpeg.installed_version,
         }
-
-    def _discovered_words(self, censor_words: set[str], exclude_words: set[str]) -> list[str]:
-        transcripts_directory = getattr(
-            getattr(getattr(self.service, "settings", None), "directories", None),
-            "transcripts",
-            None,
-        )
-        if not isinstance(transcripts_directory, (str, Path)):
-            return []
-
-        discovered: set[str] = set()
-        try:
-            transcript_files = Path(transcripts_directory).glob("*-transcript.json")
-            for transcript in transcript_files:
-                try:
-                    words_data = json.loads(transcript.read_text(encoding="utf-8"))
-                    discovered.update(
-                        candidate["word"]
-                        for candidate in find_review_candidates(words_data, censor_words, exclude_words)
-                    )
-                except (OSError, TypeError, ValueError, ImportError):
-                    continue
-        except OSError:
-            return []
-        return sorted(discovered)
-
 
 def serve(
     bridge: DesktopBridge | None = None,

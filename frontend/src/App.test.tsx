@@ -7,7 +7,7 @@ import App from './App'
 import { createQueryClient } from './query-client'
 import { desktopClient } from './services/desktop-client'
 import type { Settings } from './types/domain'
-import { defaultSettings, emptyDictionary, readyCapabilities } from './test/fixtures'
+import { defaultSettings, emptyDictionary, emptyDictionaryPage, readyCapabilities } from './test/fixtures'
 
 function cloneSettings(settings: Settings): Settings {
   return structuredClone(settings)
@@ -36,7 +36,13 @@ describe('desktop application renderer', () => {
       return cloneSettings(persisted)
     })
     vi.spyOn(desktopClient, 'getCapabilities').mockResolvedValue(readyCapabilities)
-    vi.spyOn(desktopClient, 'getDictionary').mockResolvedValue(emptyDictionary)
+    vi.spyOn(desktopClient, 'getDictionaryInfo').mockResolvedValue(emptyDictionary)
+    vi.spyOn(desktopClient, 'getDictionaryExclusions').mockResolvedValue(emptyDictionaryPage)
+    vi.spyOn(desktopClient, 'getCensoredWords').mockResolvedValue({
+      ...emptyDictionaryPage,
+      target: 'censor',
+    })
+    vi.spyOn(desktopClient, 'getDiscoveredWords').mockResolvedValue({ words: [] })
     vi.spyOn(desktopClient, 'listLibrary').mockResolvedValue([])
     vi.spyOn(desktopClient, 'listArchive').mockResolvedValue([])
     vi.spyOn(desktopClient, 'listJobs').mockResolvedValue([])
@@ -195,24 +201,55 @@ describe('desktop application renderer', () => {
     ))
   })
 
-  it('shows the durable user dictionary in the Dictionary page', async () => {
-    vi.mocked(desktopClient.getDictionary).mockResolvedValueOnce({
-      dictionary_path: 'C:\\Users\\Parent\\AppData\\Local\\ExpletiveDeleted\\dictionary\\profanity.json',
-      schema_version: 1,
+  it('requires confirmation to reveal censored words while leaving exclusions visible', async () => {
+    vi.mocked(desktopClient.getDictionaryInfo).mockResolvedValueOnce({
+      dictionary_path: 'C:\\Users\\Parent\\AppData\\Local\\ExpletiveDeleted\\dictionary',
+      schema_version: 2,
       seeded_from_default_version: 1,
-      words_count: 2,
-      words: ['example-censor-one', 'example-censor-two'],
-      exclusions_count: 1,
-      exclusions: ['example-exclusion'],
-      discovered_count: 0,
-      discovered: [],
+    })
+    vi.mocked(desktopClient.getDictionaryExclusions).mockResolvedValue({
+      target: 'exclude',
+      items: [{ value: 'example-exclusion', added_at: '2026-09-01T12:00:00Z', source: 'user' }],
+      total: 1, page: 1, page_size: 25, total_pages: 1,
+    })
+    vi.mocked(desktopClient.getCensoredWords).mockResolvedValueOnce({
+      target: 'censor',
+      items: [
+        { value: 'example-censor-one', added_at: '1970-01-01T00:00:00Z', source: 'default' },
+        { value: 'example-censor-two', added_at: '2026-09-01T13:00:00Z', source: 'imported' },
+      ],
+      total: 2, page: 1, page_size: 25, total_pages: 1,
     })
 
+    const user = userEvent.setup()
     renderApp('/dictionary')
 
+    expect(await screen.findByText('example-exclusion')).toBeInTheDocument()
+    expect(screen.queryByText('example-censor-one')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Remove example-censor-one' })).not.toBeInTheDocument()
+    expect(screen.getByText('Format 2 · defaults 1')).toBeInTheDocument()
+    expect(screen.getByText('User')).toBeInTheDocument()
+    expect(desktopClient.getDictionaryExclusions).toHaveBeenCalledOnce()
+    expect(desktopClient.getCensoredWords).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: 'Censored words' }))
+    let confirmation = screen.getByRole('dialog', { name: 'Reveal censored words?' })
+    expect(screen.queryByText('example-censor-one')).not.toBeInTheDocument()
+    await user.click(within(confirmation).getByRole('button', { name: 'Cancel' }))
+    expect(desktopClient.getCensoredWords).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: 'Censored words' }))
+    confirmation = screen.getByRole('dialog', { name: 'Reveal censored words?' })
+    await user.click(within(confirmation).getByRole('button', { name: 'Reveal words' }))
     expect(await screen.findByText('example-censor-one')).toBeInTheDocument()
+    expect(desktopClient.getCensoredWords).toHaveBeenCalledOnce()
     expect(screen.getByText('example-censor-two')).toBeInTheDocument()
-    expect(screen.getByText('Format 1 · defaults 1')).toBeInTheDocument()
+    expect(screen.getByText('Default', { selector: 'td' })).toBeInTheDocument()
+    expect(screen.getByText('Imported')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Exclusions' }))
+    expect(screen.queryByText('example-censor-one')).not.toBeInTheDocument()
+    expect(await screen.findByText('example-exclusion')).toBeInTheDocument()
   })
 
   it('confirms restore and forwards selected dictionary import and export paths', async () => {
@@ -233,15 +270,19 @@ describe('desktop application renderer', () => {
     await waitFor(() => expect(desktopClient.exportDictionary).toHaveBeenCalledWith('C:\\backup\\export.json'))
   })
 
-  it('does not present a pending Dictionary request as an empty policy', () => {
-    vi.mocked(desktopClient.getDictionary).mockImplementationOnce(
+  it('turns a stalled Dictionary request into a retryable error', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.mocked(desktopClient.getDictionaryInfo).mockImplementationOnce(
       () => new Promise(() => undefined),
     )
 
     renderApp('/dictionary')
 
-    expect(screen.getByText('Loading censor dictionary')).toBeInTheDocument()
-    expect(screen.queryByText('No words configured.')).not.toBeInTheDocument()
+    expect(screen.getByText('Loading dictionary')).toBeInTheDocument()
+    expect(screen.queryByText('No matching entries.')).not.toBeInTheDocument()
+    await act(() => vi.advanceTimersByTimeAsync(15_000))
+    expect(await screen.findByRole('button', { name: 'Retry' })).toBeInTheDocument()
+    expect(screen.getByText(/censor dictionary did not respond/i)).toBeInTheDocument()
   })
 
   it('submits each explicit row action with its required mode', async () => {

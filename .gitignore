@@ -24,7 +24,6 @@ build/
 /frontend/node_modules/
 /frontend/dist/
 /frontend/dist-electron/
-/frontend/release/
 /frontend/out/
 /frontend/.vite/
 /frontend/.electron-vite/
@@ -40,6 +39,11 @@ electron-debug.log*
 *.tsbuildinfo
 
 # Windows Application Packaging
+/frontend/release/
+/frontend/win-unpacked/
+/frontend/builder-effective-config.yaml
+/frontend/Expletive-Deleted-Setup-*.exe
+/frontend/Expletive-Deleted-Setup-*.exe.blockmap
 *.exe.blockmap
 *.appx
 *.msix

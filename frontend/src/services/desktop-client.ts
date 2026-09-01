@@ -2,8 +2,12 @@ import type {
   Capabilities,
   ArchiveItem,
   DictionaryAction,
+  DictionaryEntryPage,
   DictionaryInfo,
+  DictionarySort,
+  DictionarySummary,
   DictionaryTarget,
+  DiscoveredWords,
   InstallPlan,
   ImportResult,
   Job,
@@ -30,12 +34,31 @@ export const desktopClient = {
   getSettings: () => invoke<Settings>('settings.get'),
   updateSettings: (settings: Settings) => invoke<Settings>('settings.update', { settings }),
   getCapabilities: () => invoke<Capabilities>('capabilities.get'),
-  getDictionary: () => invoke<DictionaryInfo>('dictionary.get'),
+  getDictionaryInfo: () => invoke<DictionaryInfo>('dictionary.info'),
+  getDictionaryExclusions: (
+    page: number,
+    pageSize: number,
+    sort: DictionarySort,
+    direction: 'asc' | 'desc',
+    search: string,
+  ) => invoke<DictionaryEntryPage>('dictionary.exclusions', {
+    page, page_size: pageSize, sort, direction, search,
+  }),
+  getCensoredWords: (
+    page: number,
+    pageSize: number,
+    sort: DictionarySort,
+    direction: 'asc' | 'desc',
+    search: string,
+  ) => invoke<DictionaryEntryPage>('dictionary.censored', {
+    page, page_size: pageSize, sort, direction, search,
+  }),
+  getDiscoveredWords: () => invoke<DiscoveredWords>('dictionary.discovered'),
   updateDictionary: (action: DictionaryAction, target: DictionaryTarget, word: string) =>
-    invoke<DictionaryInfo>(`dictionary.${action}`, { target, word }),
-  restoreDictionaryDefaults: () => invoke<DictionaryInfo>('dictionary.restore_defaults'),
+    invoke<DictionarySummary>(`dictionary.${action}`, { target, word }),
+  restoreDictionaryDefaults: () => invoke<DictionarySummary>('dictionary.restore_defaults'),
   importDictionary: (source: string) =>
-    invoke<DictionaryInfo>('dictionary.import', { source }),
+    invoke<DictionarySummary>('dictionary.import', { source }),
   exportDictionary: (destination: string) =>
     invoke<{ path: string }>('dictionary.export', { destination }),
   getReview: (source: string) => invoke<ReviewResult>('reviews.list', { source }),

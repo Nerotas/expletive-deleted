@@ -80,6 +80,19 @@ try {
   await window.getByRole('link', { name: 'Dictionary', exact: true }).click()
   await window.getByRole('heading', { name: 'Dictionary', exact: true }).waitFor()
   await window.getByText('User dictionary', { exact: true }).waitFor()
+  const exclusionsTab = window.getByRole('button', { name: /^Exclusions \(/ })
+  await exclusionsTab.waitFor()
+  if (await exclusionsTab.getAttribute('aria-pressed') !== 'true') {
+    throw new Error('Dictionary did not default to exclusions')
+  }
+  await window.getByRole('button', { name: 'Censored words', exact: true }).click()
+  const revealDialog = window.getByRole('dialog', { name: 'Reveal censored words?' })
+  await revealDialog.waitFor()
+  await revealDialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await revealDialog.waitFor({ state: 'detached' })
+  if (await exclusionsTab.getAttribute('aria-pressed') !== 'true') {
+    throw new Error('Cancelling the profanity warning changed the dictionary category')
+  }
   await window.screenshot({ path: path.join(results, 'desktop-dictionary.png'), fullPage: true })
 
   await window.setViewportSize({ width: 1060, height: 720 })
@@ -89,6 +102,7 @@ try {
   await restoreDialog.waitFor()
   await window.screenshot({ path: path.join(results, 'desktop-dictionary-dark.png'), fullPage: true })
   await restoreDialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await restoreDialog.waitFor({ state: 'detached' })
   await window.evaluate((theme) => {
     if (theme) document.documentElement.dataset.theme = theme
     else delete document.documentElement.dataset.theme

@@ -1,8 +1,26 @@
 import { useEffect, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { desktopClient, type DesktopClient } from '../../services/desktop-client'
-import type { DictionaryAction, DictionaryTarget, ReviewResult } from '../../types/domain'
+import type {
+  DictionaryAction,
+  DictionarySort,
+  DictionaryTarget,
+  ReviewResult,
+  SortDirection,
+} from '../../types/domain'
 import { errorMessage } from '../../utils/format'
+
+const DICTIONARY_LOAD_TIMEOUT_MS = 15_000
+const DICTIONARY_PAGE_SIZE = 25
+
+function withLoadTimeout<T>(request: Promise<T>) {
+  return new Promise<T>((resolve, reject) => {
+    const timeout = globalThis.setTimeout(() => {
+      reject(new Error('The censor dictionary did not respond. Retry, or restart the desktop application.'))
+    }, DICTIONARY_LOAD_TIMEOUT_MS)
+    request.then(resolve, reject).finally(() => globalThis.clearTimeout(timeout))
+  })
+}
 
 type DictionaryOptions = {
   client?: DesktopClient
@@ -18,37 +36,65 @@ export function useDictionary({
   onNotice,
 }: DictionaryOptions) {
   const [review, setReview] = useState<ReviewResult | null>(null)
+  const [target, setTarget] = useState<DictionaryTarget>('exclude')
+  const [page, setPage] = useState(1)
+  const [search, setSearch] = useState('')
+  const [sort, setSortState] = useState<DictionarySort>('value')
+  const [direction, setDirection] = useState<SortDirection>('asc')
+  const [censoredWordsRevealed, setCensoredWordsRevealed] = useState(false)
   const queryClient = useQueryClient()
-  const query = useQuery({
-    queryKey: ['dictionary'],
-    queryFn: () => client.getDictionary(),
+
+  const infoQuery = useQuery({
+    queryKey: ['dictionary', 'info'],
+    queryFn: () => withLoadTimeout(client.getDictionaryInfo()),
+    enabled,
+  })
+  const entriesQuery = useQuery({
+    queryKey: ['dictionary', 'entries', target, page, search, sort, direction],
+    queryFn: () => withLoadTimeout(target === 'exclude'
+      ? client.getDictionaryExclusions(page, DICTIONARY_PAGE_SIZE, sort, direction, search)
+      : client.getCensoredWords(page, DICTIONARY_PAGE_SIZE, sort, direction, search)),
+    enabled: enabled && (target === 'exclude' || censoredWordsRevealed),
+    placeholderData: keepPreviousData,
+  })
+  const discoveredQuery = useQuery({
+    queryKey: ['dictionary', 'discovered'],
+    queryFn: () => client.getDiscoveredWords(),
     enabled,
   })
 
   useEffect(() => {
-    if (query.error) onError(errorMessage(query.error))
-  }, [onError, query.error])
+    const error = infoQuery.error ?? entriesQuery.error ?? discoveredQuery.error
+    if (error) onError(errorMessage(error))
+  }, [discoveredQuery.error, entriesQuery.error, infoQuery.error, onError])
+
+  const refreshDictionary = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['dictionary', 'info'] }),
+      queryClient.invalidateQueries({ queryKey: ['dictionary', 'entries'] }),
+      queryClient.invalidateQueries({ queryKey: ['dictionary', 'discovered'] }),
+    ])
+  }
 
   const updateMutation = useMutation({
-    mutationFn: ({ target, word, action }: {
+    mutationFn: ({ target: destination, word, action }: {
       target: DictionaryTarget
       word: string
       action: DictionaryAction
-    }) => client.updateDictionary(action, target, word),
-    onSuccess: (dictionary, { target, word, action }) => {
-      queryClient.setQueryData(['dictionary'], dictionary)
+    }) => client.updateDictionary(action, destination, word),
+    onSuccess: async (_summary, { target: destination, word, action }) => {
       setReview((current) => current ? {
         ...current,
         candidates: current.candidates.filter(
           (candidate) => candidate.word !== word.trim().toLowerCase(),
         ),
       } : null)
+      await refreshDictionary()
       onNotice(
         action === 'add'
-          ? `Added ${word} to ${target === 'censor' ? 'censored words' : 'exclusions'}`
+          ? `Added ${word} to ${destination === 'censor' ? 'censored words' : 'exclusions'}`
           : `Removed ${word}`,
       )
-      return dictionary
     },
     onError: (reason) => onError(errorMessage(reason)),
   })
@@ -64,8 +110,9 @@ export function useDictionary({
       operation === 'restore'
         ? client.restoreDictionaryDefaults()
         : client.importDictionary(source!),
-    onSuccess: (dictionary, { operation }) => {
-      queryClient.setQueryData(['dictionary'], dictionary)
+    onSuccess: async (_summary, { operation }) => {
+      setPage(1)
+      await refreshDictionary()
       onNotice(operation === 'restore' ? 'Restored the default dictionary' : 'Imported dictionary')
     },
     onError: (reason) => onError(errorMessage(reason)),
@@ -78,38 +125,60 @@ export function useDictionary({
   })
 
   return {
-    // The query cache is the single renderer snapshot. Mutation responses update
-    // it above, while a later reload can still reveal policy-file changes.
-    dictionary: query.data ?? null,
+    info: infoQuery.data ?? null,
+    entries: entriesQuery.data ?? null,
+    discovered: discoveredQuery.data?.words ?? [],
     review,
-    loading: query.isLoading,
-    loadFailed: query.isError,
-    busy: query.isFetching || updateMutation.isPending || reviewMutation.isPending
-      || replaceMutation.isPending || exportMutation.isPending,
-    reload: async () => {
-      await query.refetch()
+    target,
+    page,
+    search,
+    sort,
+    direction,
+    censoredWordsRevealed,
+    loading: infoQuery.isLoading || entriesQuery.isLoading,
+    loadFailed: infoQuery.isError || entriesQuery.isError,
+    busy: infoQuery.isFetching || entriesQuery.isFetching || updateMutation.isPending
+      || reviewMutation.isPending || replaceMutation.isPending || exportMutation.isPending,
+    reload: refreshDictionary,
+    showExclusions: () => {
+      setTarget('exclude')
+      setPage(1)
+    },
+    revealCensoredWords: () => {
+      setCensoredWordsRevealed(true)
+      setTarget('censor')
+      setPage(1)
+    },
+    setPage,
+    setSearch: (value: string) => {
+      setSearch(value)
+      setPage(1)
+    },
+    setSort: (value: DictionarySort) => {
+      if (sort === value) setDirection((current) => current === 'asc' ? 'desc' : 'asc')
+      else {
+        setSortState(value)
+        setDirection('asc')
+      }
+      setPage(1)
     },
     updateDictionary: async (
-      target: DictionaryTarget,
+      destination: DictionaryTarget,
       word: string,
       action: DictionaryAction = 'add',
     ) => {
-      await updateMutation.mutateAsync({ target, word, action }).catch(() => undefined)
+      await updateMutation.mutateAsync({ target: destination, word, action }).catch(() => undefined)
     },
     restoreDefaults: async () => {
       await replaceMutation.mutateAsync({ operation: 'restore' }).catch(() => undefined)
     },
     importDictionary: async () => {
       const source = await client.selectDictionaryImport()
-      if (source) {
-        await replaceMutation.mutateAsync({ operation: 'import', source }).catch(() => undefined)
-      }
+      if (source) await replaceMutation.mutateAsync({ operation: 'import', source }).catch(() => undefined)
     },
     exportDictionary: async () => {
       const destination = await client.selectDictionaryExport()
-      if (destination) {
-        await exportMutation.mutateAsync(destination).catch(() => undefined)
-      }
+      if (destination) await exportMutation.mutateAsync(destination).catch(() => undefined)
     },
     openReview: async (source: string) => {
       await reviewMutation.mutateAsync(source).catch(() => undefined)

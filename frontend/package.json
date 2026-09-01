@@ -18,7 +18,11 @@
     "test:watch": "node scripts/test.mjs --watch",
     "typecheck": "tsc -b",
     "preview": "electron-vite preview",
-    "smoke": "npm run build && node scripts/smoke.mjs"
+    "smoke": "npm run build && node scripts/smoke.mjs",
+    "audit:package": "node scripts/audit-package.mjs",
+    "package:dir": "npm run build && node scripts/package-windows.mjs dir && npm run audit:package",
+    "package:win": "npm run build && node scripts/package-windows.mjs nsis && npm run audit:package",
+    "smoke:package": "node scripts/smoke-packaged.mjs"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "^5.3.0",
@@ -41,6 +45,7 @@
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^5.2.0",
     "electron": "^44.0.0",
+    "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
     "esbuild": "0.25.12",
     "eslint": "^10.9.0",

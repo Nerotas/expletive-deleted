@@ -67,6 +67,22 @@ jobs:
         working-directory: frontend
         run: npm run smoke
 
+      - name: Build Windows installer
+        working-directory: frontend
+        run: npm run package:win
+
+      - name: Smoke-test packaged application
+        working-directory: frontend
+        run: npm run smoke:package
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: expletive-deleted-windows-x64
+          path: frontend/release/Expletive-Deleted-Setup-*-x64.exe
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Upload smoke-test screenshots on failure
         if: failure()
         uses: actions/upload-artifact@v4

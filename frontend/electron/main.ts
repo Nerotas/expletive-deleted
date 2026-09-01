@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, shell, type IpcMainInvokeEve
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
+import { backendEnvironment, findBackendRoot, findPythonRuntime } from './backend-runtime.js'
 
 type BridgeResponse = { id: number; ok: true; result: unknown } | { id: number; ok: false; error: { message?: string } }
 
@@ -30,15 +31,25 @@ function rejectPending(message: string): void {
 
 function startBridge(): void {
   let root: string
+  let runtime: ReturnType<typeof findPythonRuntime>
   try {
-    root = findProjectRoot()
+    root = findBackendRoot({
+      isPackaged: app.isPackaged,
+      resourcesPath: process.resourcesPath,
+      appPath: app.getAppPath(),
+      cwd: process.cwd(),
+      moduleDirectory: __dirname,
+    })
+    runtime = findPythonRuntime(root, process.platform)
   } catch (error) {
     bridgeFailure = error instanceof Error ? error.message : String(error)
     return
   }
-  const venvPython = path.join(root, '.venv', 'Scripts', process.platform === 'win32' ? 'python.exe' : 'python')
-  bridge = spawn(existsSync(venvPython) ? venvPython : 'python', ['-m', 'scripts.desktop_bridge'], {
-    cwd: root, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true,
+  bridge = spawn(runtime.command, runtime.args, {
+    cwd: root,
+    env: backendEnvironment(),
+    stdio: ['pipe', 'pipe', 'pipe'],
+    windowsHide: true,
   })
   let stderr = ''
   bridge.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString() })
@@ -67,17 +78,6 @@ function startBridge(): void {
     bridgeFailure = stderr.trim() || `The local processing service stopped unexpectedly${code === null ? '' : ` (exit code ${code})`}.`
     rejectPending(bridgeFailure)
   })
-}
-
-function findProjectRoot(): string {
-  for (const start of [app.getAppPath(), process.cwd(), __dirname]) {
-    for (let candidate = path.resolve(start); ; candidate = path.dirname(candidate)) {
-      if (existsSync(path.join(candidate, 'scripts', 'desktop_bridge.py'))) return candidate
-      const parent = path.dirname(candidate)
-      if (parent === candidate) break
-    }
-  }
-  throw new Error('Could not find scripts/desktop_bridge.py. Start the desktop app from the repository checkout.')
 }
 
 function invoke(method: string, params?: Record<string, unknown>): Promise<unknown> {
