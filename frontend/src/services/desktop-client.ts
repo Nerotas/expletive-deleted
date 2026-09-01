@@ -3,6 +3,7 @@ import type {
   ArchiveItem,
   DictionaryAction,
   DictionaryEntryPage,
+  DictionaryInfo,
   DictionarySort,
   DictionarySummary,
   DictionaryTarget,
@@ -33,16 +34,24 @@ export const desktopClient = {
   getSettings: () => invoke<Settings>('settings.get'),
   updateSettings: (settings: Settings) => invoke<Settings>('settings.update', { settings }),
   getCapabilities: () => invoke<Capabilities>('capabilities.get'),
-  getDictionarySummary: () => invoke<DictionarySummary>('dictionary.summary'),
-  getDictionaryEntries: (
-    target: DictionaryTarget,
+  getDictionaryInfo: () => invoke<DictionaryInfo>('dictionary.info'),
+  getDictionaryExclusions: (
     page: number,
     pageSize: number,
     sort: DictionarySort,
     direction: 'asc' | 'desc',
     search: string,
-  ) => invoke<DictionaryEntryPage>('dictionary.entries', {
-    target, page, page_size: pageSize, sort, direction, search,
+  ) => invoke<DictionaryEntryPage>('dictionary.exclusions', {
+    page, page_size: pageSize, sort, direction, search,
+  }),
+  getCensoredWords: (
+    page: number,
+    pageSize: number,
+    sort: DictionarySort,
+    direction: 'asc' | 'desc',
+    search: string,
+  ) => invoke<DictionaryEntryPage>('dictionary.censored', {
+    page, page_size: pageSize, sort, direction, search,
   }),
   getDiscoveredWords: () => invoke<DiscoveredWords>('dictionary.discovered'),
   updateDictionary: (action: DictionaryAction, target: DictionaryTarget, word: string) =>

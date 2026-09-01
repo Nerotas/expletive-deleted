@@ -112,6 +112,11 @@ export type DictionarySummary = {
   changed?: boolean
 }
 
+export type DictionaryInfo = Pick<
+  DictionarySummary,
+  'dictionary_path' | 'schema_version' | 'seeded_from_default_version'
+>
+
 export type DictionaryEntry = {
   value: string
   added_at: string

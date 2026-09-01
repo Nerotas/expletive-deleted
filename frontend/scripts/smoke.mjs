@@ -85,10 +85,11 @@ try {
   if (await exclusionsTab.getAttribute('aria-pressed') !== 'true') {
     throw new Error('Dictionary did not default to exclusions')
   }
-  await window.getByRole('button', { name: /^Censored words \(/ }).click()
+  await window.getByRole('button', { name: 'Censored words', exact: true }).click()
   const revealDialog = window.getByRole('dialog', { name: 'Reveal censored words?' })
   await revealDialog.waitFor()
   await revealDialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await revealDialog.waitFor({ state: 'detached' })
   if (await exclusionsTab.getAttribute('aria-pressed') !== 'true') {
     throw new Error('Cancelling the profanity warning changed the dictionary category')
   }
@@ -101,6 +102,7 @@ try {
   await restoreDialog.waitFor()
   await window.screenshot({ path: path.join(results, 'desktop-dictionary-dark.png'), fullPage: true })
   await restoreDialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await restoreDialog.waitFor({ state: 'detached' })
   await window.evaluate((theme) => {
     if (theme) document.documentElement.dataset.theme = theme
     else delete document.documentElement.dataset.theme

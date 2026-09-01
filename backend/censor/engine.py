@@ -377,7 +377,8 @@ class ProfanityCensor:
             self.encoders,
             os.environ.get("CENSOR_VIDEO_ENCODER"),
         )
-        policy = (policy_store or PolicyStore()).load()
+        self.policy_store = policy_store or PolicyStore()
+        policy = self.policy_store.load()
         self.censor_words_file = policy.censor_defaults_path
         self.censor_words = set(policy.censor_words)
         self.exclusions_file = policy.exclusions_defaults_path
@@ -1055,6 +1056,11 @@ class ProfanityCensor:
             stage_started = time.perf_counter()
             # Detect profanity
             self.review_candidates = self.find_review_candidates(words_data)
+            policy_store = getattr(self, "policy_store", None)
+            if policy_store is not None:
+                policy_store.add_discovered({
+                    candidate["word"] for candidate in self.review_candidates
+                })
             if include_undiscovered:
                 self.report_potential_profanity(words_data)
             profane_segments = self.detect_profanity(words_data, include_undiscovered)

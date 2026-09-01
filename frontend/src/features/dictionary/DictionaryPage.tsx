@@ -9,17 +9,17 @@ import './dictionary.css'
 const SOURCE_LABELS = { default: 'Default', user: 'User', imported: 'Imported' } as const
 
 export function DictionaryPage({ controller }: { controller: DictionaryController }) {
-  const unavailable = !controller.loading && controller.loadFailed && !controller.summary
+  const unavailable = !controller.loading && controller.loadFailed && !controller.info
 
   return (
     <section className="page dictionary-page">
       <PageHeading title="Dictionary" subtitle="Review discoveries and manage the policy used for future jobs">
         <span className="dictionary-total">
-          {(controller.summary?.words_count ?? 0) + (controller.summary?.exclusions_count ?? 0)} classified
+          {`${controller.entries?.total ?? 0} ${controller.target === 'exclude' ? 'exclusions' : 'censored words'}`}
         </span>
       </PageHeading>
       <div className="dictionary-workspace">
-        {controller.loading && !controller.summary ? (
+        {controller.loading && !controller.info ? (
           <LoadingRow>Loading dictionary</LoadingRow>
         ) : unavailable ? (
           <div className="dictionary-unavailable">
@@ -65,11 +65,11 @@ function DictionaryEditor({ controller }: { controller: DictionaryController }) 
           Add
         </button>
       </div>
-      {controller.summary && (
+      {controller.info && (
         <div className="policy-storage">
           <strong>User dictionary</strong>
-          <span title={controller.summary.dictionary_path}>{controller.summary.dictionary_path}</span>
-          <small>{`Format ${controller.summary.schema_version} · defaults ${controller.summary.seeded_from_default_version}`}</small>
+          <span title={controller.info.dictionary_path}>{controller.info.dictionary_path}</span>
+          <small>{`Format ${controller.info.schema_version} · defaults ${controller.info.seeded_from_default_version}`}</small>
           <div className="dictionary-actions">
             <button className="button secondary" disabled={controller.busy} onClick={() => void controller.importDictionary()}>Import</button>
             <button className="button secondary" disabled={controller.busy} onClick={() => void controller.exportDictionary()}>Export</button>
@@ -89,14 +89,14 @@ function DictionaryEditor({ controller }: { controller: DictionaryController }) 
             aria-pressed={controller.target === 'exclude'}
             onClick={controller.showExclusions}
           >
-            {`Exclusions (${controller.summary?.exclusions_count ?? 0})`}
+            {`Exclusions${controller.target === 'exclude' ? ` (${controller.entries?.total ?? 0})` : ''}`}
           </button>
           <button
             type="button"
             aria-pressed={controller.target === 'censor'}
             onClick={selectCensored}
           >
-            {`Censored words (${controller.summary?.words_count ?? 0})`}
+            {`Censored words${controller.target === 'censor' ? ` (${controller.entries?.total ?? 0})` : ''}`}
           </button>
         </div>
         <label className="dictionary-search">

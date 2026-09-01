@@ -44,16 +44,16 @@ export function useDictionary({
   const [censoredWordsRevealed, setCensoredWordsRevealed] = useState(false)
   const queryClient = useQueryClient()
 
-  const summaryQuery = useQuery({
-    queryKey: ['dictionary', 'summary'],
-    queryFn: () => withLoadTimeout(client.getDictionarySummary()),
+  const infoQuery = useQuery({
+    queryKey: ['dictionary', 'info'],
+    queryFn: () => withLoadTimeout(client.getDictionaryInfo()),
     enabled,
   })
   const entriesQuery = useQuery({
     queryKey: ['dictionary', 'entries', target, page, search, sort, direction],
-    queryFn: () => withLoadTimeout(
-      client.getDictionaryEntries(target, page, DICTIONARY_PAGE_SIZE, sort, direction, search),
-    ),
+    queryFn: () => withLoadTimeout(target === 'exclude'
+      ? client.getDictionaryExclusions(page, DICTIONARY_PAGE_SIZE, sort, direction, search)
+      : client.getCensoredWords(page, DICTIONARY_PAGE_SIZE, sort, direction, search)),
     enabled: enabled && (target === 'exclude' || censoredWordsRevealed),
     placeholderData: keepPreviousData,
   })
@@ -64,13 +64,13 @@ export function useDictionary({
   })
 
   useEffect(() => {
-    const error = summaryQuery.error ?? entriesQuery.error ?? discoveredQuery.error
+    const error = infoQuery.error ?? entriesQuery.error ?? discoveredQuery.error
     if (error) onError(errorMessage(error))
-  }, [discoveredQuery.error, entriesQuery.error, onError, summaryQuery.error])
+  }, [discoveredQuery.error, entriesQuery.error, infoQuery.error, onError])
 
   const refreshDictionary = async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['dictionary', 'summary'] }),
+      queryClient.invalidateQueries({ queryKey: ['dictionary', 'info'] }),
       queryClient.invalidateQueries({ queryKey: ['dictionary', 'entries'] }),
       queryClient.invalidateQueries({ queryKey: ['dictionary', 'discovered'] }),
     ])
@@ -125,7 +125,7 @@ export function useDictionary({
   })
 
   return {
-    summary: summaryQuery.data ?? null,
+    info: infoQuery.data ?? null,
     entries: entriesQuery.data ?? null,
     discovered: discoveredQuery.data?.words ?? [],
     review,
@@ -135,9 +135,9 @@ export function useDictionary({
     sort,
     direction,
     censoredWordsRevealed,
-    loading: summaryQuery.isLoading || entriesQuery.isLoading,
-    loadFailed: summaryQuery.isError || entriesQuery.isError,
-    busy: summaryQuery.isFetching || entriesQuery.isFetching || updateMutation.isPending
+    loading: infoQuery.isLoading || entriesQuery.isLoading,
+    loadFailed: infoQuery.isError || entriesQuery.isError,
+    busy: infoQuery.isFetching || entriesQuery.isFetching || updateMutation.isPending
       || reviewMutation.isPending || replaceMutation.isPending || exportMutation.isPending,
     reload: refreshDictionary,
     showExclusions: () => {

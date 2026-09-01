@@ -79,11 +79,18 @@ Store the user's durable profanity configuration beneath:
 %LOCALAPPDATA%\ExpletiveDeleted\dictionary\
 ```
 
-Recommended file:
+Durable stores:
 
 ```text
-%LOCALAPPDATA%\ExpletiveDeleted\dictionary\profanity.json
+%LOCALAPPDATA%\ExpletiveDeleted\dictionary\censored.json
+%LOCALAPPDATA%\ExpletiveDeleted\dictionary\exclusions.json
+%LOCALAPPDATA%\ExpletiveDeleted\dictionary\discovered.json
 ```
+
+`censored.json` and `exclusions.json` are independently readable policy stores.
+`discovered.json` is an independently persisted review queue. The combined
+`profanity.json` format is retained only for migration and portable import/export;
+it is not the live source of truth.
 
 This is application configuration/state rather than user media, so LocalAppData is appropriate.
 
@@ -153,7 +160,7 @@ effective dictionary
 When the application needs the profanity dictionary:
 
 ```text
-Does user profanity.json exist?
+Do split dictionary stores exist?
         │
         ├── YES
         │     ↓
@@ -167,7 +174,7 @@ Does user profanity.json exist?
               ↓
         otherwise seed from bundled defaults
               ↓
-        write user profanity.json
+      write censored.json and exclusions.json
               ↓
         load user dictionary
 ```
@@ -521,4 +528,9 @@ as:
 
 > **the user's dictionary**
 
-Once the user dictionary exists, it is authoritative until the user explicitly changes, imports, or resets it.
+Once the split user stores exist, they are authoritative until the user explicitly changes,
+imports, or resets them. Loading exclusions must not read or validate censored entries, and
+loading censored entries must not read or validate exclusions. Existing combined
+`profanity.json` files are migrated once into both stores. `discovered.json` starts empty
+when absent; processing and explicit transcript review add candidates directly without a
+dictionary-page transcript scan.

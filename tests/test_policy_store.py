@@ -35,7 +35,8 @@ class PolicyStoreTests(unittest.TestCase):
 
             self.assertEqual(policy.censor_words, {"default-censor"})
             self.assertEqual(policy.exclusions, {"default-exclusion"})
-            self.assertTrue(store.path.exists())
+            self.assertTrue(store.censor_path.exists())
+            self.assertTrue(store.exclusions_path.exists())
 
     def test_user_changes_are_atomic_snapshots_and_do_not_mutate_defaults(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -46,15 +47,16 @@ class PolicyStoreTests(unittest.TestCase):
 
             policy, changed = store.update("censor", "custom word", "add")
 
-            payload = json.loads(store.path.read_text(encoding="utf-8"))
+            censor_payload = json.loads(store.censor_path.read_text(encoding="utf-8"))
+            exclusion_payload = json.loads(store.exclusions_path.read_text(encoding="utf-8"))
             self.assertTrue(changed)
             self.assertIn("custom word", policy.censor_words)
             self.assertEqual(
-                [(entry["value"], entry["source"]) for entry in payload["words"]],
+                [(entry["value"], entry["source"]) for entry in censor_payload["entries"]],
                 [("custom word", "user"), ("default-censor", "default")],
             )
             self.assertEqual(
-                [(entry["value"], entry["source"]) for entry in payload["exclusions"]],
+                [(entry["value"], entry["source"]) for entry in exclusion_payload["entries"]],
                 [("default-exclusion", "default")],
             )
             self.assertEqual(
@@ -80,7 +82,7 @@ class PolicyStoreTests(unittest.TestCase):
 
             self.assertNotIn("default-censor", policy.censor_words)
             self.assertNotIn("new-default", policy.censor_words)
-            self.assertEqual(json.loads(store.path.read_text(encoding="utf-8"))["words"], [])
+            self.assertEqual(json.loads(store.censor_path.read_text(encoding="utf-8"))["entries"], [])
 
     def test_classification_is_mutually_exclusive(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -99,7 +101,7 @@ class PolicyStoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary_directory:
             store = self.create_store(Path(temporary_directory))
             store.update("censor", "first", "add")
-            prior = store.path.read_text(encoding="utf-8")
+            prior = store.censor_path.read_text(encoding="utf-8")
 
             with (
                 patch("backend.policy.store.os.replace", side_effect=OSError("disk unavailable")),
@@ -107,7 +109,7 @@ class PolicyStoreTests(unittest.TestCase):
             ):
                 store.update("censor", "second", "add")
 
-            self.assertEqual(store.path.read_text(encoding="utf-8"), prior)
+            self.assertEqual(store.censor_path.read_text(encoding="utf-8"), prior)
             self.assertEqual(list(store.path.parent.glob("*.tmp")), [])
 
     def test_malformed_policy_is_actionable_and_never_silently_ignored(self):

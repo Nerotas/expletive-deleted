@@ -36,8 +36,12 @@ describe('desktop application renderer', () => {
       return cloneSettings(persisted)
     })
     vi.spyOn(desktopClient, 'getCapabilities').mockResolvedValue(readyCapabilities)
-    vi.spyOn(desktopClient, 'getDictionarySummary').mockResolvedValue(emptyDictionary)
-    vi.spyOn(desktopClient, 'getDictionaryEntries').mockResolvedValue(emptyDictionaryPage)
+    vi.spyOn(desktopClient, 'getDictionaryInfo').mockResolvedValue(emptyDictionary)
+    vi.spyOn(desktopClient, 'getDictionaryExclusions').mockResolvedValue(emptyDictionaryPage)
+    vi.spyOn(desktopClient, 'getCensoredWords').mockResolvedValue({
+      ...emptyDictionaryPage,
+      target: 'censor',
+    })
     vi.spyOn(desktopClient, 'getDiscoveredWords').mockResolvedValue({ words: [] })
     vi.spyOn(desktopClient, 'listLibrary').mockResolvedValue([])
     vi.spyOn(desktopClient, 'listArchive').mockResolvedValue([])
@@ -198,27 +202,24 @@ describe('desktop application renderer', () => {
   })
 
   it('requires confirmation to reveal censored words while leaving exclusions visible', async () => {
-    vi.mocked(desktopClient.getDictionarySummary).mockResolvedValueOnce({
-      dictionary_path: 'C:\\Users\\Parent\\AppData\\Local\\ExpletiveDeleted\\dictionary\\profanity.json',
+    vi.mocked(desktopClient.getDictionaryInfo).mockResolvedValueOnce({
+      dictionary_path: 'C:\\Users\\Parent\\AppData\\Local\\ExpletiveDeleted\\dictionary',
       schema_version: 2,
       seeded_from_default_version: 1,
-      words_count: 2,
-      exclusions_count: 1,
     })
-    vi.mocked(desktopClient.getDictionaryEntries).mockImplementation(async (target) => target === 'exclude'
-      ? {
-          target,
-          items: [{ value: 'example-exclusion', added_at: '2026-09-01T12:00:00Z', source: 'user' }],
-          total: 1, page: 1, page_size: 25, total_pages: 1,
-        }
-      : {
-          target,
-          items: [
-            { value: 'example-censor-one', added_at: '1970-01-01T00:00:00Z', source: 'default' },
-            { value: 'example-censor-two', added_at: '2026-09-01T13:00:00Z', source: 'imported' },
-          ],
-          total: 2, page: 1, page_size: 25, total_pages: 1,
-        })
+    vi.mocked(desktopClient.getDictionaryExclusions).mockResolvedValue({
+      target: 'exclude',
+      items: [{ value: 'example-exclusion', added_at: '2026-09-01T12:00:00Z', source: 'user' }],
+      total: 1, page: 1, page_size: 25, total_pages: 1,
+    })
+    vi.mocked(desktopClient.getCensoredWords).mockResolvedValueOnce({
+      target: 'censor',
+      items: [
+        { value: 'example-censor-one', added_at: '1970-01-01T00:00:00Z', source: 'default' },
+        { value: 'example-censor-two', added_at: '2026-09-01T13:00:00Z', source: 'imported' },
+      ],
+      total: 2, page: 1, page_size: 25, total_pages: 1,
+    })
 
     const user = userEvent.setup()
     renderApp('/dictionary')
@@ -228,23 +229,25 @@ describe('desktop application renderer', () => {
     expect(screen.queryByRole('button', { name: 'Remove example-censor-one' })).not.toBeInTheDocument()
     expect(screen.getByText('Format 2 · defaults 1')).toBeInTheDocument()
     expect(screen.getByText('User')).toBeInTheDocument()
-    expect(desktopClient.getDictionaryEntries).toHaveBeenCalledTimes(1)
+    expect(desktopClient.getDictionaryExclusions).toHaveBeenCalledOnce()
+    expect(desktopClient.getCensoredWords).not.toHaveBeenCalled()
 
-    await user.click(screen.getByRole('button', { name: 'Censored words (2)' }))
+    await user.click(screen.getByRole('button', { name: 'Censored words' }))
     let confirmation = screen.getByRole('dialog', { name: 'Reveal censored words?' })
     expect(screen.queryByText('example-censor-one')).not.toBeInTheDocument()
     await user.click(within(confirmation).getByRole('button', { name: 'Cancel' }))
-    expect(desktopClient.getDictionaryEntries).toHaveBeenCalledTimes(1)
+    expect(desktopClient.getCensoredWords).not.toHaveBeenCalled()
 
-    await user.click(screen.getByRole('button', { name: 'Censored words (2)' }))
+    await user.click(screen.getByRole('button', { name: 'Censored words' }))
     confirmation = screen.getByRole('dialog', { name: 'Reveal censored words?' })
     await user.click(within(confirmation).getByRole('button', { name: 'Reveal words' }))
     expect(await screen.findByText('example-censor-one')).toBeInTheDocument()
+    expect(desktopClient.getCensoredWords).toHaveBeenCalledOnce()
     expect(screen.getByText('example-censor-two')).toBeInTheDocument()
     expect(screen.getByText('Default', { selector: 'td' })).toBeInTheDocument()
     expect(screen.getByText('Imported')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Exclusions (1)' }))
+    await user.click(screen.getByRole('button', { name: 'Exclusions' }))
     expect(screen.queryByText('example-censor-one')).not.toBeInTheDocument()
     expect(await screen.findByText('example-exclusion')).toBeInTheDocument()
   })
@@ -269,7 +272,7 @@ describe('desktop application renderer', () => {
 
   it('turns a stalled Dictionary request into a retryable error', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
-    vi.mocked(desktopClient.getDictionarySummary).mockImplementationOnce(
+    vi.mocked(desktopClient.getDictionaryInfo).mockImplementationOnce(
       () => new Promise(() => undefined),
     )
 

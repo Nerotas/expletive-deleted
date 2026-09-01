@@ -27,21 +27,29 @@ class DurablePolicyStoreTests(unittest.TestCase):
             store = self.create_store(Path(temporary_directory))
 
             policy = store.load()
-            payload = json.loads(store.path.read_text(encoding="utf-8"))
+            censor_payload = json.loads(store.censor_path.read_text(encoding="utf-8"))
+            exclusion_payload = json.loads(store.exclusions_path.read_text(encoding="utf-8"))
 
             self.assertEqual(policy.censor_words, {"default-censor"})
             self.assertEqual(policy.exclusions, {"default-exclusion", "shared"})
             self.assertEqual(
-                payload,
+                censor_payload,
                 {
                     "schema_version": 2,
                     "seeded_from_default_version": 1,
-                    "words": [{
+                    "entries": [{
                         "value": "default-censor",
                         "added_at": "1970-01-01T00:00:00Z",
                         "source": "default",
                     }],
-                    "exclusions": [
+                },
+            )
+            self.assertEqual(
+                exclusion_payload,
+                {
+                    "schema_version": 2,
+                    "seeded_from_default_version": 1,
+                    "entries": [
                         {
                             "value": "default-exclusion",
                             "added_at": "1970-01-01T00:00:00Z",
@@ -73,11 +81,62 @@ class DurablePolicyStoreTests(unittest.TestCase):
             policy = store.load()
 
             self.assertEqual(policy.schema_version, 2)
+            self.assertTrue(store.censor_path.is_file())
+            self.assertTrue(store.exclusions_path.is_file())
             self.assertEqual(policy.censor_entries["existing-censor"].source, "default")
             self.assertEqual(
                 policy.exclusion_entries["existing-exclusion"].added_at,
                 "1970-01-01T00:00:00Z",
             )
+
+    def test_exclusions_load_without_validating_censored_entries(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            store = self.create_store(Path(temporary_directory))
+            store.load()
+            store.censor_path.write_text(
+                json.dumps({
+                    "schema_version": 2,
+                    "seeded_from_default_version": 1,
+                    "entries": [{"not": "a valid entry"}],
+                }),
+                encoding="utf-8",
+            )
+
+            entries = store.load_entries("exclude")
+
+            self.assertEqual(
+                [entry.value for entry in entries],
+                ["default-exclusion", "shared"],
+            )
+
+    def test_censored_entries_load_without_validating_exclusions(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            store = self.create_store(Path(temporary_directory))
+            store.load()
+            store.exclusions_path.write_text(
+                json.dumps({
+                    "schema_version": 2,
+                    "seeded_from_default_version": 1,
+                    "entries": [{"not": "a valid entry"}],
+                }),
+                encoding="utf-8",
+            )
+
+            entries = store.load_entries("censor")
+
+            self.assertEqual([entry.value for entry in entries], ["default-censor"])
+
+    def test_discovered_words_persist_and_are_removed_when_classified(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            store = self.create_store(root)
+            store.add_discovered({"candidate", "another"})
+
+            reloaded = self.create_store(root)
+            self.assertEqual(reloaded.load_discovered(), ("another", "candidate"))
+
+            reloaded.update("exclude", "candidate", "add")
+            self.assertEqual(reloaded.load_discovered(), ("another",))
 
     def test_existing_dictionary_does_not_reread_changed_or_missing_defaults(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -164,11 +223,14 @@ class DurablePolicyStoreTests(unittest.TestCase):
             store.load()
             invalid = root / "invalid.json"
             invalid.write_text('{"words":[]}', encoding="utf-8")
-            before = store.path.read_bytes()
+            before = (store.censor_path.read_bytes(), store.exclusions_path.read_bytes())
 
             with self.assertRaises(PolicyFileError):
                 store.import_dictionary(invalid)
-            self.assertEqual(store.path.read_bytes(), before)
+            self.assertEqual(
+                (store.censor_path.read_bytes(), store.exclusions_path.read_bytes()),
+                before,
+            )
 
             imported = root / "import.json"
             imported.write_text(
@@ -208,7 +270,7 @@ class DurablePolicyStoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary_directory:
             store = self.create_store(Path(temporary_directory))
             store.load()
-            prior = store.path.read_bytes()
+            prior = store.censor_path.read_bytes()
 
             with (
                 patch("backend.policy.store.os.replace", side_effect=OSError("disk unavailable")),
@@ -216,7 +278,7 @@ class DurablePolicyStoreTests(unittest.TestCase):
             ):
                 store.update("censor", "custom", "add")
 
-            self.assertEqual(store.path.read_bytes(), prior)
+            self.assertEqual(store.censor_path.read_bytes(), prior)
             self.assertEqual(list(store.path.parent.glob("*.tmp")), [])
 
 
