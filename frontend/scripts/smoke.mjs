@@ -80,7 +80,18 @@ try {
   await window.getByRole('link', { name: 'Dictionary', exact: true }).click()
   await window.getByRole('heading', { name: 'Dictionary', exact: true }).waitFor()
   await window.getByText('User dictionary', { exact: true }).waitFor()
-  await window.getByText('Censored words are hidden.', { exact: true }).waitFor()
+  const exclusionsTab = window.getByRole('button', { name: /^Exclusions \(/ })
+  await exclusionsTab.waitFor()
+  if (await exclusionsTab.getAttribute('aria-pressed') !== 'true') {
+    throw new Error('Dictionary did not default to exclusions')
+  }
+  await window.getByRole('button', { name: /^Censored words \(/ }).click()
+  const revealDialog = window.getByRole('dialog', { name: 'Reveal censored words?' })
+  await revealDialog.waitFor()
+  await revealDialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+  if (await exclusionsTab.getAttribute('aria-pressed') !== 'true') {
+    throw new Error('Cancelling the profanity warning changed the dictionary category')
+  }
   await window.screenshot({ path: path.join(results, 'desktop-dictionary.png'), fullPage: true })
 
   await window.setViewportSize({ width: 1060, height: 720 })

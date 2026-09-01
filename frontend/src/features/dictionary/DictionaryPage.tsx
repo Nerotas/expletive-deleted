@@ -101,9 +101,9 @@ function DictionaryEditor({ controller }: { controller: DictionaryController }) 
         </div>
         <label className="dictionary-search">
           <Search size={15} aria-hidden="true" />
-          <span className="sr-only">Search dictionary</span>
           <input
             type="search"
+            aria-label="Search dictionary"
             value={controller.search}
             placeholder="Search"
             onChange={(event) => controller.setSearch(event.target.value)}
