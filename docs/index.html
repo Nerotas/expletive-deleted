@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#102a3a">
+  <meta name="description" content="Expletive Deleted is a private Windows desktop app that finds unwanted language in audio and video and creates a censored copy locally.">
+  <meta property="og:title" content="Expletive Deleted">
+  <meta property="og:description" content="Censor unwanted language in family media without uploading your files.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://nerotas.github.io/expletive-deleted/">
+  <meta property="og:image" content="https://nerotas.github.io/expletive-deleted/app-queue.png">
+  <meta property="og:image:alt" content="The Expletive Deleted desktop queue">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="canonical" href="https://nerotas.github.io/expletive-deleted/">
+  <link rel="icon" href="app-icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&amp;family=Source+Serif+4:opsz,wght@8..60,700&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <title>Expletive Deleted | Local media censoring for Windows</title>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <a class="brand" href="#top" aria-label="Expletive Deleted home">
+      <img src="app-icon.svg" alt="" width="38" height="38">
+      <span>Expletive Deleted</span>
+    </a>
+    <nav aria-label="Primary navigation">
+      <a href="#how-it-works">How it works</a>
+      <a href="#privacy">Privacy</a>
+      <a href="#requirements">Setup</a>
+      <a class="nav-action" href="https://github.com/Nerotas/expletive-deleted/releases/latest">Download</a>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section class="hero" id="top" aria-labelledby="hero-title">
+      <div class="hero-media" role="img" aria-label="Expletive Deleted desktop application showing the media processing queue"></div>
+      <div class="hero-shade"></div>
+      <div class="hero-content">
+        <p class="release-label"><span></span>Windows desktop &middot; Version 1.0.0</p>
+        <h1 id="hero-title">Expletive Deleted</h1>
+        <p class="hero-copy">Censor unwanted language in audio and video without sending your family's media to the cloud.</p>
+        <div class="hero-actions">
+          <a class="button primary" href="https://github.com/Nerotas/expletive-deleted/releases/latest">Download for Windows <span aria-hidden="true">&darr;</span></a>
+          <a class="button secondary" href="https://github.com/Nerotas/expletive-deleted">View on GitHub</a>
+        </div>
+        <p class="hero-note">Free to download. Your originals stay yours.</p>
+      </div>
+    </section>
+
+    <section class="promise" aria-label="Product principles">
+      <div><strong>Local by default</strong><span>Media and transcripts stay on your computer.</span></div>
+      <div><strong>Review before sharing</strong><span>Transcribe first, then decide what should be censored.</span></div>
+      <div><strong>Originals protected</strong><span>Source files are retained unless you deliberately archive them.</span></div>
+    </section>
+
+    <section class="section workflow" id="how-it-works" aria-labelledby="workflow-title">
+      <div class="section-heading">
+        <p class="eyebrow">A clear, repeatable workflow</p>
+        <h2 id="workflow-title">From original to family-ready copy</h2>
+        <p>Expletive Deleted handles the technical pieces while keeping every important choice visible.</p>
+      </div>
+      <ol class="steps">
+        <li><span>01</span><div><h3>Add your media</h3><p>Drop an audio or video file into the Queue. Adding it never starts processing automatically.</p></div></li>
+        <li><span>02</span><div><h3>Transcribe and review</h3><p>Create a local transcript, review discovered words, and choose what to censor or ignore.</p></div></li>
+        <li><span>03</span><div><h3>Create a censored copy</h3><p>Mute detected intervals or use stereo dialogue cancellation, then review the finished file.</p></div></li>
+      </ol>
+    </section>
+
+    <section class="product-view" aria-labelledby="product-title">
+      <div class="product-copy">
+        <p class="eyebrow">Built for control</p>
+        <h2 id="product-title">See every file, job, and result</h2>
+        <p>The serial Queue shows what is ready, waiting, processing, transcribed, or finished. Nothing begins because a file happened to appear.</p>
+        <ul>
+          <li>Transcribe only for a safe first review</li>
+          <li>Transcribe and transcode when your policy is ready</li>
+          <li>Retry, retranscribe, or retranscode deliberately</li>
+        </ul>
+      </div>
+      <figure>
+        <img src="app-queue.png" alt="Expletive Deleted Queue showing local media controls and processing status" loading="lazy" width="1045" height="1033">
+        <figcaption>The native Windows Queue keeps processing state and source safety visible.</figcaption>
+      </figure>
+    </section>
+
+    <section class="privacy-band" id="privacy" aria-labelledby="privacy-title">
+      <div>
+        <p class="eyebrow">Private by design</p>
+        <h2 id="privacy-title">Your media does not need to leave home</h2>
+      </div>
+      <div class="privacy-points">
+        <p><strong>No media uploads</strong><span>Speech recognition and censorship run locally.</span></p>
+        <p><strong>No silent overwrites</strong><span>Destination conflicts stop with a clear error.</span></p>
+        <p><strong>No hidden cleanup</strong><span>Failed or cancelled jobs retain the source and remove incomplete output when safe.</span></p>
+        <p><strong>No false promises</strong><span>Automated transcription is not perfect, so finished media should be reviewed.</span></p>
+      </div>
+    </section>
+
+    <section class="section requirements" id="requirements" aria-labelledby="requirements-title">
+      <div class="section-heading">
+        <p class="eyebrow">Before your first file</p>
+        <h2 id="requirements-title">Guided setup, with you in control</h2>
+        <p>The Windows installer contains Expletive Deleted itself. Processing components are installed separately and verified during first-run setup.</p>
+      </div>
+      <div class="requirement-list">
+        <div><span>Required</span><strong>Python 3.9 or later</strong><p>Runs the local processing service.</p></div>
+        <div><span>Required</span><strong>FFmpeg and FFprobe</strong><p>Inspect media and create censored output.</p></div>
+        <div><span>Required</span><strong>faster-whisper and large-v3</strong><p>Provide local speech recognition and word timing.</p></div>
+      </div>
+      <p class="consent-note">The app checks each component, explains what is missing, and asks for approval before any supported retrieval. FFmpeg, Python processing packages, and Whisper models are not bundled in the installer.</p>
+    </section>
+
+    <section class="closing" aria-labelledby="closing-title">
+      <img src="app-icon.svg" alt="" width="84" height="84">
+      <p class="eyebrow">Expletive Deleted 1.0.0</p>
+      <h2 id="closing-title">Make a copy you can share with confidence.</h2>
+      <p>Keep the original. Choose the words. Review the result.</p>
+      <a class="button primary" href="https://github.com/Nerotas/expletive-deleted/releases/latest">Get the Windows release</a>
+    </section>
+  </main>
+
+  <footer>
+    <a class="brand footer-brand" href="#top"><img src="app-icon.svg" alt="" width="30" height="30"><span>Expletive Deleted</span></a>
+    <p>Local media processing for Windows.</p>
+    <nav aria-label="Footer navigation">
+      <a href="https://github.com/Nerotas/expletive-deleted">Source</a>
+      <a href="https://github.com/Nerotas/expletive-deleted/releases">Releases</a>
+      <a href="https://github.com/Nerotas/expletive-deleted/issues">Issues</a>
+    </nav>
+  </footer>
+</body>
+</html>
