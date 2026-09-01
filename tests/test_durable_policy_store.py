@@ -16,7 +16,7 @@ class DurablePolicyStoreTests(unittest.TestCase):
         censor_path.write_text("default-censor\nshared\n", encoding="utf-8")
         exclusions_path.write_text("default-exclusion\nshared\n", encoding="utf-8")
         return PolicyStore(
-            root / "dictionary" / "profanity.json",
+            root / "dictionary",
             censor_defaults_path=censor_path,
             exclusions_defaults_path=exclusions_path,
         )
@@ -237,7 +237,7 @@ class DurablePolicyStoreTests(unittest.TestCase):
                 store.update("censor", "custom", "add")
 
             self.assertEqual(store.censor_path.read_bytes(), prior)
-            self.assertEqual(list(store.path.parent.glob("*.tmp")), [])
+            self.assertEqual(list(store.directory.glob("*.tmp")), [])
 
 
 if __name__ == "__main__":

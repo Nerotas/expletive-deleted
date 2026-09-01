@@ -30,8 +30,8 @@ The beige colors are okay, but I much prefer a light blue scheme to give the app
 
 Complete. The application now has dedicated icon assets in `frontend/src/assets`:
 
-- `profanity-censor-icon.ico` for the Windows desktop application.
-- `profanity-censor-icon.svg` for scalable UI and favicon use.
+- `expletive-deleted-icon.ico` for the Windows desktop application.
+- `expletive-deleted-icon.svg` for scalable UI and favicon use.
 
 ## About
 

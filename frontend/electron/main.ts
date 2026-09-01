@@ -11,8 +11,8 @@ let bridge: ChildProcessWithoutNullStreams | undefined
 let requestId = 0
 let bridgeFailure: string | undefined
 const pending = new Map<number, { resolve: (value: unknown) => void; reject: (reason: Error) => void }>()
-const APPLICATION_ID = 'com.profanity-censor.desktop'
-const APPLICATION_ICON = 'profanity-censor-icon.ico'
+const APPLICATION_ID = 'com.expletive-deleted.desktop'
+const APPLICATION_ICON = 'expletive-deleted-icon.ico'
 
 function resolveApplicationIcon(): string | undefined {
   const candidates = [
@@ -112,12 +112,12 @@ if (process.platform === 'win32') app.setAppUserModelId(APPLICATION_ID)
 app.whenReady().then(() => {
   if (!process.env.ELECTRON_RENDERER_URL) Menu.setApplicationMenu(null)
   startBridge()
-  ipcMain.handle('profanity-censor:invoke', (_event: IpcMainInvokeEvent, method: string, params?: Record<string, unknown>) => invoke(method, params))
-  ipcMain.handle('profanity-censor:select-directory', async (_event: IpcMainInvokeEvent, defaultPath?: string) => {
+  ipcMain.handle('expletive-deleted:invoke', (_event: IpcMainInvokeEvent, method: string, params?: Record<string, unknown>) => invoke(method, params))
+  ipcMain.handle('expletive-deleted:select-directory', async (_event: IpcMainInvokeEvent, defaultPath?: string) => {
     const result = await dialog.showOpenDialog(window!, { defaultPath, properties: ['openDirectory', 'createDirectory'] })
     return result.canceled ? undefined : result.filePaths[0]
   })
-  ipcMain.handle('profanity-censor:select-file', async (_event: IpcMainInvokeEvent, defaultPath?: string) => {
+  ipcMain.handle('expletive-deleted:select-file', async (_event: IpcMainInvokeEvent, defaultPath?: string) => {
     const result = await dialog.showOpenDialog(window!, {
       defaultPath,
       properties: ['openFile'],
@@ -127,21 +127,21 @@ app.whenReady().then(() => {
     })
     return result.canceled ? undefined : result.filePaths[0]
   })
-  ipcMain.handle('profanity-censor:select-dictionary-import', async () => {
+  ipcMain.handle('expletive-deleted:select-dictionary-import', async () => {
     const result = await dialog.showOpenDialog(window!, {
       properties: ['openFile'],
       filters: [{ name: 'Expletive Deleted dictionary', extensions: ['json'] }],
     })
     return result.canceled ? undefined : result.filePaths[0]
   })
-  ipcMain.handle('profanity-censor:select-dictionary-export', async () => {
+  ipcMain.handle('expletive-deleted:select-dictionary-export', async () => {
     const result = await dialog.showSaveDialog(window!, {
       defaultPath: 'expletive-deleted-dictionary.json',
       filters: [{ name: 'Expletive Deleted dictionary', extensions: ['json'] }],
     })
     return result.canceled ? undefined : result.filePath
   })
-  ipcMain.handle('profanity-censor:open-external', async (_event: IpcMainInvokeEvent, value: string) => {
+  ipcMain.handle('expletive-deleted:open-external', async (_event: IpcMainInvokeEvent, value: string) => {
     const url = new URL(value)
     if (url.protocol !== 'https:') throw new Error('Only secure project links can be opened')
     await shell.openExternal(url.toString())

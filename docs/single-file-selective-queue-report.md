@@ -36,11 +36,11 @@ The desktop Dictionary and processing pipeline use the same complete, durable po
 - `resources/profanity_censor_words.txt` supplies the default censored words.
 - `resources/profanity_exclusions.txt` supplies the default exclusions.
 
-On first use, these files seed `%LOCALAPPDATA%\ExpletiveDeleted\dictionary\profanity.json`. This versioned JSON document contains all censored words and exclusions. It is staged, verified, and atomically replaced; the resource files are never edited by the application. Existing legacy `policy.json` deltas are materialized once, and new shipped defaults do not alter an existing user dictionary.
+On first use, these files seed `%LOCALAPPDATA%\ExpletiveDeleted\dictionary\censored.json` and `exclusions.json`. Discovered review words are persisted independently in `discovered.json`. Each live store is staged, verified, and atomically replaced; the resource files are never edited by the application. New shipped defaults do not alter an existing user dictionary.
 
 There is no renderer-owned dictionary. The Dictionary page identifies the durable user-policy location, supports backend-owned import/export, and confirms before copying current factory defaults over it. It shows a loading state instead of temporarily presenting a pending request as an empty policy. Its query cache remains the only renderer snapshot, so reloading reflects the latest atomic backend policy.
 
-Backend regressions cover seeding, persistence, migration, reset, import/export, malformed data, and interrupted writes. Renderer regressions verify durable metadata and confirmation before restore.
+Backend regressions cover seeding, persistence, reset, import/export, malformed data, split-store isolation, and interrupted writes. Renderer regressions verify durable metadata and confirmation before restore.
 
 ## Queue and bridge architecture
 

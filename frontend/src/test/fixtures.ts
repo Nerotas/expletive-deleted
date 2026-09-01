@@ -1,4 +1,4 @@
-import type { Capabilities, DictionaryEntryPage, DictionarySummary, Settings } from '../types/domain'
+import type { Capabilities, DictionaryEntryPage, DictionaryMutationResult, Settings } from '../types/domain'
 
 export const defaultSettings: Settings = {
   schema_version: 1,
@@ -33,7 +33,7 @@ export const readyCapabilities: Capabilities = {
   video_encoders: ['libx264'],
 }
 
-export const emptyDictionary: DictionarySummary = {
+export const emptyDictionary: DictionaryMutationResult = {
   dictionary_path: 'profanity.json',
   schema_version: 2,
   seeded_from_default_version: 1,

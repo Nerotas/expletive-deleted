@@ -7,7 +7,7 @@ from .store import (
     PolicyFileError,
     PolicyStore,
     ProfanityPolicy,
-    default_policy_path,
+    default_dictionary_directory,
 )
 
 __all__ = [
@@ -17,5 +17,5 @@ __all__ = [
     "PolicyFileError",
     "PolicyStore",
     "ProfanityPolicy",
-    "default_policy_path",
+    "default_dictionary_directory",
 ]

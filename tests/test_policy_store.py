@@ -20,7 +20,7 @@ class PolicyStoreTests(unittest.TestCase):
         censor_path.write_text(censor_words, encoding="utf-8")
         exclusions_path.write_text(exclusions, encoding="utf-8")
         return PolicyStore(
-            root / "dictionary" / "profanity.json",
+            root / "dictionary",
             censor_defaults_path=censor_path,
             exclusions_defaults_path=exclusions_path,
         )
@@ -94,7 +94,6 @@ class PolicyStoreTests(unittest.TestCase):
             self.assertNotIn("default-censor", moved.censor_words)
             self.assertIn("default-censor", restored.censor_words)
             self.assertNotIn("default-censor", restored.exclusions)
-            self.assertEqual(restored.overrides_count, 0)
 
     def test_failed_replace_preserves_existing_policy(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -109,7 +108,7 @@ class PolicyStoreTests(unittest.TestCase):
                 store.update("censor", "second", "add")
 
             self.assertEqual(store.censor_path.read_text(encoding="utf-8"), prior)
-            self.assertEqual(list(store.path.parent.glob("*.tmp")), [])
+            self.assertEqual(list(store.directory.glob("*.tmp")), [])
 
     def test_malformed_policy_is_actionable_and_never_silently_ignored(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -132,8 +131,7 @@ class PolicyStoreTests(unittest.TestCase):
                 exclusions=frozenset({"custom-exclusion"}),
                 censor_defaults_path=root / "censor.txt",
                 exclusions_defaults_path=root / "exclude.txt",
-                overrides_path=root / "policy.json",
-                overrides_count=2,
+                dictionary_path=root / "dictionary",
             )
             with (
                 patch("backend.censor.engine.find_ffmpeg", return_value="ffmpeg"),
@@ -153,7 +151,7 @@ class PolicyStoreTests(unittest.TestCase):
 
             self.assertEqual(censor.censor_words, {"custom-censor"})
             self.assertEqual(censor.exclude_words, {"custom-exclusion"})
-            self.assertEqual(censor.policy_file, root / "policy.json")
+            self.assertEqual(censor.dictionary_directory, root / "dictionary")
 
 
 if __name__ == "__main__":

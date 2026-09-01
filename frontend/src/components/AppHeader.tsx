@@ -9,7 +9,7 @@ import {
   SunIcon,
 } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
-import appIconUrl from '../assets/profanity-censor-icon.svg'
+import appIconUrl from '../assets/expletive-deleted-icon.svg'
 import { APPLICATION_DISPLAY_NAME } from '../constants/application'
 import type { Capabilities, Theme } from '../types/domain'
 

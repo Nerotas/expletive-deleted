@@ -103,7 +103,7 @@ export type DictionarySource = 'default' | 'user' | 'imported'
 export type DictionarySort = 'value' | 'added_at' | 'source'
 export type SortDirection = 'asc' | 'desc'
 
-export type DictionarySummary = {
+export type DictionaryMutationResult = {
   dictionary_path: string
   schema_version: number
   seeded_from_default_version: number
@@ -113,7 +113,7 @@ export type DictionarySummary = {
 }
 
 export type DictionaryInfo = Pick<
-  DictionarySummary,
+  DictionaryMutationResult,
   'dictionary_path' | 'schema_version' | 'seeded_from_default_version'
 >
 

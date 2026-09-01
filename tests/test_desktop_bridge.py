@@ -30,8 +30,7 @@ class DesktopBridgeTests(unittest.TestCase):
             exclusions=frozenset(exclusions),
             censor_defaults_path=root / "words.txt",
             exclusions_defaults_path=root / "exclusions.txt",
-            overrides_path=root / "policy.json",
-            overrides_count=0,
+            dictionary_path=root,
             censor_entries={
                 word: PolicyEntry(word, "1970-01-01T00:00:00Z", "default")
                 for word in censor_words
@@ -44,20 +43,19 @@ class DesktopBridgeTests(unittest.TestCase):
 
     def test_dictionary_inventory_seeds_complete_user_dictionary_from_defaults(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
-            dictionary_path = Path(temporary_directory) / "dictionary" / "profanity.json"
+            dictionary_path = Path(temporary_directory) / "dictionary"
             with patch.dict("os.environ", {}, clear=True):
                 policy_store = PolicyStore(dictionary_path)
                 bridge = DesktopBridge(MagicMock(), policy_store)
-                summary = bridge.handle("dictionary.summary")
+                info = bridge.handle("dictionary.info")
                 exclusions = bridge.handle("dictionary.exclusions", {"page_size": 100})
                 censored = bridge.handle("dictionary.censored", {"page_size": 100})
                 expected_words_path = get_profanity_censor_words_file()
                 expected_exclusions_path = get_profanity_exclusions_file()
 
-        self.assertEqual(Path(summary["dictionary_path"]), dictionary_path.parent.resolve())
-        self.assertEqual(summary["schema_version"], 2)
-        self.assertEqual(summary["seeded_from_default_version"], 1)
-        self.assertEqual(summary["words_count"], len(load_profanity_censor_words(expected_words_path)))
+        self.assertEqual(Path(info["dictionary_path"]), dictionary_path.resolve())
+        self.assertEqual(info["schema_version"], 2)
+        self.assertEqual(info["seeded_from_default_version"], 1)
         self.assertEqual(
             {entry["value"] for entry in exclusions["items"]},
             load_profanity_exclusions(expected_exclusions_path),
@@ -65,11 +63,15 @@ class DesktopBridgeTests(unittest.TestCase):
         self.assertEqual(censored["target"], "censor")
         self.assertGreater(censored["total"], 0)
 
-    def test_combined_dictionary_operation_is_not_available(self):
+    def test_removed_dictionary_compatibility_operations_are_not_available(self):
         bridge = DesktopBridge(MagicMock(), MagicMock())
 
-        with self.assertRaisesRegex(ValueError, "Unknown desktop bridge method"):
-            bridge.handle("dictionary.get")
+        for method in ("dictionary.get", "dictionary.summary", "dictionary.entries"):
+            with self.subTest(method=method), self.assertRaisesRegex(
+                ValueError,
+                "Unknown desktop bridge method",
+            ):
+                bridge.handle(method)
 
     def test_dictionary_portability_methods_use_policy_store(self):
         service = MagicMock()
@@ -147,23 +149,6 @@ class DesktopBridgeTests(unittest.TestCase):
         self.assertEqual(result["target"], "censor")
         self.assertEqual(result["items"][0]["value"], "blocked")
         policy_store.load_entries.assert_called_once_with("censor")
-
-    def test_dictionary_summary_does_not_scan_transcripts(self):
-        policy_store = MagicMock()
-        policy_store.summary.return_value = {
-            "dictionary_path": "C:/policy/policy.json",
-            "schema_version": 2,
-            "seeded_from_default_version": 1,
-            "words_count": 1,
-            "exclusions_count": 1,
-        }
-        bridge = DesktopBridge(MagicMock(), policy_store)
-
-        result = bridge.handle("dictionary.summary")
-
-        policy_store.load.assert_not_called()
-        self.assertEqual(result["words_count"], 1)
-        self.assertEqual(result["exclusions_count"], 1)
 
     def test_protocol_returns_library_and_correlates_request(self):
         service = MagicMock()

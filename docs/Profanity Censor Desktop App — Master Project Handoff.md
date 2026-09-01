@@ -1,4 +1,9 @@
-# Profanity Censor Desktop App — Master Project Handoff
+> **Obsolete historical planning document.** Current product identity, persistence, dependency,
+> and architecture decisions are defined by `AGENTS.md` and the active project documentation.
+> In particular, no old product state is migrated, settings use only `settings.ini`, and the
+> live dictionary uses three split stores. References below describe superseded planning.
+
+# Historical Desktop App Master Handoff
 
 ## Status
 

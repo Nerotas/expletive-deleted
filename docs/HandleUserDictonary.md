@@ -2,19 +2,15 @@
 
 ## Context
 
-The Expletive Deleted application currently has bundled/default profanity resources in the repository.
+The Expletive Deleted application has bundled profanity resources in the repository.
 
-The current implementation appears to use files under:
+Files under:
 
 ```text
 resources/
 ```
 
-as part of the live runtime dictionary.
-
-The existing `policy.json` stores user changes as deltas against those resource files, meaning the application must continue rereading the repository/default resources to reconstruct the effective profanity policy.
-
-That is not appropriate for the packaged desktop application.
+provide factory defaults, not the live runtime dictionary.
 
 When this application is distributed, users should not be expected to have or interact with the repository's `resources/` directory.
 
@@ -257,7 +253,7 @@ bundled defaults
       ↓
 copy
       ↓
-user profanity.json
+user dictionary stores
 ```
 
 ---
@@ -298,7 +294,7 @@ write temporary file
       ↓
 validate
       ↓
-replace existing profanity.json
+atomically replace each affected live store
 ```
 
 Use the appropriate safe/atomic replacement mechanism for the backend/platform.

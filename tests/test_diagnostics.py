@@ -15,7 +15,7 @@ class DiagnosticsTests(unittest.TestCase):
             root = Path(temporary_directory)
             settings = AppSettings.defaults(root)
             ensure_directories(settings.directories)
-            store = SettingsStore(root / "settings.json", settings)
+            store = SettingsStore(root / "settings.ini", settings)
             ready = DependencyStatus(
                 id="ready",
                 name="ready",
