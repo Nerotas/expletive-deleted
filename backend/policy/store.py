@@ -17,7 +17,7 @@ from backend.runtime import (
     load_profanity_exclusions,
     normalize_policy_word,
 )
-from backend.settings import default_app_data_root
+from backend.application_identity import prepare_app_data_root
 
 
 POLICY_SCHEMA_VERSION = 1
@@ -60,7 +60,7 @@ def default_policy_path(
     configured = environment.get("CENSOR_POLICY_FILE", "").strip()
     if configured:
         return Path(configured).expanduser().resolve()
-    return default_app_data_root(environment, home) / "policy.json"
+    return prepare_app_data_root(environment, home) / "policy.json"
 
 
 class PolicyStore:

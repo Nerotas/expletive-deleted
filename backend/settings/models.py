@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
+from backend.application_identity import get_documents_root
 from backend.runtime.paths import RuntimePaths
 
 
@@ -29,10 +30,7 @@ class SettingsValidationError(ValueError):
 
 def default_user_data_root(home: Path | None = None) -> Path:
     """Return the default user-visible working directory root."""
-    if home is None:
-        user_profile = os.environ.get("USERPROFILE", "").strip()
-        home = Path(user_profile) if user_profile else Path.home()
-    return (home.expanduser() / "Documents" / "Profanity Censor").resolve()
+    return get_documents_root(home)
 
 
 @dataclass(frozen=True)

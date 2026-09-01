@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Inspect and update persistent Profanity Censor settings."""
+"""Inspect and update persistent Expletive Deleted settings."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-# Profanity Censor Desktop
+# Expletive Deleted Desktop
 
 Electron hosts the React renderer in this directory. This is an installed desktop application, not a browser-hosted application.
 
@@ -40,5 +40,7 @@ npm run smoke
 ## Dictionary behavior
 
 - The resource text files are built-in defaults and are never edited by the renderer.
-- User classifications and removals are stored atomically in the backend-managed `%LOCALAPPDATA%\ProfanityCensor\policy.json` overlay.
+- User classifications and removals are stored atomically in the backend-managed `%LOCALAPPDATA%\ExpletiveDeleted\policy.json` overlay.
+
+The existing `com.profanity-censor.desktop` Windows AppUserModelID, private `profanity-censor:*` IPC channels, and `window.profanityCensor` preload API remain stable compatibility identifiers. They are not displayed as the product name and changing them would split existing OS/protocol identity without a functional benefit.
 - The Dictionary displays both built-in source paths and the user-policy path; processing resolves the same effective policy at job start.

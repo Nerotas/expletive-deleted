@@ -1,1 +1,1 @@
-"""Regression tests for the Profanity Censor backend."""
+"""Regression tests for the Expletive Deleted backend."""

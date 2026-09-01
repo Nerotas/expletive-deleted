@@ -6,6 +6,7 @@ import type { Capabilities, Settings, WhisperLibrary, WhisperModel } from '../..
 import { Field, SettingsSection } from './SettingsControls'
 import type { SettingsController } from './useSettingsController'
 import './settings.css'
+import { APPLICATION_DISPLAY_NAME } from '../../constants/application'
 
 type SettingsPageProps = {
   controller: SettingsController
@@ -291,7 +292,7 @@ export function SettingsPage({ controller, capabilities, checkingSystem, onCheck
 
         <SettingsSection title="About" description="Desktop application identity">
           <div className="about-setting">
-            <strong>Profanity Censor 0.1.0</strong>
+            <strong>{APPLICATION_DISPLAY_NAME} 0.1.0</strong>
             <span>Electron desktop · local processing · Windows</span>
           </div>
         </SettingsSection>

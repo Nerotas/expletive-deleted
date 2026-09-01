@@ -112,7 +112,7 @@ def collect_diagnostics(store: SettingsStore | None = None) -> list[DiagnosticRe
 
 
 def main() -> int:
-    print("Profanity Censor runtime diagnostics")
+    print("Expletive Deleted runtime diagnostics")
     print("=" * 36)
 
     results = collect_diagnostics()

@@ -81,7 +81,7 @@ The current accuracy baseline is `faster-whisper` with `large-v3`. A change to s
 
 ## Settings behavior
 
-- User settings live outside the repository in the platform application-data directory. On Windows the default is `%LOCALAPPDATA%\ProfanityCensor\settings.ini`.
+- User settings live outside the repository in the platform application-data directory. On Windows the default is `%LOCALAPPDATA%\ExpletiveDeleted\settings.ini`.
 - `config.example.ini` documents the schema; generated `settings.ini` and machine-specific paths must remain ignored by Git.
 - Writes must be validated and atomic. Preserve compatible settings across upgrades and make migrations explicit.
 - The renderer maintains separate persisted and draft snapshots. Editing a field must not save automatically or be overwritten by background polling.

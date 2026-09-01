@@ -6,6 +6,12 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
+from backend.application_identity import (
+    APP_DATA_DIRECTORY_NAME,
+    DISPLAY_NAME,
+    AppDataMigrationError,
+    prepare_app_data_root,
+)
 from backend.settings import (
     SETTINGS_SCHEMA_VERSION,
     AppSettings,
@@ -30,7 +36,7 @@ class SettingsModelTests(unittest.TestCase):
             home = Path(temporary_directory)
             settings = AppSettings.defaults(home)
 
-        root = home / "Documents" / "Profanity Censor"
+        root = home / "Documents" / "Expletive Deleted"
         self.assertEqual(settings.directories.input, root / "Ready")
         self.assertEqual(settings.directories.output, root / "Finished")
         self.assertEqual(settings.directories.archive, root / "Processed")
@@ -127,7 +133,81 @@ class SettingsModelTests(unittest.TestCase):
 class SettingsStoreTests(unittest.TestCase):
     def test_windows_app_data_default(self):
         root = default_app_data_root({"LOCALAPPDATA": "C:\\Users\\User\\AppData\\Local"})
-        self.assertEqual(root, Path("C:\\Users\\User\\AppData\\Local\\ProfanityCensor"))
+        self.assertEqual(root, Path("C:\\Users\\User\\AppData\\Local\\ExpletiveDeleted"))
+
+    def test_product_identity_uses_expletive_deleted_names(self):
+        self.assertEqual(DISPLAY_NAME, "Expletive Deleted")
+        self.assertEqual(APP_DATA_DIRECTORY_NAME, "ExpletiveDeleted")
+
+    def test_legacy_durable_state_is_copied_and_source_is_retained(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            local_app_data = Path(temporary_directory)
+            legacy_root = local_app_data / "Profanity Censor"
+            legacy_root.mkdir()
+            (legacy_root / "settings.ini").write_text("settings", encoding="utf-8")
+            (legacy_root / "policy.json").write_text('{"overrides": {"word": "censor"}}', encoding="utf-8")
+
+            root = prepare_app_data_root({"LOCALAPPDATA": str(local_app_data)})
+
+            self.assertEqual(root, local_app_data / "ExpletiveDeleted")
+            self.assertEqual((root / "settings.ini").read_text(encoding="utf-8"), "settings")
+            self.assertEqual((root / "policy.json").read_text(encoding="utf-8"), '{"overrides": {"word": "censor"}}')
+            self.assertTrue((legacy_root / "settings.ini").exists())
+            self.assertTrue((legacy_root / "policy.json").exists())
+
+    def test_existing_new_root_wins_over_legacy_state(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            local_app_data = Path(temporary_directory)
+            legacy_root = local_app_data / "Profanity Censor"
+            new_root = local_app_data / "ExpletiveDeleted"
+            legacy_root.mkdir()
+            new_root.mkdir()
+            (legacy_root / "settings.ini").write_text("legacy", encoding="utf-8")
+            (new_root / "settings.ini").write_text("current", encoding="utf-8")
+
+            root = prepare_app_data_root({"LOCALAPPDATA": str(local_app_data)})
+
+            self.assertEqual(root, new_root)
+            self.assertEqual((root / "settings.ini").read_text(encoding="utf-8"), "current")
+
+    def test_failed_migration_does_not_delete_legacy_data(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            local_app_data = Path(temporary_directory)
+            legacy_root = local_app_data / "Profanity Censor"
+            legacy_root.mkdir()
+            legacy_settings = legacy_root / "settings.ini"
+            legacy_settings.write_text("keep me", encoding="utf-8")
+
+            with (
+                patch("backend.application_identity.shutil.copy2", side_effect=OSError("disk unavailable")),
+                self.assertRaisesRegex(AppDataMigrationError, "disk unavailable"),
+            ):
+                prepare_app_data_root({"LOCALAPPDATA": str(local_app_data)})
+
+            self.assertEqual(legacy_settings.read_text(encoding="utf-8"), "keep me")
+            self.assertFalse((local_app_data / "ExpletiveDeleted").exists())
+
+    def test_migrated_settings_preserve_custom_media_directories(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            local_app_data = Path(temporary_directory)
+            legacy_root = local_app_data / "Profanity Censor"
+            custom_root = local_app_data / "Family Media"
+            defaults = AppSettings.defaults(local_app_data / "home")
+            customized = replace(
+                defaults,
+                directories=DirectorySettings(
+                    input=(custom_root / "Incoming").resolve(),
+                    output=(custom_root / "Share").resolve(),
+                    archive=(custom_root / "Originals").resolve(),
+                    transcripts=(custom_root / "Reviews").resolve(),
+                ),
+            )
+            SettingsStore(legacy_root / "settings.ini", defaults).save(customized)
+
+            root = prepare_app_data_root({"LOCALAPPDATA": str(local_app_data)})
+            loaded = SettingsStore(root / "settings.ini", defaults).load()
+
+            self.assertEqual(loaded.directories, customized.directories)
 
     def test_missing_file_initializes_an_ignored_ini_template(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

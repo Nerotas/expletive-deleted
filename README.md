@@ -1,6 +1,6 @@
-# Profanity Censor
+# Expletive Deleted
 
-Profanity Censor transcribes audio and video locally with faster-whisper, identifies configured profanity from word-level timestamps, and censors those intervals with FFmpeg. The Phase 7 Electron desktop interface controls the local Python application service; this is not a browser-hosted application.
+Expletive Deleted transcribes audio and video locally with faster-whisper, identifies configured profanity from word-level timestamps, and censors those intervals with FFmpeg. The Phase 7 Electron desktop interface controls the local Python application service; this is not a browser-hosted application.
 
 Windows is the current application target. The processing engine remains portable, but macOS and Linux packaging are future work.
 
@@ -43,7 +43,7 @@ The root Python commands remain as compatibility entry points. New backend code 
 
 The repository bootstrap installs Python packages in a local `.venv`. FFmpeg and the Whisper model follow the reviewed dependency-plan workflow described below.
 
-User media and transcripts default to `Documents\Profanity Censor`. Internal settings use the operating system's application-data location in an automatically created `settings.ini`. Runtime assets explicitly retrieved through the desktop setup flow use `%LOCALAPPDATA%\ExpletiveDeleted\dependencies` and `%LOCALAPPDATA%\ExpletiveDeleted\models`; they are not written into the packaged application or user-media folders.
+User media and transcripts default to `Documents\Expletive Deleted`. Internal settings use `%LOCALAPPDATA%\ExpletiveDeleted\settings.ini`. Runtime assets explicitly retrieved through the desktop setup flow use `%LOCALAPPDATA%\ExpletiveDeleted\dependencies` and `%LOCALAPPDATA%\ExpletiveDeleted\models`; they are not written into the packaged application or user-media folders.
 
 ## Prepare the Application
 
@@ -78,13 +78,13 @@ Use the same `plan` then `install --approve` flow with `--component ffmpeg` or `
 Windows defaults:
 
 ```text
-%USERPROFILE%\Documents\Profanity Censor\Ready
-%USERPROFILE%\Documents\Profanity Censor\Finished
-%USERPROFILE%\Documents\Profanity Censor\Processed
-%USERPROFILE%\Documents\Profanity Censor\Transcripts
+%USERPROFILE%\Documents\Expletive Deleted\Ready
+%USERPROFILE%\Documents\Expletive Deleted\Finished
+%USERPROFILE%\Documents\Expletive Deleted\Processed
+%USERPROFILE%\Documents\Expletive Deleted\Transcripts
 ```
 
-Settings are stored at `%LOCALAPPDATA%\ProfanityCensor\settings.ini` by default. The generated, machine-specific file is ignored by Git; [`config.example.ini`](config.example.ini) documents its schema.
+Settings are stored at `%LOCALAPPDATA%\ExpletiveDeleted\settings.ini` by default. On first use, known durable files from the legacy `%LOCALAPPDATA%\Profanity Censor` or `%LOCALAPPDATA%\ProfanityCensor` root are copied when the new root does not yet exist; legacy data is retained. The generated, machine-specific file is ignored by Git; [`config.example.ini`](config.example.ini) documents its schema.
 
 The advanced CLI setup retains its repository-local `whisper-cache/` default and prints the active path and size. The desktop setup flow instead uses its per-user managed model directory unless the user selects another verified cache in Settings.
 
@@ -158,13 +158,13 @@ Place a supported file in the configured `Ready` directory and inspect the Queue
 Start with report-only processing:
 
 ```powershell
-.\.venv\Scripts\python.exe backend_app.py process "$env:USERPROFILE\Documents\Profanity Censor\Ready\Movie.mkv" --mode report_only
+.\.venv\Scripts\python.exe backend_app.py process "$env:USERPROFILE\Documents\Expletive Deleted\Ready\Movie.mkv" --mode report_only
 ```
 
 After reviewing the transcript and detections, create censored output:
 
 ```powershell
-.\.venv\Scripts\python.exe backend_app.py process "$env:USERPROFILE\Documents\Profanity Censor\Ready\Movie.mkv" --mode censor
+.\.venv\Scripts\python.exe backend_app.py process "$env:USERPROFILE\Documents\Expletive Deleted\Ready\Movie.mkv" --mode censor
 ```
 
 The command returns the final job record and structured stage, progress, detection, completion, or error events. Jobs run serially. Press `Ctrl+C` to request cancellation; incomplete output is removed and the source remains untouched.
@@ -202,7 +202,7 @@ Review potentially profane words without creating output files or moving source 
 .\.venv\Scripts\python.exe batch_process.py --report-only
 ```
 
-The report lists words detected by the broader `better-profanity` vocabulary that are not in your effective policy, with occurrence counts and timestamps. Classify reviewed words from the desktop **Dictionary** page. User decisions are stored locally in `%LOCALAPPDATA%\ProfanityCensor\policy.json` and are applied to future desktop and CLI runs.
+The report lists words detected by the broader `better-profanity` vocabulary that are not in your effective policy, with occurrence counts and timestamps. Classify reviewed words from the desktop **Dictionary** page. User decisions are stored locally in `%LOCALAPPDATA%\ExpletiveDeleted\policy.json` and are applied to future desktop and CLI runs.
 
 The default censor run combines the shipped [censor defaults](resources/profanity_censor_words.txt), shipped [exclusions](resources/profanity_exclusions.txt), and the local user-policy overlay. It skips inputs with an existing output. Use these deliberate opt-in controls when needed:
 
@@ -328,7 +328,7 @@ Under `[Whisper]`, `Device = auto` and `ComputeType = auto` are the portable def
 
 The application service and batch workflow apply processing mode, device, stereo censor method, before/after padding, surround output, video output, and source archival settings. Batch CLI flags such as `--report-only`, `--censor-media`, `--censor-method`, `--archive-original`, and `--keep-original` override their matching settings for one run.
 
-The workflow does not use `better-profanity`'s broad built-in dictionary for normal censoring. The text files under `resources/` are immutable product defaults. User additions, exclusions, moves, and removals belong in the desktop **Dictionary**, which writes a versioned override document to `%LOCALAPPDATA%\ProfanityCensor\policy.json`. Writes are staged, verified, and atomically replaced.
+The workflow does not use `better-profanity`'s broad built-in dictionary for normal censoring. The text files under `resources/` are immutable product defaults. User additions, exclusions, moves, and removals belong in the desktop **Dictionary**, which writes a versioned override document to `%LOCALAPPDATA%\ExpletiveDeleted\policy.json`. Writes are staged, verified, and atomically replaced.
 
 The effective policy is recalculated whenever a job starts. New defaults shipped in an upgrade appear automatically, while explicit user removals remain removed. A word can be classified as censored, excluded, or removed, but never censored and excluded simultaneously.
 

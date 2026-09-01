@@ -2,7 +2,7 @@
 
 ## Context
 
-The Profanity Censor application does **not bundle FFmpeg, ffprobe, faster-whisper models, or other externally retrieved processing assets** with the application installer.
+The Expletive Deleted application does **not bundle FFmpeg, ffprobe, faster-whisper models, or other externally retrieved processing assets** with the application installer.
 
 The frontend already detects when required components are unavailable and shows a **System Ready** / missing-assets notification.
 
@@ -73,13 +73,13 @@ Suggested wording:
 ```text
 Get FFmpeg
 
-Profanity Censor requires FFmpeg to process media.
+Expletive Deleted requires FFmpeg to process media.
 
 If you continue, you are asking the application to retrieve FFmpeg
 from an external source and store it locally for use by this application.
 
 FFmpeg is a third-party project and is not developed or distributed
-as part of Profanity Censor.
+as part of Expletive Deleted.
 
 Source: <source>
 Install location: <local destination>
@@ -376,7 +376,7 @@ Keep three concepts separate:
 
 ```text
 Application package
-    → Profanity Censor itself
+  → Expletive Deleted itself
 
 Application-managed runtime directory
     → user-approved third-party processing components

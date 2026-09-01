@@ -291,7 +291,7 @@ class DesktopBridgeTests(unittest.TestCase):
 
         self.assertEqual(
             result["actions"][0]["destination"],
-            "/tmp/expletive-runtime/models/whisper",
+            str((Path("/tmp/expletive-runtime") / "models" / "whisper").resolve()),
         )
         service.update_settings.assert_not_called()
 

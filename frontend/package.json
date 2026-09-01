@@ -1,5 +1,6 @@
 {
-  "name": "profanity-censor-desktop",
+  "name": "expletive-deleted-desktop",
+  "productName": "Expletive Deleted",
   "private": true,
   "version": "0.1.0",
   "description": "Local desktop application for transcribing and censoring profanity in media.",

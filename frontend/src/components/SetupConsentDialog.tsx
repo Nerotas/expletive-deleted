@@ -1,6 +1,7 @@
 import { Download, ExternalLink } from 'lucide-react'
 import { desktopClient } from '../services/desktop-client'
 import type { InstallPlan } from '../types/domain'
+import { APPLICATION_DISPLAY_NAME } from '../constants/application'
 
 type SetupConsentDialogProps = {
   plan: InstallPlan
@@ -32,7 +33,7 @@ export function SetupConsentDialog({
         <span className="eyebrow">Your approval is required</span>
         <h2 id="setup-consent-title">Retrieve required components?</h2>
         <p>
-          Profanity Censor needs these third-party components for local media processing.
+          {APPLICATION_DISPLAY_NAME} needs these third-party components for local media processing.
           Continuing asks the application to retrieve and store them on this computer.
         </p>
 
@@ -56,7 +57,7 @@ export function SetupConsentDialog({
         </div>
 
         <p className="setup-third-party-note">
-          These projects are not developed or distributed as part of Profanity Censor.
+          These projects are not developed or distributed as part of {APPLICATION_DISPLAY_NAME}.
           Canceling leaves the current setup unchanged.
         </p>
         <div className="modal-actions">
