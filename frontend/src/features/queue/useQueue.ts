@@ -9,6 +9,7 @@ const RUNNING_STATUSES = new Set(['transcribing', 'censoring', 'verifying'])
 
 type QueueOptions = {
   client?: DesktopClient
+  enabled?: boolean
   onError: (message: string) => void
   onNotice: (message: string) => void
   pollInterval?: number
@@ -27,6 +28,7 @@ async function loadQueue(client: DesktopClient) {
 
 export function useQueue({
   client = desktopClient,
+  enabled = true,
   onError,
   onNotice,
   pollInterval = 1_500,
@@ -34,7 +36,8 @@ export function useQueue({
   const query = useQuery({
     queryKey: ['queue'],
     queryFn: () => loadQueue(client),
-    refetchInterval: pollInterval,
+    enabled,
+    refetchInterval: enabled ? pollInterval : false,
   })
 
   useEffect(() => {

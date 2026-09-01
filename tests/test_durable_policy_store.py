@@ -19,7 +19,6 @@ class DurablePolicyStoreTests(unittest.TestCase):
             root / "dictionary" / "profanity.json",
             censor_defaults_path=censor_path,
             exclusions_defaults_path=exclusions_path,
-            legacy_path=root / "policy.json",
         )
 
     def test_first_load_seeds_complete_dictionary_from_defaults(self):
@@ -64,31 +63,6 @@ class DurablePolicyStoreTests(unittest.TestCase):
                 },
             )
 
-    def test_schema_one_dictionary_is_migrated_with_default_metadata(self):
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            store = self.create_store(Path(temporary_directory))
-            store.path.parent.mkdir(parents=True)
-            store.path.write_text(
-                json.dumps({
-                    "schema_version": 1,
-                    "seeded_from_default_version": 1,
-                    "words": ["existing-censor"],
-                    "exclusions": ["existing-exclusion"],
-                }),
-                encoding="utf-8",
-            )
-
-            policy = store.load()
-
-            self.assertEqual(policy.schema_version, 2)
-            self.assertTrue(store.censor_path.is_file())
-            self.assertTrue(store.exclusions_path.is_file())
-            self.assertEqual(policy.censor_entries["existing-censor"].source, "default")
-            self.assertEqual(
-                policy.exclusion_entries["existing-exclusion"].added_at,
-                "1970-01-01T00:00:00Z",
-            )
-
     def test_exclusions_load_without_validating_censored_entries(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             store = self.create_store(Path(temporary_directory))
@@ -108,6 +82,17 @@ class DurablePolicyStoreTests(unittest.TestCase):
                 [entry.value for entry in entries],
                 ["default-exclusion", "shared"],
             )
+
+    def test_first_exclusion_load_does_not_create_censored_store(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            store = self.create_store(Path(temporary_directory))
+
+            entries = store.load_entries("exclude")
+
+            self.assertGreater(len(entries), 0)
+            self.assertTrue(store.exclusions_path.is_file())
+            self.assertFalse(store.censor_path.exists())
+            self.assertFalse(store.discovered_path.exists())
 
     def test_censored_entries_load_without_validating_exclusions(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -169,41 +154,6 @@ class DurablePolicyStoreTests(unittest.TestCase):
                 "1970-01-01T00:00:00Z",
             )
 
-    def test_legacy_overrides_are_materialized_without_modifying_source(self):
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            root = Path(temporary_directory)
-            store = self.create_store(root)
-            legacy_payload = {
-                "schema_version": 1,
-                "overrides": {
-                    "custom-censor": "censor",
-                    "custom-exclusion": "exclude",
-                    "default-censor": "none",
-                    "default-exclusion": "censor",
-                },
-            }
-            store.legacy_path.write_text(json.dumps(legacy_payload), encoding="utf-8")
-            source_before = store.legacy_path.read_bytes()
-
-            policy = store.load()
-
-            self.assertEqual(policy.censor_words, {"custom-censor", "default-exclusion"})
-            self.assertEqual(policy.exclusions, {"custom-exclusion", "shared"})
-            self.assertEqual(store.legacy_path.read_bytes(), source_before)
-
-    def test_failed_legacy_migration_leaves_source_and_destination_untouched(self):
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            root = Path(temporary_directory)
-            store = self.create_store(root)
-            store.legacy_path.write_text('{"schema_version":1,"overrides":[]}', encoding="utf-8")
-            source_before = store.legacy_path.read_bytes()
-
-            with self.assertRaisesRegex(PolicyFileError, "overrides must be an object"):
-                store.load()
-
-            self.assertFalse(store.path.exists())
-            self.assertEqual(store.legacy_path.read_bytes(), source_before)
-
     def test_restore_defaults_uses_current_factory_dictionary(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             store = self.create_store(Path(temporary_directory))
@@ -236,10 +186,18 @@ class DurablePolicyStoreTests(unittest.TestCase):
             imported.write_text(
                 json.dumps(
                     {
-                        "schema_version": 1,
+                        "schema_version": 2,
                         "seeded_from_default_version": 1,
-                        "words": ["portable-censor"],
-                        "exclusions": ["portable-exclusion"],
+                        "words": [{
+                            "value": "portable-censor",
+                            "added_at": "1970-01-01T00:00:00Z",
+                            "source": "default",
+                        }],
+                        "exclusions": [{
+                            "value": "portable-exclusion",
+                            "added_at": "1970-01-01T00:00:00Z",
+                            "source": "default",
+                        }],
                     }
                 ),
                 encoding="utf-8",

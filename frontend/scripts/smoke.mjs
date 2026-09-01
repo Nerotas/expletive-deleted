@@ -79,7 +79,15 @@ try {
 
   await window.getByRole('link', { name: 'Dictionary', exact: true }).click()
   await window.getByRole('heading', { name: 'Dictionary', exact: true }).waitFor()
-  await window.getByText('User dictionary', { exact: true }).waitFor()
+  const dictionaryReady = window.getByText('User dictionary', { exact: true })
+  const dictionaryError = window.getByRole('alert')
+  const dictionaryOutcome = await Promise.race([
+    dictionaryReady.waitFor().then(() => 'ready'),
+    dictionaryError.waitFor().then(() => 'error'),
+  ])
+  if (dictionaryOutcome === 'error') {
+    throw new Error(`Dictionary failed to load: ${await dictionaryError.innerText()}`)
+  }
   const exclusionsTab = window.getByRole('button', { name: /^Exclusions \(/ })
   await exclusionsTab.waitFor()
   if (await exclusionsTab.getAttribute('aria-pressed') !== 'true') {

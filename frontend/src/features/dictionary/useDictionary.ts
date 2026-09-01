@@ -135,8 +135,8 @@ export function useDictionary({
     sort,
     direction,
     censoredWordsRevealed,
-    loading: infoQuery.isLoading || entriesQuery.isLoading,
-    loadFailed: infoQuery.isError || entriesQuery.isError,
+    tableLoading: entriesQuery.isLoading,
+    tableFailed: entriesQuery.isError,
     busy: infoQuery.isFetching || entriesQuery.isFetching || updateMutation.isPending
       || reviewMutation.isPending || replaceMutation.isPending || exportMutation.isPending,
     reload: refreshDictionary,

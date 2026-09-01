@@ -3,6 +3,8 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from threading import Event
+from time import perf_counter
 from unittest.mock import MagicMock, patch
 
 from backend.policy import PolicyEntry, PolicyStore, ProfanityPolicy
@@ -179,6 +181,33 @@ class DesktopBridgeTests(unittest.TestCase):
         self.assertTrue(response["ok"])
         self.assertEqual(response["result"][0]["status"], "ready")
         service.close.assert_called_once()
+
+    def test_blocked_queue_request_does_not_delay_dictionary_request(self):
+        release_queue = Event()
+        bridge = MagicMock()
+
+        def handle(method, _params=None):
+            if method == "library.list":
+                release_queue.wait(timeout=2)
+                return []
+            release_queue.set()
+            return {"dictionary_path": "C:/dictionary"}
+
+        bridge.handle.side_effect = handle
+        requests = io.StringIO(
+            '{"id":1,"method":"library.list"}\n'
+            '{"id":2,"method":"dictionary.info"}\n'
+        )
+        output = io.StringIO()
+
+        started = perf_counter()
+        serve(bridge, requests, output)
+        elapsed = perf_counter() - started
+
+        responses = {item["id"]: item for item in map(json.loads, output.getvalue().splitlines())}
+        self.assertLess(elapsed, 1)
+        self.assertEqual(responses[2]["result"]["dictionary_path"], "C:/dictionary")
+        bridge.close.assert_called_once_with()
 
     def test_archive_and_import_methods_use_the_narrow_service_operations(self):
         service = MagicMock()
