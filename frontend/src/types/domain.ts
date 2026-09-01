@@ -166,6 +166,7 @@ export type Settings = {
   video: { mode: 'h264' | 'preserve_source' }
   whisper: { library: WhisperLibrary; model: WhisperModel }
   source: { archive_after_success: boolean; scan_subdirectories: boolean }
+  onboarding: { completed: boolean }
   runtime: {
     ffmpeg_path: string | null
     ffprobe_path: string | null

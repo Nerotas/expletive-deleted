@@ -132,6 +132,11 @@ class RuntimeSettings:
 
 
 @dataclass(frozen=True)
+class OnboardingSettings:
+    completed: bool = False
+
+
+@dataclass(frozen=True)
 class AppSettings:
     directories: DirectorySettings = field(default_factory=DirectorySettings.defaults)
     processing: ProcessingSettings = field(default_factory=ProcessingSettings)
@@ -141,6 +146,7 @@ class AppSettings:
     whisper: WhisperSettings = field(default_factory=WhisperSettings)
     source: SourceSettings = field(default_factory=SourceSettings)
     runtime: RuntimeSettings = field(default_factory=RuntimeSettings)
+    onboarding: OnboardingSettings = field(default_factory=OnboardingSettings)
 
     @classmethod
     def defaults(cls, home: Path | None = None) -> AppSettings:
@@ -164,6 +170,7 @@ class AppSettings:
             ("whisper", self.whisper, WhisperSettings),
             ("source", self.source, SourceSettings),
             ("runtime", self.runtime, RuntimeSettings),
+            ("onboarding", self.onboarding, OnboardingSettings),
         )
         invalid_groups = [name for name, value, expected in expected_groups if not isinstance(value, expected)]
         issues.extend(f"{name} has an invalid settings object" for name in invalid_groups)
@@ -194,6 +201,8 @@ class AppSettings:
             issues.append("source.archive_after_success must be a boolean")
         if not isinstance(self.source.scan_subdirectories, bool):
             issues.append("source.scan_subdirectories must be a boolean")
+        if not isinstance(self.onboarding.completed, bool):
+            issues.append("onboarding.completed must be a boolean")
 
         for name, value in (
             ("runtime.ffmpeg_path", self.runtime.ffmpeg_path),

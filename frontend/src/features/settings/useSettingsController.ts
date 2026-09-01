@@ -52,6 +52,15 @@ export function useSettingsController({
     await saveMutation.mutateAsync(form.getValues()).catch(() => undefined)
   }
 
+  const saveDraft = async (nextSettings: Settings): Promise<boolean> => {
+    try {
+      await saveMutation.mutateAsync(nextSettings)
+      return true
+    } catch {
+      return false
+    }
+  }
+
   const discard = () => {
     if (settingsQuery.data) form.reset(settingsQuery.data)
   }
@@ -106,6 +115,7 @@ export function useSettingsController({
     updateGroup,
     discard,
     save,
+    saveDraft,
     chooseDirectory,
     chooseFfmpeg,
     chooseWhisperCache,

@@ -107,8 +107,13 @@ _INI_SECTIONS = (
     "whisper",
     "source",
     "runtime",
+    "onboarding",
 )
-_INI_BOOLEAN_FIELDS = {("source", "archive_after_success"), ("source", "scan_subdirectories")}
+_INI_BOOLEAN_FIELDS = {
+    ("source", "archive_after_success"),
+    ("source", "scan_subdirectories"),
+    ("onboarding", "completed"),
+}
 _INI_INTEGER_FIELDS = {("censoring", "padding_before_ms"), ("censoring", "padding_after_ms")}
 
 

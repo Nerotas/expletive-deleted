@@ -13,6 +13,7 @@ type SettingsPageProps = {
   capabilities: Capabilities | null
   checkingSystem: boolean
   onCheckSystem: () => void
+  onOpenOnboarding: () => void
 }
 
 const DIRECTORY_LABELS: Record<keyof Settings['directories'], string> = {
@@ -22,7 +23,7 @@ const DIRECTORY_LABELS: Record<keyof Settings['directories'], string> = {
   transcripts: 'Transcripts',
 }
 
-export function SettingsPage({ controller, capabilities, checkingSystem, onCheckSystem }: SettingsPageProps) {
+export function SettingsPage({ controller, capabilities, checkingSystem, onCheckSystem, onOpenOnboarding }: SettingsPageProps) {
   const settings = controller.draft
   if (!settings) return <div className="loading-row">Loading settings</div>
 
@@ -293,9 +294,10 @@ export function SettingsPage({ controller, capabilities, checkingSystem, onCheck
 
         <SettingsSection title="About" description="Desktop application identity">
           <div className="about-setting">
-            <strong>{APPLICATION_DISPLAY_NAME} 0.1.0</strong>
+            <strong>{APPLICATION_DISPLAY_NAME} 1.0.0</strong>
             <span>Electron desktop · local processing · Windows</span>
           </div>
+          <button className="button secondary" onClick={onOpenOnboarding}>Open setup walkthrough</button>
         </SettingsSection>
       </div>
     </section>

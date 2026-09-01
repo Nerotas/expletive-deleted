@@ -18,6 +18,7 @@ export const defaultSettings: Settings = {
   video: { mode: 'h264' },
   whisper: { library: 'faster-whisper', model: 'large-v3' },
   source: { archive_after_success: false, scan_subdirectories: true },
+  onboarding: { completed: true },
   runtime: { ffmpeg_path: null, ffprobe_path: null, whisper_cache: null },
 }
 

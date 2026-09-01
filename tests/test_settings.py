@@ -113,6 +113,20 @@ class SettingsModelTests(unittest.TestCase):
         self.assertEqual(payload["schema_version"], SETTINGS_SCHEMA_VERSION)
         self.assertEqual(restored, settings)
 
+    def test_onboarding_defaults_incomplete_and_round_trips(self):
+        settings = AppSettings.defaults()
+        completed = replace(settings, onboarding=replace(settings.onboarding, completed=True))
+
+        self.assertFalse(settings.onboarding.completed)
+        self.assertTrue(settings_from_dict(settings_to_dict(completed)).onboarding.completed)
+
+    def test_invalid_onboarding_value_is_rejected(self):
+        payload = settings_to_dict(AppSettings.defaults())
+        payload["onboarding"] = {"completed": "yes"}
+
+        with self.assertRaisesRegex(SettingsValidationError, "onboarding.completed must be a boolean"):
+            settings_from_dict(payload)
+
     def test_unknown_fields_are_rejected(self):
         payload = settings_to_dict(AppSettings.defaults())
         payload["mystery"] = True
@@ -175,6 +189,8 @@ class SettingsStoreTests(unittest.TestCase):
             self.assertTrue(path.exists())
             self.assertIn("[settings]", path.read_text(encoding="utf-8"))
             self.assertIn("[directories]", path.read_text(encoding="utf-8"))
+            self.assertIn("[onboarding]", path.read_text(encoding="utf-8"))
+            self.assertFalse(loaded.onboarding.completed)
 
     def test_save_and_load_round_trip_atomically(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

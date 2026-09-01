@@ -11,6 +11,7 @@ from .models import (
     AudioSettings,
     CensoringSettings,
     DirectorySettings,
+    OnboardingSettings,
     ProcessingDevice,
     ProcessingMode,
     ProcessingSettings,
@@ -38,6 +39,7 @@ _TOP_LEVEL_KEYS = {
     "whisper",
     "source",
     "runtime",
+    "onboarding",
 }
 
 
@@ -117,6 +119,7 @@ def settings_from_dict(data: object, defaults: AppSettings | None = None) -> App
     whisper = _group(mapping, "whisper", {"library", "model"})
     source = _group(mapping, "source", {"archive_after_success", "scan_subdirectories"})
     runtime = _group(mapping, "runtime", {"ffmpeg_path", "ffprobe_path", "whisper_cache"})
+    onboarding = _group(mapping, "onboarding", {"completed"})
 
     parsed = AppSettings(
         directories=DirectorySettings(
@@ -226,6 +229,14 @@ def settings_from_dict(data: object, defaults: AppSettings | None = None) -> App
                 "runtime.whisper_cache",
             ),
         ),
+        onboarding=OnboardingSettings(
+            completed=_boolean(
+                onboarding,
+                "completed",
+                base.onboarding.completed,
+                "onboarding.completed",
+            )
+        ),
     )
     parsed.validate()
     return parsed
@@ -263,4 +274,5 @@ def settings_to_dict(settings: AppSettings) -> dict[str, object]:
             "ffprobe_path": str(settings.runtime.ffprobe_path) if settings.runtime.ffprobe_path else None,
             "whisper_cache": str(settings.runtime.whisper_cache) if settings.runtime.whisper_cache else None,
         },
+        "onboarding": {"completed": settings.onboarding.completed},
     }

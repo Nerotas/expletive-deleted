@@ -11,6 +11,7 @@ import { useDictionary } from './features/dictionary/useDictionary'
 import { useCapabilities } from './features/capabilities/useCapabilities'
 import { QueuePage } from './features/queue/QueuePage'
 import { useQueue } from './features/queue/useQueue'
+import { OnboardingPage } from './features/onboarding/OnboardingPage'
 import { SettingsPage } from './features/settings/SettingsPage'
 import { useSettingsController } from './features/settings/useSettingsController'
 import { useTheme } from './hooks/use-theme'
@@ -40,12 +41,12 @@ function App() {
     onSaved: capabilities.refresh,
   })
   const queue = useQueue({
-    enabled: location.pathname === '/',
+    enabled: location.pathname === '/' && settings.persisted?.onboarding.completed === true,
     onError: reportError,
     onNotice: reportNotice,
   })
   const dictionary = useDictionary({
-    enabled: location.pathname === '/dictionary',
+    enabled: location.pathname === '/dictionary' || location.pathname === '/onboarding',
     onError: reportError,
     onNotice: reportNotice,
   })
@@ -61,7 +62,7 @@ function App() {
       <main>
         {error && <AlertBanner tone="error" message={error} onDismiss={() => setError(null)} />}
         {notice && <AlertBanner tone="success" message={notice} onDismiss={() => setNotice(null)} />}
-        {!capabilities.loading && capabilities.capabilities && !capabilities.capabilities.ready && (
+        {location.pathname !== '/onboarding' && !capabilities.loading && capabilities.capabilities && !capabilities.capabilities.ready && (
           <SetupBand
             capabilities={capabilities.capabilities}
             reviewInstall={(components) => void capabilities.reviewInstall(components)}
@@ -73,29 +74,64 @@ function App() {
 
         <Routes>
           <Route
+            path="/onboarding"
+            element={
+              settings.loading || !settings.draft
+                ? <LoadingRow>Loading setup</LoadingRow>
+                : (
+                  <OnboardingPage
+                    settings={settings}
+                    capabilities={capabilities.capabilities}
+                    checking={capabilities.checking}
+                    capabilityBusy={capabilities.busy}
+                    dictionary={dictionary}
+                    onReviewInstall={(components) => void capabilities.reviewInstall(components)}
+                    onLocateExisting={(component) => void capabilities.locateExisting(component)}
+                    onCheckAgain={() => void capabilities.refresh()}
+                    onFinished={() => navigate('/')}
+                    onError={reportError}
+                  />
+                )
+            }
+          />
+          <Route
             path="/"
             element={(
-              <QueuePage
-                queue={queue}
-                settings={settings.persisted}
-                capabilities={capabilities.capabilities}
-                onChangeFolder={() => navigate('/settings')}
-                onReview={(source) => void dictionary.openReview(source)}
-              />
+              settings.loading
+                ? <LoadingRow>Loading settings</LoadingRow>
+                : settings.persisted && !settings.persisted.onboarding.completed
+                  ? <Navigate to="/onboarding" replace />
+                  : (
+                    <QueuePage
+                      queue={queue}
+                      settings={settings.persisted}
+                      capabilities={capabilities.capabilities}
+                      onChangeFolder={() => navigate('/settings')}
+                      onReview={(source) => void dictionary.openReview(source)}
+                    />
+                  )
             )}
           />
-          <Route path="/dictionary" element={<DictionaryPage controller={dictionary} />} />
+          <Route
+            path="/dictionary"
+            element={settings.persisted && !settings.persisted.onboarding.completed
+              ? <Navigate to="/onboarding" replace />
+              : <DictionaryPage controller={dictionary} />}
+          />
           <Route
             path="/settings"
             element={
               settings.loading
                 ? <LoadingRow>Loading settings</LoadingRow>
-                : (
+                : settings.persisted && !settings.persisted.onboarding.completed
+                  ? <Navigate to="/onboarding" replace />
+                  : (
                   <SettingsPage
                     controller={settings}
                     capabilities={capabilities.capabilities}
                     checkingSystem={capabilities.busy}
                     onCheckSystem={() => void capabilities.refresh()}
+                    onOpenOnboarding={() => navigate('/onboarding')}
                   />
                 )
             }
