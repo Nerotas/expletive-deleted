@@ -1,4 +1,4 @@
-appId: com.profanity-censor.desktop
+appId: com.expletive-deleted.desktop
 productName: Expletive Deleted
 asar: true
 directories:
@@ -22,7 +22,7 @@ extraResources:
   - from: ../requirements.txt
     to: app-backend/requirements.txt
 win:
-  icon: src/assets/profanity-censor-icon.ico
+  icon: src/assets/expletive-deleted-icon.ico
   target:
     - target: nsis
       arch:

@@ -51,8 +51,7 @@ class ProfanityPolicy:
     exclusions: frozenset[str]
     censor_defaults_path: Path
     exclusions_defaults_path: Path
-    overrides_path: Path
-    overrides_count: int
+    dictionary_path: Path
     schema_version: int = POLICY_SCHEMA_VERSION
     seeded_from_default_version: int = DEFAULT_DICTIONARY_VERSION
     censor_entries: Mapping[str, PolicyEntry] = field(default_factory=dict)
@@ -74,15 +73,11 @@ class ProfanityPolicy:
         )
 
 
-def default_policy_path(
+def default_dictionary_directory(
     environment: Mapping[str, str] | None = None,
     home: Path | None = None,
 ) -> Path:
-    environment = os.environ if environment is None else environment
-    configured = environment.get("CENSOR_POLICY_FILE", "").strip()
-    if configured:
-        return Path(configured).expanduser().resolve()
-    return prepare_app_data_root(environment, home) / "dictionary" / "profanity.json"
+    return prepare_app_data_root(environment, home) / "dictionary"
 
 
 class PolicyStore:
@@ -90,15 +85,15 @@ class PolicyStore:
 
     def __init__(
         self,
-        path: Path | None = None,
+        directory: Path | None = None,
         *,
         censor_defaults_path: Path | None = None,
         exclusions_defaults_path: Path | None = None,
     ):
-        self.path = (path or default_policy_path()).expanduser().resolve()
-        self.censor_path = self.path.with_name("censored.json")
-        self.exclusions_path = self.path.with_name("exclusions.json")
-        self.discovered_path = self.path.with_name("discovered.json")
+        self.directory = (directory or default_dictionary_directory()).expanduser().resolve()
+        self.censor_path = self.directory / "censored.json"
+        self.exclusions_path = self.directory / "exclusions.json"
+        self.discovered_path = self.directory / "discovered.json"
         self.censor_defaults_path = (
             censor_defaults_path or get_profanity_censor_words_file()
         ).expanduser().resolve()
@@ -115,28 +110,15 @@ class PolicyStore:
             exclusions=frozenset(exclusion_entries),
             censor_defaults_path=self.censor_defaults_path,
             exclusions_defaults_path=self.exclusions_defaults_path,
-            overrides_path=self.path,
-            overrides_count=0,
+            dictionary_path=self.directory,
             seeded_from_default_version=max(censor_version, exclusion_version),
             censor_entries=censor_entries,
             exclusion_entries=exclusion_entries,
         )
 
-    def summary(self) -> dict[str, int | str]:
-        self._ensure_split_stores()
-        censor_version, censor_entries = self._read_entry_store(self.censor_path)
-        exclusion_version, exclusion_entries = self._read_entry_store(self.exclusions_path)
-        return {
-            "dictionary_path": str(self.path.parent),
-            "schema_version": POLICY_SCHEMA_VERSION,
-            "seeded_from_default_version": max(censor_version, exclusion_version),
-            "words_count": len(censor_entries),
-            "exclusions_count": len(exclusion_entries),
-        }
-
     def info(self) -> dict[str, int | str]:
         return {
-            "dictionary_path": str(self.path.parent),
+            "dictionary_path": str(self.directory),
             "schema_version": POLICY_SCHEMA_VERSION,
             "seeded_from_default_version": DEFAULT_DICTIONARY_VERSION,
         }
@@ -276,7 +258,7 @@ class PolicyStore:
             exclusions = load_profanity_exclusions(self.exclusions_defaults_path)
             censor_words = load_profanity_censor_words(self.censor_defaults_path) - exclusions
         except (OSError, ValueError) as exc:
-            raise PolicyFileError(self.path, f"could not load bundled defaults: {exc}") from exc
+            raise PolicyFileError(self.directory, f"could not load bundled defaults: {exc}") from exc
         return censor_words, exclusions
 
 
@@ -296,8 +278,7 @@ class PolicyStore:
             exclusions=frozenset(exclusions),
             censor_defaults_path=self.censor_defaults_path,
             exclusions_defaults_path=self.exclusions_defaults_path,
-            overrides_path=self.path,
-            overrides_count=0,
+            dictionary_path=self.directory,
             schema_version=schema_version,
             seeded_from_default_version=default_version,
             censor_entries=censor_entries,
@@ -399,15 +380,6 @@ class PolicyStore:
         if self.discovered_path.exists():
             classified = set(censor_entries) | set(exclusion_entries)
             self.replace_discovered(set(self.load_discovered()) - classified)
-
-    def _write_policy(self, policy: ProfanityPolicy) -> None:
-        self._write_dictionary(
-            set(policy.censor_words),
-            set(policy.exclusions),
-            seeded_from_default_version=policy.seeded_from_default_version,
-            censor_entries=policy.censor_entries,
-            exclusion_entries=policy.exclusion_entries,
-        )
 
     def _read_entry_store(self, path: Path) -> tuple[int, dict[str, PolicyEntry]]:
         payload = self._read_json(path)

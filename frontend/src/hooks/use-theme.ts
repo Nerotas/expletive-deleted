@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Theme } from '../types/domain'
 
-const STORAGE_KEY = 'profanity-censor-theme'
+const STORAGE_KEY = 'expletive-deleted-theme'
 
 export function useTheme() {
   const [theme, setTheme] = useState<Theme>(() =>

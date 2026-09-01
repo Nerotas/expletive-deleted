@@ -383,14 +383,14 @@ class ProfanityCensor:
         self.censor_words = set(policy.censor_words)
         self.exclusions_file = policy.exclusions_defaults_path
         self.exclude_words = set(policy.exclusions)
-        self.policy_file = policy.overrides_path
+        self.dictionary_directory = policy.dictionary_path
         self.review_candidates: list[dict] = []
         self.used_cached_transcript: bool = False
         self.profane_count: int = 0
         self.last_error: str | None = None
         print(
             f"[*] Loaded {len(self.censor_words)} profanity censor word(s) "
-            f"from {self.policy_file}"
+            f"from {self.dictionary_directory}"
         )
         print(f"[*] Loaded {len(self.exclude_words)} profanity exclusion(s)")
 

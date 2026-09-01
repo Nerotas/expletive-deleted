@@ -37,7 +37,11 @@ try {
   await access(path.join(backendRoot, 'scripts', 'desktop_bridge.py'))
   await access(path.join(backendRoot, 'resources', 'profanity_censor_words.txt'))
 
-  const settings = await window.evaluate(() => window.profanityCensor.invoke('settings.get'))
+  const { settings, legacyBridgePresent } = await window.evaluate(async () => ({
+    settings: await window.expletiveDeleted.invoke('settings.get'),
+    legacyBridgePresent: 'profanityCensor' in window,
+  }))
+  if (legacyBridgePresent) throw new Error('Obsolete preload bridge is still exposed')
   const installedResources = path.resolve(resourcesPath).toLowerCase()
   for (const [name, directory] of Object.entries(settings.directories)) {
     if (path.resolve(directory).toLowerCase().startsWith(installedResources)) {

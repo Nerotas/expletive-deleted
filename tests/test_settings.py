@@ -1,4 +1,3 @@
-import json
 import os
 import tempfile
 import unittest
@@ -9,7 +8,6 @@ from unittest.mock import patch
 from backend.application_identity import (
     APP_DATA_DIRECTORY_NAME,
     DISPLAY_NAME,
-    AppDataMigrationError,
     prepare_app_data_root,
 )
 from backend.settings import (
@@ -135,79 +133,35 @@ class SettingsStoreTests(unittest.TestCase):
         root = default_app_data_root({"LOCALAPPDATA": "C:\\Users\\User\\AppData\\Local"})
         self.assertEqual(root, Path("C:\\Users\\User\\AppData\\Local\\ExpletiveDeleted"))
 
+    def test_app_data_requires_local_app_data(self):
+        with self.assertRaisesRegex(RuntimeError, "LOCALAPPDATA is required"):
+            default_app_data_root({})
+
     def test_product_identity_uses_expletive_deleted_names(self):
         self.assertEqual(DISPLAY_NAME, "Expletive Deleted")
         self.assertEqual(APP_DATA_DIRECTORY_NAME, "ExpletiveDeleted")
 
-    def test_legacy_durable_state_is_copied_and_source_is_retained(self):
+    def test_prepare_app_data_root_resolves_fresh_state_without_creating_it(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             local_app_data = Path(temporary_directory)
-            legacy_root = local_app_data / "Profanity Censor"
-            legacy_root.mkdir()
-            (legacy_root / "settings.ini").write_text("settings", encoding="utf-8")
-            (legacy_root / "policy.json").write_text('{"overrides": {"word": "censor"}}', encoding="utf-8")
 
             root = prepare_app_data_root({"LOCALAPPDATA": str(local_app_data)})
 
             self.assertEqual(root, (local_app_data / "ExpletiveDeleted").resolve())
-            self.assertEqual((root / "settings.ini").read_text(encoding="utf-8"), "settings")
-            self.assertEqual((root / "policy.json").read_text(encoding="utf-8"), '{"overrides": {"word": "censor"}}')
-            self.assertTrue((legacy_root / "settings.ini").exists())
-            self.assertTrue((legacy_root / "policy.json").exists())
+            self.assertFalse(root.exists())
 
-    def test_existing_new_root_wins_over_legacy_state(self):
+    def test_prepare_app_data_root_leaves_existing_canonical_state_untouched(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             local_app_data = Path(temporary_directory)
-            legacy_root = local_app_data / "Profanity Censor"
-            new_root = local_app_data / "ExpletiveDeleted"
-            legacy_root.mkdir()
-            new_root.mkdir()
-            (legacy_root / "settings.ini").write_text("legacy", encoding="utf-8")
-            (new_root / "settings.ini").write_text("current", encoding="utf-8")
+            canonical_root = local_app_data / "ExpletiveDeleted"
+            canonical_root.mkdir()
+            settings_path = canonical_root / "settings.ini"
+            settings_path.write_text("current", encoding="utf-8")
 
             root = prepare_app_data_root({"LOCALAPPDATA": str(local_app_data)})
 
-            self.assertEqual(root, new_root.resolve())
-            self.assertEqual((root / "settings.ini").read_text(encoding="utf-8"), "current")
-
-    def test_failed_migration_does_not_delete_legacy_data(self):
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            local_app_data = Path(temporary_directory)
-            legacy_root = local_app_data / "Profanity Censor"
-            legacy_root.mkdir()
-            legacy_settings = legacy_root / "settings.ini"
-            legacy_settings.write_text("keep me", encoding="utf-8")
-
-            with (
-                patch("backend.application_identity.shutil.copy2", side_effect=OSError("disk unavailable")),
-                self.assertRaisesRegex(AppDataMigrationError, "disk unavailable"),
-            ):
-                prepare_app_data_root({"LOCALAPPDATA": str(local_app_data)})
-
-            self.assertEqual(legacy_settings.read_text(encoding="utf-8"), "keep me")
-            self.assertFalse((local_app_data / "ExpletiveDeleted").exists())
-
-    def test_migrated_settings_preserve_custom_media_directories(self):
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            local_app_data = Path(temporary_directory)
-            legacy_root = local_app_data / "Profanity Censor"
-            custom_root = local_app_data / "Family Media"
-            defaults = AppSettings.defaults(local_app_data / "home")
-            customized = replace(
-                defaults,
-                directories=DirectorySettings(
-                    input=(custom_root / "Incoming").resolve(),
-                    output=(custom_root / "Share").resolve(),
-                    archive=(custom_root / "Originals").resolve(),
-                    transcripts=(custom_root / "Reviews").resolve(),
-                ),
-            )
-            SettingsStore(legacy_root / "settings.ini", defaults).save(customized)
-
-            root = prepare_app_data_root({"LOCALAPPDATA": str(local_app_data)})
-            loaded = SettingsStore(root / "settings.ini", defaults).load()
-
-            self.assertEqual(loaded.directories, customized.directories)
+            self.assertEqual(root, canonical_root.resolve())
+            self.assertEqual(settings_path.read_text(encoding="utf-8"), "current")
 
     def test_missing_file_initializes_an_ignored_ini_template(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -236,6 +190,23 @@ class SettingsStoreTests(unittest.TestCase):
             self.assertIn(f"schema_version = {SETTINGS_SCHEMA_VERSION}", path.read_text(encoding="utf-8"))
             self.assertEqual(list(path.parent.glob("*.tmp")), [])
 
+    def test_save_failure_preserves_existing_ini(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "settings.ini"
+            settings = AppSettings.defaults(Path(temporary_directory))
+            store = SettingsStore(path, settings)
+            store.save(settings)
+            original_content = path.read_text(encoding="utf-8")
+
+            with (
+                patch("backend.settings.store.os.replace", side_effect=OSError("disk unavailable")),
+                self.assertRaisesRegex(SettingsFileError, "disk unavailable"),
+            ):
+                store.save(settings)
+
+            self.assertEqual(path.read_text(encoding="utf-8"), original_content)
+            self.assertEqual(list(path.parent.glob("*.tmp")), [])
+
     def test_invalid_ini_is_reported_without_falling_back(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             path = Path(temporary_directory) / "settings.ini"
@@ -244,18 +215,20 @@ class SettingsStoreTests(unittest.TestCase):
             with self.assertRaisesRegex(SettingsFileError, "invalid INI"):
                 SettingsStore(path).load()
 
-    def test_legacy_json_is_migrated_when_ini_is_first_loaded(self):
+    def test_neighboring_settings_json_is_ignored(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             path = root / "settings.ini"
             defaults = AppSettings.defaults(root / "home")
-            (root / "settings.json").write_text(json.dumps(settings_to_dict(defaults)), encoding="utf-8")
+            json_path = root / "settings.json"
+            json_path.write_text('{"ignored": true}', encoding="utf-8")
 
             loaded = SettingsStore(path, defaults).load()
 
             self.assertEqual(loaded, defaults)
             self.assertTrue(path.exists())
             self.assertIn("[whisper]", path.read_text(encoding="utf-8"))
+            self.assertEqual(json_path.read_text(encoding="utf-8"), '{"ignored": true}')
 
 
 class DirectoryValidationTests(unittest.TestCase):
@@ -300,7 +273,7 @@ class SettingsResolutionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             defaults = AppSettings.defaults(root / "home")
-            store = SettingsStore(root / "settings.json", defaults)
+            store = SettingsStore(root / "settings.ini", defaults)
             store.save(defaults)
 
             paths = resolve_runtime_paths(store)
@@ -315,7 +288,7 @@ class SettingsResolutionTests(unittest.TestCase):
                 AppSettings.defaults(root / "home"),
                 processing=replace(AppSettings.defaults().processing, mode="report_only"),
             )
-            store = SettingsStore(root / "settings.json", defaults)
+            store = SettingsStore(root / "settings.ini", defaults)
             legacy_root = root / "legacy"
 
             with patch.dict(

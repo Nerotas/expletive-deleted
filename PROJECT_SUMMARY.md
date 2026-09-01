@@ -60,9 +60,9 @@ The root compatibility files remain intentionally thin. New backend code should 
 
 ## Persistent Settings
 
-Settings default to `%LOCALAPPDATA%\ExpletiveDeleted\settings.ini`. It is created automatically from validated defaults, remains outside the repository, and has a tracked [`config.example.ini`](config.example.ini) schema template. When the new root is absent, known durable state is copied from the legacy `%LOCALAPPDATA%\Profanity Censor` or `%LOCALAPPDATA%\ProfanityCensor` root without deleting the source. Existing `settings.json` files migrate to INI on first load.
+Settings default to `%LOCALAPPDATA%\ExpletiveDeleted\settings.ini`. It is created automatically from validated defaults, remains outside the repository, and has a tracked [`config.example.ini`](config.example.ini) schema template.
 
-The complete user dictionary is stored separately in `%LOCALAPPDATA%\ExpletiveDeleted\dictionary\profanity.json`. Shipped files under `resources/` seed it on first use and supply explicit restore-defaults behavior only. Existing legacy `policy.json` overrides migrate into a complete dictionary, and upgrades do not silently merge changed defaults into an existing user's policy.
+The live user dictionary is stored in `%LOCALAPPDATA%\ExpletiveDeleted\dictionary\censored.json`, `exclusions.json`, and `discovered.json`. Shipped files under `resources/` seed the classified stores on first use and supply explicit restore-defaults behavior only. Upgrades do not silently merge changed defaults into an existing user's policy. A combined JSON document is used only for explicit import and export.
 
 User working directories default to:
 

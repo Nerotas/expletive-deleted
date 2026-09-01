@@ -49,9 +49,9 @@ Both package commands audit `win-unpacked` and fail if it contains `ffmpeg.exe`,
 ## Dictionary behavior
 
 - The resource text files are built-in defaults and are never edited by the renderer.
-- The complete policy is stored atomically in the backend-managed `%LOCALAPPDATA%\ExpletiveDeleted\dictionary\profanity.json` file.
-- Import, export, migration, validation, and restore-defaults behavior remain backend-owned. Restore requires explicit renderer confirmation.
+- The live policy uses backend-managed `censored.json`, `exclusions.json`, and `discovered.json` stores beneath `%LOCALAPPDATA%\ExpletiveDeleted\dictionary`.
+- Import, export, validation, and restore-defaults behavior remain backend-owned. Combined JSON is only the explicit portable format. Restore requires explicit renderer confirmation.
 
-The existing `com.profanity-censor.desktop` Windows AppUserModelID, private `profanity-censor:*` IPC channels, and `window.profanityCensor` preload API remain stable compatibility identifiers. They are not displayed as the product name and changing them would split existing OS/protocol identity without a functional benefit.
+Electron uses the `com.expletive-deleted.desktop` Windows AppUserModelID, private `expletive-deleted:*` IPC channels, and the narrow typed `window.expletiveDeleted` preload API.
 
 - The Dictionary displays the durable user path and policy metadata; processing loads the same complete policy at job start.

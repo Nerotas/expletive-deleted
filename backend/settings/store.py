@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import configparser
-import json
 import os
 import tempfile
 from collections.abc import Mapping
@@ -48,11 +47,6 @@ class SettingsStore:
 
     def load(self) -> AppSettings:
         if not self.path.exists():
-            legacy_path = self.path.with_name("settings.json")
-            if legacy_path.exists():
-                settings = self._load_legacy_json(legacy_path)
-                self.save(settings)
-                return settings
             self.defaults.validate()
             self.save(self.defaults)
             return self.defaults
@@ -102,15 +96,6 @@ class SettingsStore:
         except OSError as exc:
             raise SettingsFileError(self.path, str(exc)) from exc
         return self.defaults
-
-    def _load_legacy_json(self, path: Path) -> AppSettings:
-        """Read the pre-INI file once so existing user choices are retained."""
-        try:
-            return settings_from_dict(json.loads(path.read_text(encoding="utf-8")), self.defaults)
-        except json.JSONDecodeError as exc:
-            raise SettingsFileError(path, f"invalid JSON at line {exc.lineno}, column {exc.colno}") from exc
-        except (SettingsValidationError, OSError) as exc:
-            raise SettingsFileError(path, str(exc)) from exc
 
 
 _INI_SECTIONS = (

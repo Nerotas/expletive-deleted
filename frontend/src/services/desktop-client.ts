@@ -5,7 +5,7 @@ import type {
   DictionaryEntryPage,
   DictionaryInfo,
   DictionarySort,
-  DictionarySummary,
+  DictionaryMutationResult,
   DictionaryTarget,
   DiscoveredWords,
   InstallPlan,
@@ -20,10 +20,10 @@ import type {
 } from '../types/domain'
 
 function bridge() {
-  if (!window.profanityCensor) {
+  if (!window.expletiveDeleted) {
     throw new Error('The Electron preload bridge did not load. Restart the desktop application.')
   }
-  return window.profanityCensor
+  return window.expletiveDeleted
 }
 
 function invoke<T>(method: string, params?: Record<string, unknown>): Promise<T> {
@@ -55,10 +55,10 @@ export const desktopClient = {
   }),
   getDiscoveredWords: () => invoke<DiscoveredWords>('dictionary.discovered'),
   updateDictionary: (action: DictionaryAction, target: DictionaryTarget, word: string) =>
-    invoke<DictionarySummary>(`dictionary.${action}`, { target, word }),
-  restoreDictionaryDefaults: () => invoke<DictionarySummary>('dictionary.restore_defaults'),
+    invoke<DictionaryMutationResult>(`dictionary.${action}`, { target, word }),
+  restoreDictionaryDefaults: () => invoke<DictionaryMutationResult>('dictionary.restore_defaults'),
   importDictionary: (source: string) =>
-    invoke<DictionarySummary>('dictionary.import', { source }),
+    invoke<DictionaryMutationResult>('dictionary.import', { source }),
   exportDictionary: (destination: string) =>
     invoke<{ path: string }>('dictionary.export', { destination }),
   getReview: (source: string) => invoke<ReviewResult>('reviews.list', { source }),

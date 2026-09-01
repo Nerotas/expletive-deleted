@@ -13,7 +13,7 @@ class ManageSettingsTests(unittest.TestCase):
     def test_set_options_updates_phase_6_preferences(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
-            store = SettingsStore(root / "settings.json", AppSettings.defaults(root / "home"))
+            store = SettingsStore(root / "settings.ini", AppSettings.defaults(root / "home"))
 
             exit_code = main(
                 [
@@ -46,7 +46,7 @@ class ManageSettingsTests(unittest.TestCase):
         self.assertTrue(settings.source.archive_after_success)
 
     def create_store(self, root: Path) -> SettingsStore:
-        return SettingsStore(root / "app-data" / "settings.json", AppSettings.defaults(root / "home"))
+        return SettingsStore(root / "app-data" / "settings.ini", AppSettings.defaults(root / "home"))
 
     def test_init_persists_defaults_and_creates_directories(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

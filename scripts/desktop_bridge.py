@@ -48,15 +48,8 @@ class DesktopBridge:
             return self.service.update_settings(params["settings"])
         if method == "capabilities.get":
             return self.service.get_capabilities()
-        if method == "dictionary.summary":
-            return self._dictionary_summary()
         if method == "dictionary.info":
             return self.policy_store.info()
-        if method == "dictionary.entries":
-            target = params.get("target")
-            if target not in ("censor", "exclude"):
-                raise ValueError("Dictionary entries require a censor/exclude target")
-            return self._dictionary_entries(target, params)
         if method == "dictionary.exclusions":
             return self._dictionary_entries("exclude", params)
         if method == "dictionary.censored":
@@ -70,7 +63,7 @@ class DesktopBridge:
             if target not in ("censor", "exclude") or not isinstance(word, str):
                 raise ValueError("Dictionary updates require a censor/exclude target and a word")
             policy, changed = self.policy_store.update(target, word, "add")
-            result = self._dictionary_summary(policy)
+            result = self._dictionary_result(policy)
             result["changed"] = changed
             return result
         if method == "dictionary.remove":
@@ -79,16 +72,16 @@ class DesktopBridge:
             if target not in ("censor", "exclude") or not isinstance(word, str):
                 raise ValueError("Dictionary updates require a censor/exclude target and a word")
             policy, changed = self.policy_store.update(target, word, "remove")
-            result = self._dictionary_summary(policy)
+            result = self._dictionary_result(policy)
             result["changed"] = changed
             return result
         if method == "dictionary.restore_defaults":
-            return self._dictionary_summary(self.policy_store.restore_defaults())
+            return self._dictionary_result(self.policy_store.restore_defaults())
         if method == "dictionary.import":
             source = params.get("source")
             if not isinstance(source, str) or not source.strip():
                 raise ValueError("Dictionary import requires a source file")
-            return self._dictionary_summary(self.policy_store.import_dictionary(Path(source)))
+            return self._dictionary_result(self.policy_store.import_dictionary(Path(source)))
         if method == "dictionary.export":
             destination = params.get("destination")
             if not isinstance(destination, str) or not destination.strip():
@@ -284,11 +277,10 @@ class DesktopBridge:
     def close(self) -> None:
         self.service.close()
 
-    def _dictionary_summary(self, policy: ProfanityPolicy | None = None) -> dict[str, object]:
-        if policy is None:
-            return self.policy_store.summary()
+    @staticmethod
+    def _dictionary_result(policy: ProfanityPolicy) -> dict[str, object]:
         return {
-            "dictionary_path": str(policy.overrides_path),
+            "dictionary_path": str(policy.dictionary_path),
             "schema_version": policy.schema_version,
             "seeded_from_default_version": policy.seeded_from_default_version,
             "words_count": len(policy.censor_words),

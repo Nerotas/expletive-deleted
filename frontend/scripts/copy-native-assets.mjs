@@ -1,7 +1,7 @@
 import { copyFile, mkdir } from 'node:fs/promises'
 import path from 'node:path'
 
-const iconName = 'profanity-censor-icon.ico'
+const iconName = 'expletive-deleted-icon.ico'
 const source = path.join(process.cwd(), 'src', 'assets', iconName)
 const destinationDirectory = path.join(process.cwd(), 'out', 'assets')
 

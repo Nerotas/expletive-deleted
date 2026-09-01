@@ -4,7 +4,7 @@ import path from 'node:path'
 const electronTempDirectory = process.env.TEMP
 const tempDirectory = path.join(process.cwd(), 'node_modules', '.tmp', 'playwright')
 await mkdir(tempDirectory, { recursive: true })
-await access(path.join(process.cwd(), 'out', 'assets', 'profanity-censor-icon.ico'))
+await access(path.join(process.cwd(), 'out', 'assets', 'expletive-deleted-icon.ico'))
 delete process.env.ELECTRON_RUN_AS_NODE
 process.env.TMPDIR = tempDirectory
 process.env.TMP = tempDirectory
@@ -30,8 +30,12 @@ try {
   await window.waitForLoadState('domcontentloaded')
   await window.getByRole('heading', { name: 'Queue', exact: true }).waitFor()
 
-  const desktop = await window.evaluate(() => window.profanityCensor.desktop)
+  const { desktop, legacyBridgePresent } = await window.evaluate(() => ({
+    desktop: window.expletiveDeleted.desktop,
+    legacyBridgePresent: 'profanityCensor' in window,
+  }))
   if (!desktop) throw new Error('Context-isolated desktop bridge was not exposed')
+  if (legacyBridgePresent) throw new Error('Obsolete preload bridge is still exposed')
 
   const applicationMenuVisible = await app.evaluate(({ Menu }) => Menu.getApplicationMenu() !== null)
   if (applicationMenuVisible) throw new Error('Production Electron menu should be hidden')
