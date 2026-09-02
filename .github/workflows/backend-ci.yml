@@ -1,0 +1,44 @@
+name: Backend CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Tests
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      HF_HUB_OFFLINE: "1"
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install backend dependencies
+        run: python -m pip install -r requirements.txt coverage
+
+      - name: Test with coverage
+        run: python -m coverage run --source=backend,scripts -m unittest discover -s tests
+
+      - name: Report coverage
+        run: python -m coverage report -m

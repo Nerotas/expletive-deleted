@@ -1,0 +1,49 @@
+name: Electron Smoke
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: electron-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Smoke test
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.12.0"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build and smoke-test Electron
+        working-directory: frontend
+        run: npm run smoke
+
+      - name: Upload smoke-test screenshots on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-smoke-screenshots
+          path: frontend/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
