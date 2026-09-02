@@ -43,6 +43,7 @@ class WhisperProfileTests(unittest.TestCase):
         )
 
         self.assertIn("openai-whisper==20250625", plan.actions[0].command)
+        self.assertIn("numpy==2.4.4", plan.actions[0].command)
         self.assertEqual(plan.actions[1].dependency_ids, ("whisper:openai-whisper:small",))
         self.assertEqual(plan.actions[1].command[-4:], ("--library", "openai-whisper", "--model", "small"))
 
