@@ -129,7 +129,8 @@ def get_managed_ffmpeg_paths(root: Path | None = None) -> tuple[str | None, str 
 
 def get_whisper_timing_history_path(root: Path | None = None) -> Path:
     """Return the local, machine-specific transcription timing history file."""
-    return get_project_root(root) / WHISPER_TIMING_HISTORY_FILE
+    history_root = get_project_root(root) if root is not None else get_application_runtime_root()
+    return history_root / WHISPER_TIMING_HISTORY_FILE
 
 
 def get_whisper_profile_key(model_name: str = REQUIRED_WHISPER_MODEL) -> str:
@@ -183,7 +184,11 @@ def record_transcription_timing(
             "seconds_per_media_second": elapsed_seconds / media_duration_seconds,
         }
     )
-    history_path.write_text(json.dumps(records[-20:], indent=2) + "\n", encoding="utf-8")
+    try:
+        history_path.parent.mkdir(parents=True, exist_ok=True)
+        history_path.write_text(json.dumps(records[-20:], indent=2) + "\n", encoding="utf-8")
+    except OSError:
+        pass
 
 
 def get_profanity_exclusions_file(root: Path | None = None) -> Path:
