@@ -4,6 +4,8 @@ on:
   pull_request:
     branches: [main]
     types: [closed]
+    paths-ignore:
+      - "docs/**"
   workflow_dispatch:
     inputs:
       bump:
