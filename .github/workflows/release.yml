@@ -117,6 +117,12 @@ jobs:
         shell: pwsh
         run: |
           $version = '${{ steps.version.outputs.version }}'
+          $existingPullRequest = gh pr list --repo '${{ github.repository }}' --base main --state open --search "chore(release): v$version in:title" --json url --jq '.[0].url'
+          if ($existingPullRequest) {
+            Write-Host "Version pull request already exists: $existingPullRequest"
+            exit 0
+          }
+
           $branch = "release/v$version-${{ github.run_id }}"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
