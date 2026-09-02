@@ -4,6 +4,15 @@ on:
   pull_request:
     branches: [main]
     types: [closed]
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - "resources/**"
+      - "scripts/**"
+      - "*.py"
+      - "requirements.txt"
+      - "config.example.ini"
+      - "convert-profanity-censor.ps1"
   workflow_dispatch:
     inputs:
       bump:
@@ -18,7 +27,9 @@ on:
           - none
 
 permissions:
+  actions: write
   contents: write
+  pull-requests: write
 
 concurrency:
   group: release-main
@@ -54,13 +65,19 @@ jobs:
         shell: pwsh
         env:
           MANUAL_BUMP: ${{ inputs.bump }}
+          PULL_REQUEST_HEAD: ${{ github.event.pull_request.head.ref }}
         run: |
           $bump = $env:MANUAL_BUMP
+          $isVersionPullRequest = '${{ github.event_name }}' -eq 'pull_request' -and $env:PULL_REQUEST_HEAD.StartsWith('release/v')
 
           if ('${{ github.event_name }}' -eq 'pull_request') {
             $currentVersion = node -p "require('./frontend/package.json').version"
-            gh release view "v$currentVersion" --repo '${{ github.repository }}' *> $null
-            $bump = if ($LASTEXITCODE -eq 0) { 'patch' } else { 'none' }
+            if ($isVersionPullRequest) {
+              $bump = 'none'
+            } else {
+              gh release view "v$currentVersion" --repo '${{ github.repository }}' *> $null
+              $bump = if ($LASTEXITCODE -eq 0) { 'patch' } else { 'none' }
+            }
           }
 
           Push-Location frontend
@@ -75,6 +92,16 @@ jobs:
           $version = node -p "require('./frontend/package.json').version"
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
+          git diff --quiet
+          $needsVersionPullRequest = $LASTEXITCODE -ne 0
+          "needs_version_pr=$($needsVersionPullRequest.ToString().ToLowerInvariant())" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+          if ($needsVersionPullRequest) {
+            "published=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            Write-Host "Preparing a pull request for version $version with bump mode $bump."
+            exit 0
+          }
+
           gh release view "v$version" --repo '${{ github.repository }}' *> $null
           if ($LASTEXITCODE -eq 0) {
             "published=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
@@ -85,8 +112,23 @@ jobs:
           }
           exit 0
 
+      - name: Open version pull request
+        if: steps.version.outputs.needs_version_pr == 'true'
+        shell: pwsh
+        run: |
+          $version = '${{ steps.version.outputs.version }}'
+          $branch = "release/v$version-${{ github.run_id }}"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c $branch
+          git add frontend/package.json frontend/package-lock.json frontend/src/features/settings/SettingsPage.tsx README.md docs/index.html
+          git commit -m "chore(release): v$version"
+          git push --set-upstream origin $branch
+          gh pr create --base main --head $branch --title "chore(release): v$version" --body "Synchronizes application version metadata for the v$version release. Merge this pull request to validate, package, tag, and publish the release."
+          gh workflow run ci.yml --ref $branch
+
       - name: Set up Python
-        if: steps.version.outputs.published != 'true'
+        if: steps.version.outputs.published != 'true' && steps.version.outputs.needs_version_pr != 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -94,63 +136,50 @@ jobs:
           cache-dependency-path: requirements.txt
 
       - name: Install backend dependencies
-        if: steps.version.outputs.published != 'true'
+        if: steps.version.outputs.published != 'true' && steps.version.outputs.needs_version_pr != 'true'
         run: python -m pip install -r requirements.txt
 
       - name: Test backend
-        if: steps.version.outputs.published != 'true'
+        if: steps.version.outputs.published != 'true' && steps.version.outputs.needs_version_pr != 'true'
         run: python -m unittest discover -s tests
 
       - name: Install frontend dependencies
-        if: steps.version.outputs.published != 'true'
+        if: steps.version.outputs.published != 'true' && steps.version.outputs.needs_version_pr != 'true'
         working-directory: frontend
         run: npm ci
 
       - name: Test frontend
-        if: steps.version.outputs.published != 'true'
+        if: steps.version.outputs.published != 'true' && steps.version.outputs.needs_version_pr != 'true'
         working-directory: frontend
         run: npm test
 
       - name: Type-check frontend
-        if: steps.version.outputs.published != 'true'
+        if: steps.version.outputs.published != 'true' && steps.version.outputs.needs_version_pr != 'true'
         working-directory: frontend
         run: npm run typecheck
 
       - name: Lint frontend
-        if: steps.version.outputs.published != 'true'
+        if: steps.version.outputs.published != 'true' && steps.version.outputs.needs_version_pr != 'true'
         working-directory: frontend
         run: npm run lint
 
       - name: Build and smoke-test Electron
-        if: steps.version.outputs.published != 'true'
+        if: steps.version.outputs.published != 'true' && steps.version.outputs.needs_version_pr != 'true'
         working-directory: frontend
         run: npm run smoke
 
       - name: Build and audit Windows installer
-        if: steps.version.outputs.published != 'true'
+        if: steps.version.outputs.published != 'true' && steps.version.outputs.needs_version_pr != 'true'
         working-directory: frontend
         run: npm run package:win
 
       - name: Smoke-test packaged application
-        if: steps.version.outputs.published != 'true'
+        if: steps.version.outputs.published != 'true' && steps.version.outputs.needs_version_pr != 'true'
         working-directory: frontend
         run: npm run smoke:package
 
-      - name: Commit synchronized version
-        if: steps.version.outputs.published != 'true'
-        shell: pwsh
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add frontend/package.json frontend/package-lock.json frontend/src/features/settings/SettingsPage.tsx README.md docs/index.html
-          git diff --cached --quiet
-          if ($LASTEXITCODE -ne 0) {
-            git commit -m "chore(release): v${{ steps.version.outputs.version }}"
-            git push origin HEAD:main
-          }
-
       - name: Tag release
-        if: steps.version.outputs.published != 'true'
+        if: steps.version.outputs.published != 'true' && steps.version.outputs.needs_version_pr != 'true'
         shell: pwsh
         run: |
           $tag = 'v${{ steps.version.outputs.version }}'
@@ -161,7 +190,7 @@ jobs:
           }
 
       - name: Publish GitHub Release
-        if: steps.version.outputs.published != 'true'
+        if: steps.version.outputs.published != 'true' && steps.version.outputs.needs_version_pr != 'true'
         shell: pwsh
         run: |
           $version = '${{ steps.version.outputs.version }}'

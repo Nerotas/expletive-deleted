@@ -138,11 +138,11 @@ npm run version:sync
 npm run version:check
 ```
 
-When a pull request merges into `main`, the [Release workflow](.github/workflows/release.yml) publishes the current package version when it has no GitHub Release yet. Otherwise, it increments the version by one patch (`1.0.1` to `1.0.2`). It synchronizes the package lock, desktop About text, README, and product website; runs backend, renderer, native, packaging, and installed-app checks; then commits the version when needed, creates a `v<version>` tag, and publishes the Windows installer to GitHub Releases.
+When a pull request containing application changes merges into `main`, the [Release workflow](.github/workflows/release.yml) prepares the next patch version in a `release/v*` pull request. Documentation and workflow-only changes do not trigger a release. Merging the version pull request runs backend, renderer, native, packaging, and installed-app checks, then creates the `v<version>` tag and publishes the Windows installer to GitHub Releases.
 
-If the merged pull request deliberately changes `frontend/package.json`, that version is preserved instead of receiving another patch bump. Use this path for minor or major releases. Manual workflow runs may choose `patch`, `minor`, `major`, or `none`.
+If an application pull request deliberately changes `frontend/package.json`, that version is preserved instead of receiving another patch bump. Use this path for minor or major releases. Manual workflow runs may choose `patch`, `minor`, `major`, or `none`; version changes are still proposed through a pull request.
 
-Repository Actions must have **Read and write permissions**, and the `main` branch rules must allow `github-actions[bot]` to push the synchronized version commit and release tag. A failed validation does not commit, tag, or publish the release.
+Repository Actions must have **Read and write permissions** and permission to create pull requests. The workflow explicitly starts CI for bot-created version pull requests, which do not trigger another workflow automatically. It never pushes commits directly to protected `main`. A failed validation does not tag or publish the release.
 
 ## Validation
 
