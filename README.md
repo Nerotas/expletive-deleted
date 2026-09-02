@@ -138,7 +138,7 @@ npm run version:sync
 npm run version:check
 ```
 
-When application changes reach `main`, the [Release workflow](.github/workflows/release.yml) chooses the next patch version from the latest published release, synchronizes version metadata only in the build runner, runs backend, renderer, native, packaging, and installed-app checks, then tags the merged `main` commit and publishes the Windows installer. Documentation and workflow-only changes do not trigger a release.
+When application changes reach `main`, the [Release workflow](.github/workflows/release.yml) chooses the next patch version from the latest published release, synchronizes version metadata in the build runner, and runs backend, renderer, native, packaging, and installed-app checks. It then creates a local metadata commit, pushes only its tag, and publishes the Windows installer. The tagged source therefore matches the packaged version without writing the commit to protected `main`. Documentation and workflow-only changes do not trigger a release.
 
 If an application pull request deliberately raises `frontend/package.json` above the latest published version, that version is used. Manual workflow runs may choose `patch`, `minor`, `major`, or `none`.
 
