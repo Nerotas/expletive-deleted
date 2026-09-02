@@ -60,27 +60,6 @@ class DesktopBridge:
             "error": state.get("error"),
         }
 
-    def _install_progress_callback(self, install_id: str, plan: object):
-        def callback(progress: object) -> None:
-            if install_id not in self._install_jobs:
-                return
-            state = self._install_jobs[install_id]
-            state["status"] = "running" if progress.phase not in {"completed", "cancelled"} else "completed" if progress.phase == "completed" else "cancelled"
-            state["action_id"] = progress.action_id
-            state["phase"] = progress.phase
-            state["message"] = progress.message
-            state["completed_bytes"] = progress.completed_bytes
-            state["total_bytes"] = progress.total_bytes
-            action_index = next(
-                (index + 1 for index, action in enumerate(plan.actions) if action.id == progress.action_id),
-                state.get("action_index"),
-            )
-            state["action_index"] = action_index
-            state["action_count"] = len(plan.actions)
-            if not state.get("error") and progress.phase == "completed":
-                state["message"] = "Installation verified"
-        return callback
-
     def _run_install_task(self, install_id: str, plan_id: str, plan: object, cache_dir: Path | None) -> None:
         state = self._install_jobs[install_id]
         cancellation = Event()
