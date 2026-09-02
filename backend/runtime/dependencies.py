@@ -559,9 +559,8 @@ def inspect_whisper_model(
     display_name = f"Whisper {model} model ({library})"
     if library == "openai-whisper":
         try:
-            import whisper
-
-            model_url = whisper._MODELS[model]
+            whisper_module = importlib.import_module("whisper")
+            model_url = whisper_module._MODELS[model]
             expected_hash = model_url.split("/")[-2]
             model_path = cache_dir / Path(model_url).name
         except (ImportError, KeyError, AttributeError) as exc:

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { AppHeader } from './components/AppHeader'
 import { SetupBand } from './components/SetupBand'
@@ -187,73 +187,11 @@ type SetupProgressDialogProps = {
 
 function SetupProgressDialog({ installState, onClose, onCancel }: SetupProgressDialogProps) {
   const [now, setNow] = useState(() => Date.now())
-  const [transferSpeedBytesPerSecond, setTransferSpeedBytesPerSecond] = useState<number | null>(null)
-  const previousProgressSample = useRef<{
-    installId: string
-    actionId: string
-    capturedAtMs: number
-    completedBytes: number
-  } | null>(null)
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(timer)
   }, [])
-
-  useEffect(() => {
-    const actionId = installState.action_id
-    const completedBytes = installState.completed_bytes
-    const capturedAtMs = Date.now()
-
-    if (
-      installState.status !== 'running'
-      || !actionId
-      || completedBytes === null
-      || completedBytes < 0
-    ) {
-      previousProgressSample.current = null
-      setTransferSpeedBytesPerSecond(null)
-      return
-    }
-
-    const previous = previousProgressSample.current
-    if (
-      !previous
-      || previous.installId !== installState.install_id
-      || previous.actionId !== actionId
-      || completedBytes < previous.completedBytes
-    ) {
-      previousProgressSample.current = {
-        installId: installState.install_id,
-        actionId,
-        capturedAtMs,
-        completedBytes,
-      }
-      setTransferSpeedBytesPerSecond(null)
-      return
-    }
-
-    const elapsedSeconds = (capturedAtMs - previous.capturedAtMs) / 1000
-    const transferredBytes = completedBytes - previous.completedBytes
-    if (elapsedSeconds >= 0.5) {
-      const instantSpeed = Math.max(0, transferredBytes / elapsedSeconds)
-      setTransferSpeedBytesPerSecond((current) => {
-        if (current === null) return instantSpeed
-        return current * 0.65 + instantSpeed * 0.35
-      })
-      previousProgressSample.current = {
-        installId: installState.install_id,
-        actionId,
-        capturedAtMs,
-        completedBytes,
-      }
-    }
-  }, [
-    installState.action_id,
-    installState.completed_bytes,
-    installState.install_id,
-    installState.status,
-  ])
 
   const phaseLabel = (() => {
     if (installState.status === 'completed') return 'Complete'
@@ -275,14 +213,21 @@ function SetupProgressDialog({ installState, onClose, onCancel }: SetupProgressD
     ? Math.min(100, Math.max(0, (completedBytes / totalBytes) * 100))
     : null
   const hasMeasurableProgress = progressPercent !== null
+  const averageSpeedBytesPerSecond = (
+    completedBytes !== null
+    && completedBytes > 0
+    && elapsedMs > 0
+  )
+    ? completedBytes / (elapsedMs / 1000)
+    : null
   const measuredEtaSeconds = (
     completedBytes !== null
     && totalBytes !== null
-    && transferSpeedBytesPerSecond !== null
-    && transferSpeedBytesPerSecond > 0
+    && averageSpeedBytesPerSecond !== null
+    && averageSpeedBytesPerSecond > 0
     && completedBytes < totalBytes
   )
-    ? Math.max(0, (totalBytes - completedBytes) / transferSpeedBytesPerSecond)
+    ? Math.max(0, (totalBytes - completedBytes) / averageSpeedBytesPerSecond)
     : null
   const fallbackEtaSeconds = completedBytes !== null && totalBytes !== null && progressPercent !== null && progressPercent > 0 && progressPercent < 100
     ? Math.max(0, (totalBytes - completedBytes) / Math.max(1, completedBytes / Math.max(1, elapsedMs / 1000)))
@@ -321,7 +266,7 @@ function SetupProgressDialog({ installState, onClose, onCancel }: SetupProgressD
 
         <div className="setup-progress-meta">
           <span>Elapsed: {elapsedLabel}</span>
-          {transferSpeedBytesPerSecond !== null ? <span>Download speed: {formatSpeed(transferSpeedBytesPerSecond)}</span> : null}
+          {averageSpeedBytesPerSecond !== null ? <span>Download speed: {formatSpeed(averageSpeedBytesPerSecond)}</span> : null}
           {etaSeconds !== null ? <span>Estimated remaining: {formatEta(etaSeconds)}</span> : null}
         </div>
 
