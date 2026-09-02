@@ -187,6 +187,7 @@ type SetupProgressDialogProps = {
 
 function SetupProgressDialog({ installState, onClose, onCancel }: SetupProgressDialogProps) {
   const [now, setNow] = useState(() => Date.now())
+
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(timer)
@@ -199,7 +200,7 @@ function SetupProgressDialog({ installState, onClose, onCancel }: SetupProgressD
     if (installState.phase === 'cancelled') return 'Cancelled'
     if (installState.message.toLowerCase().includes('download')) return 'Downloading…'
     if (installState.message.toLowerCase().includes('install')) return 'Installing…'
-    return 'Processing…'
+    return 'Fetching component now…'
   })()
 
   const startedAt = installState.started_at ? new Date(installState.started_at).getTime() : now
@@ -212,9 +213,26 @@ function SetupProgressDialog({ installState, onClose, onCancel }: SetupProgressD
     ? Math.min(100, Math.max(0, (completedBytes / totalBytes) * 100))
     : null
   const hasMeasurableProgress = progressPercent !== null
-  const etaSeconds = completedBytes !== null && totalBytes !== null && progressPercent !== null && progressPercent > 0 && progressPercent < 100
+  const averageSpeedBytesPerSecond = (
+    completedBytes !== null
+    && completedBytes > 0
+    && elapsedMs > 0
+  )
+    ? completedBytes / (elapsedMs / 1000)
+    : null
+  const measuredEtaSeconds = (
+    completedBytes !== null
+    && totalBytes !== null
+    && averageSpeedBytesPerSecond !== null
+    && averageSpeedBytesPerSecond > 0
+    && completedBytes < totalBytes
+  )
+    ? Math.max(0, (totalBytes - completedBytes) / averageSpeedBytesPerSecond)
+    : null
+  const fallbackEtaSeconds = completedBytes !== null && totalBytes !== null && progressPercent !== null && progressPercent > 0 && progressPercent < 100
     ? Math.max(0, (totalBytes - completedBytes) / Math.max(1, completedBytes / Math.max(1, elapsedMs / 1000)))
     : null
+  const etaSeconds = measuredEtaSeconds ?? fallbackEtaSeconds
 
   return (
     <div className="modal-backdrop">
@@ -248,6 +266,7 @@ function SetupProgressDialog({ installState, onClose, onCancel }: SetupProgressD
 
         <div className="setup-progress-meta">
           <span>Elapsed: {elapsedLabel}</span>
+          {averageSpeedBytesPerSecond !== null ? <span>Download speed: {formatSpeed(averageSpeedBytesPerSecond)}</span> : null}
           {etaSeconds !== null ? <span>Estimated remaining: {formatEta(etaSeconds)}</span> : null}
         </div>
 
@@ -277,6 +296,11 @@ function formatEta(seconds: number): string {
   if (seconds < 60) return `about ${Math.max(1, Math.round(seconds))} seconds`
   const minutes = Math.round(seconds / 60)
   return `about ${minutes} minute${minutes === 1 ? '' : 's'}`
+}
+
+function formatSpeed(bytesPerSecond: number): string {
+  if (!Number.isFinite(bytesPerSecond) || bytesPerSecond <= 0) return '0 B/s'
+  return `${formatBytes(Math.round(bytesPerSecond))}/s`
 }
 
 function formatBytes(value: number | null): string {

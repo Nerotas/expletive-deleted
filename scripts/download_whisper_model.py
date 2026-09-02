@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 from pathlib import Path
 
 from backend.runtime.dependencies import (
@@ -22,10 +23,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.library == "openai-whisper":
-        import whisper
-
-        whisper.load_model(args.model, download_root=args.cache_dir)
-        model_path = str(Path(args.cache_dir) / Path(whisper._MODELS[args.model]).name)
+        whisper_module = importlib.import_module("whisper")
+        whisper_module.load_model(args.model, download_root=args.cache_dir)
+        model_path = str(Path(args.cache_dir) / Path(whisper_module._MODELS[args.model]).name)
     else:
         from faster_whisper.utils import download_model
 

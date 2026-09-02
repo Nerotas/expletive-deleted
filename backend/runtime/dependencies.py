@@ -45,6 +45,7 @@ WHISPER_MODEL_FILES = (
 WHISPER_MODELS = ("tiny", "base", "small", "medium", "large-v3")
 WHISPER_LIBRARIES = ("faster-whisper", "openai-whisper")
 OPENAI_WHISPER_VERSION = "20250625"
+OPENAI_WHISPER_NUMPY_VERSION = "2.4.4"
 PYTHON_DEPENDENCIES = (
     ("faster-whisper", "1.2.1"),
     ("better-profanity", "0.7.0"),
@@ -54,6 +55,29 @@ PYTHON_DEPENDENCIES = (
     ("huggingface-hub", "1.28.0"),
 )
 PYTHON_REQUIREMENTS = tuple(f"{name}=={version}" for name, version in PYTHON_DEPENDENCIES)
+
+
+def _python_dependencies_for_library(
+    whisper_library: str,
+) -> tuple[tuple[str, str], ...]:
+    dependencies = list(PYTHON_DEPENDENCIES)
+    if whisper_library == "openai-whisper":
+        dependencies = [
+            (
+                distribution,
+                OPENAI_WHISPER_NUMPY_VERSION if distribution == "numpy" else version,
+            )
+            for distribution, version in dependencies
+        ]
+        dependencies.append(("openai-whisper", OPENAI_WHISPER_VERSION))
+    return tuple(dependencies)
+
+
+def _python_requirements_for_library(whisper_library: str) -> tuple[str, ...]:
+    return tuple(
+        f"{distribution}=={version}"
+        for distribution, version in _python_dependencies_for_library(whisper_library)
+    )
 
 
 @dataclass(frozen=True)
@@ -234,11 +258,11 @@ def build_install_plan(
         )
 
     if "python" in requested:
-        requirements = list(PYTHON_REQUIREMENTS)
-        dependency_ids = [f"python:{name}" for name, _version in PYTHON_DEPENDENCIES]
-        if whisper_library == "openai-whisper":
-            requirements.append(f"openai-whisper=={OPENAI_WHISPER_VERSION}")
-            dependency_ids.append("python:openai-whisper")
+        requirements = _python_requirements_for_library(whisper_library)
+        dependency_ids = [
+            f"python:{distribution}"
+            for distribution, _version in _python_dependencies_for_library(whisper_library)
+        ]
         actions.append(
             InstallAction(
                 id="install-python-dependencies",
@@ -353,7 +377,7 @@ def _run_action(
                     InstallProgress(
                         action.id,
                         "running",
-                        "Operation is still running",
+                        f"Fetching component now: {action.description}",
                         completed_bytes=completed_bytes,
                         total_bytes=action.estimated_download_bytes,
                     ),
@@ -493,10 +517,7 @@ def inspect_python_dependencies(
     whisper_library: str = "faster-whisper",
 ) -> tuple[DependencyStatus, ...]:
     statuses: list[DependencyStatus] = []
-    dependencies = list(PYTHON_DEPENDENCIES)
-    if whisper_library == "openai-whisper":
-        dependencies.append(("openai-whisper", OPENAI_WHISPER_VERSION))
-    for distribution, required_version in dependencies:
+    for distribution, required_version in _python_dependencies_for_library(whisper_library):
         try:
             installed_version = importlib.metadata.version(distribution)
         except importlib.metadata.PackageNotFoundError:
@@ -538,9 +559,8 @@ def inspect_whisper_model(
     display_name = f"Whisper {model} model ({library})"
     if library == "openai-whisper":
         try:
-            import whisper
-
-            model_url = whisper._MODELS[model]
+            whisper_module = importlib.import_module("whisper")
+            model_url = whisper_module._MODELS[model]
             expected_hash = model_url.split("/")[-2]
             model_path = cache_dir / Path(model_url).name
         except (ImportError, KeyError, AttributeError) as exc:
