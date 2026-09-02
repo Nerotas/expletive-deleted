@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { desktopClient, type DesktopClient } from '../../services/desktop-client'
-import type { InstallPlan } from '../../types/domain'
+import type { InstallPlan, InstallStatus } from '../../types/domain'
 import { errorMessage } from '../../utils/format'
 
 type CapabilitiesOptions = {
@@ -17,6 +17,7 @@ export function useCapabilities({
 }: CapabilitiesOptions) {
   const queryClient = useQueryClient()
   const [pendingPlan, setPendingPlan] = useState<InstallPlan | null>(null)
+  const [installState, setInstallState] = useState<InstallStatus | null>(null)
   const query = useQuery({
     queryKey: ['capabilities'],
     queryFn: () => client.getCapabilities(),
@@ -32,15 +33,47 @@ export function useCapabilities({
     onError: (reason) => onError(errorMessage(reason)),
   })
 
+  useEffect(() => {
+    if (!installState) return
+    const active = ['running', 'canceling'].includes(installState.status)
+    if (!active) {
+      if (installState.status === 'completed') {
+        void Promise.all([
+          query.refetch(),
+          queryClient.invalidateQueries({ queryKey: ['settings'] }),
+        ]).then(() => {
+          onNotice('Installation complete and verified')
+          setInstallState(null)
+        })
+      } else if (installState.status === 'failed') {
+        onError(installState.error ?? 'Dependency installation failed')
+        setInstallState(null)
+      } else if (installState.status === 'cancelled') {
+        setInstallState(null)
+      }
+      return
+    }
+
+    const timer = window.setInterval(() => {
+      void client.getInstallStatus(installState.install_id)
+        .then((status) => setInstallState(status))
+        .catch(() => undefined)
+    }, 1200)
+
+    return () => window.clearInterval(timer)
+  }, [client, installState, onError, onNotice, query, queryClient])
+
   const installMutation = useMutation({
     mutationFn: (planId: string) => client.installDependencies(planId),
-    onSuccess: async () => {
+    onSuccess: (result) => {
       setPendingPlan(null)
-      await Promise.all([
-        query.refetch(),
-        queryClient.invalidateQueries({ queryKey: ['settings'] }),
-      ])
-      onNotice('Installation complete and verified')
+      setInstallState(result)
+      if (result.status === 'completed') {
+        void Promise.all([
+          query.refetch(),
+          queryClient.invalidateQueries({ queryKey: ['settings'] }),
+        ]).then(() => onNotice('Installation complete and verified'))
+      }
     },
     onError: (reason) => onError(errorMessage(reason)),
   })
@@ -68,17 +101,24 @@ export function useCapabilities({
     loading: query.isLoading,
     checking: query.isFetching,
     busy: planMutation.isPending || installMutation.isPending || locateMutation.isPending || query.isFetching,
-    installing: installMutation.isPending,
+    installing: installMutation.isPending || Boolean(installState && ['running', 'canceling'].includes(installState.status)),
+    installState,
     pendingPlan,
     refresh: async () => { await query.refetch() },
     reviewInstall: async (components: string[]) => {
       await planMutation.mutateAsync(components).catch(() => undefined)
     },
     cancelInstall: () => setPendingPlan(null),
+    cancelCurrentInstall: async () => {
+      if (!installState) return
+      const status = await client.cancelInstall(installState.install_id).catch(() => null)
+      if (status) setInstallState(status)
+    },
     approveInstall: async () => {
       if (!pendingPlan) return
       await installMutation.mutateAsync(pendingPlan.plan_id).catch(() => undefined)
     },
+    dismissProgress: () => setInstallState(null),
     locateExisting: async (component: 'ffmpeg' | 'whisper_model') => {
       await locateMutation.mutateAsync(component).catch(() => undefined)
     },

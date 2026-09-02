@@ -23,6 +23,7 @@ from backend.runtime.dependencies import (
     inspect_whisper_model,
     require_whisper_model_path,
 )
+from scripts.desktop_bridge import DesktopBridge
 from backend.runtime.environment import get_managed_ffmpeg_manifest_path, get_managed_ffmpeg_paths
 
 
@@ -307,6 +308,37 @@ class DependencyPlanTests(unittest.TestCase):
             if line.strip() and not line.startswith("#")
         )
         self.assertEqual(requirements, PYTHON_REQUIREMENTS)
+
+    def test_install_tracking_starts_and_reports_background_state(self):
+        bridge = DesktopBridge()
+        plan = build_install_plan(["python"], python_executable=Path("C:\\python.exe"))
+        bridge._install_plans[plan.id] = plan
+
+        running = Event()
+        finish = Event()
+
+        def fake_run(plan_arg, **kwargs):
+            progress_callback = kwargs["progress_callback"]
+            progress_callback(type("Event", (), {"action_id": plan_arg.actions[0].id, "phase": "starting", "message": "Installing Python dependencies", "completed_bytes": None, "total_bytes": None})())
+            progress_callback(type("Event", (), {"action_id": plan_arg.actions[0].id, "phase": "running", "message": "Installing Python dependencies", "completed_bytes": 1024, "total_bytes": 4096})())
+            running.set()
+            finish.wait(1)
+            progress_callback(type("Event", (), {"action_id": plan_arg.actions[0].id, "phase": "completed", "message": "Installation verified", "completed_bytes": 4096, "total_bytes": 4096})())
+            return (type("Result", (), {"action_id": plan_arg.actions[0].id, "dependency_ids": plan_arg.actions[0].dependency_ids, "detail": "installed"})(),)
+
+        with patch("scripts.desktop_bridge.execute_install_plan", side_effect=fake_run):
+            started = bridge.handle("dependencies.install", {"plan_id": plan.id})
+            self.assertIn("install_id", started)
+            self.assertEqual(started["status"], "running")
+
+            self.assertTrue(running.wait(1))
+            status = bridge.handle("dependencies.status", {"install_id": started["install_id"]})
+            self.assertEqual(status["phase"], "running")
+            self.assertEqual(status["message"], "Installing Python dependencies")
+            self.assertEqual(status["completed_bytes"], 1024)
+            self.assertEqual(status["total_bytes"], 4096)
+
+            finish.set()
 
 
 if __name__ == "__main__":

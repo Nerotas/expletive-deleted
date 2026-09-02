@@ -188,3 +188,17 @@ export type InstallPlan = {
   plan_id: string
   actions: InstallAction[]
 }
+
+export type InstallStatus = {
+  install_id: string
+  status: 'running' | 'completed' | 'failed' | 'cancelled' | 'canceling'
+  action_id: string | null
+  action_index: number | null
+  action_count: number | null
+  phase: 'starting' | 'running' | 'verifying' | 'completed' | 'cancelled' | null
+  message: string
+  completed_bytes: number | null
+  total_bytes: number | null
+  started_at: string | null
+  error: string | null
+}
