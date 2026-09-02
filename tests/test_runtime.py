@@ -30,6 +30,7 @@ from backend.runtime.environment import (
     get_calibrated_transcription_factor,
     get_whisper_cache_dir,
     get_whisper_device_status,
+    get_whisper_timing_history_path,
     record_transcription_timing,
     get_runtime_paths,
     load_profanity_censor_words,
@@ -654,6 +655,37 @@ class RuntimeTests(unittest.TestCase):
                 record_transcription_timing(100.0, 300.0, root=root)
                 factor = get_calibrated_transcription_factor(root=root)
             self.assertEqual(factor, 3.0)
+
+    def test_transcription_timing_defaults_to_writable_app_data(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            local_app_data = Path(temporary_directory)
+            expected_path = local_app_data / "ExpletiveDeleted" / ".whisper-timing.json"
+            with (
+                patch.dict(os.environ, {"LOCALAPPDATA": str(local_app_data)}, clear=False),
+                patch(
+                    "backend.runtime.environment.get_whisper_profile_key",
+                    return_value="large:cpu:int8",
+                ),
+            ):
+                self.assertEqual(get_whisper_timing_history_path(), expected_path.resolve())
+                record_transcription_timing(100.0, 200.0)
+
+            self.assertTrue(expected_path.is_file())
+
+    def test_transcription_timing_write_failure_does_not_fail_transcription(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            with (
+                patch(
+                    "backend.runtime.environment.get_whisper_profile_key",
+                    return_value="large:cpu:int8",
+                ),
+                patch("pathlib.Path.write_text", side_effect=PermissionError("read only")),
+            ):
+                record_transcription_timing(
+                    100.0,
+                    200.0,
+                    root=Path(temporary_directory),
+                )
 
     def test_whisper_uses_cpu_when_cuda_is_unavailable(self):
         with patch("backend.runtime.environment.ctranslate2", None):
