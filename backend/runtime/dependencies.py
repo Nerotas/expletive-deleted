@@ -377,7 +377,7 @@ def _run_action(
                     InstallProgress(
                         action.id,
                         "running",
-                        "Operation is still running",
+                        f"Fetching component now: {action.description}",
                         completed_bytes=completed_bytes,
                         total_bytes=action.estimated_download_bytes,
                     ),
