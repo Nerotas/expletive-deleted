@@ -64,7 +64,19 @@ describe('desktop application renderer', () => {
       plan_id: 'approved-plan',
       actions: [],
     })
-    vi.spyOn(desktopClient, 'installDependencies').mockResolvedValue({})
+    vi.spyOn(desktopClient, 'installDependencies').mockResolvedValue({
+      install_id: 'install-job',
+      status: 'completed',
+      action_id: null,
+      action_index: null,
+      action_count: null,
+      phase: 'completed',
+      message: 'Installation complete and verified',
+      completed_bytes: null,
+      total_bytes: null,
+      started_at: new Date().toISOString(),
+      error: null,
+    })
     vi.spyOn(desktopClient, 'updateDictionary').mockResolvedValue(emptyDictionary)
     vi.spyOn(desktopClient, 'restoreDictionaryDefaults').mockResolvedValue(emptyDictionary)
     vi.spyOn(desktopClient, 'importDictionary').mockResolvedValue(emptyDictionary)
@@ -255,7 +267,19 @@ describe('desktop application renderer', () => {
     }))
     vi.mocked(desktopClient.installDependencies).mockImplementationOnce(async () => {
       persisted.runtime.whisper_cache = managedCache
-      return {}
+      return {
+        install_id: 'install-job',
+        status: 'completed',
+        action_id: null,
+        action_index: null,
+        action_count: null,
+        phase: 'completed',
+        message: 'Installation complete and verified',
+        completed_bytes: null,
+        total_bytes: null,
+        started_at: new Date().toISOString(),
+        error: null,
+      }
     })
     const user = userEvent.setup()
     renderApp('/')

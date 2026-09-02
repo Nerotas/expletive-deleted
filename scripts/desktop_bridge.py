@@ -6,11 +6,13 @@ from __future__ import annotations
 import json
 import math
 import sys
+import uuid
 from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
+from datetime import datetime, timezone
 from pathlib import Path
-from threading import Lock
+from threading import Event, Lock
 from typing import Any, TextIO
 
 from backend.policy import PolicyStore, ProfanityPolicy
@@ -39,6 +41,111 @@ class DesktopBridge:
         self.service = service or BackendService()
         self.policy_store = policy_store or PolicyStore()
         self._install_plans = {}
+        self._install_jobs = {}
+        self._install_lock = Lock()
+        self._install_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="desktop-install")
+
+    def _serialize_install_state(self, install_id: str) -> dict[str, Any]:
+        with self._install_lock:
+            state = self._install_jobs[install_id]
+            return {
+                "install_id": install_id,
+                "status": state["status"],
+                "action_id": state.get("action_id"),
+                "action_index": state.get("action_index"),
+                "action_count": state.get("action_count"),
+                "phase": state.get("phase"),
+                "message": state.get("message"),
+                "completed_bytes": state.get("completed_bytes"),
+                "total_bytes": state.get("total_bytes"),
+                "started_at": state.get("started_at"),
+                "error": state.get("error"),
+            }
+
+    def _run_install_task(self, install_id: str, plan_id: str, plan: object, cache_dir: Path | None) -> None:
+        cancellation = Event()
+        with self._install_lock:
+            self._install_jobs[install_id]["cancel_event"] = cancellation
+        try:
+            def callback(progress: object) -> None:
+                action_index = next(
+                    (index + 1 for index, action in enumerate(plan.actions) if action.id == progress.action_id),
+                    None,
+                )
+                with self._install_lock:
+                    state = self._install_jobs[install_id]
+                    state["status"] = (
+                        "completed" if progress.phase == "completed"
+                        else "cancelled" if progress.phase == "cancelled"
+                        else "running"
+                    )
+                    state["action_id"] = progress.action_id
+                    state["phase"] = progress.phase
+                    state["message"] = progress.message
+                    state["completed_bytes"] = progress.completed_bytes
+                    state["total_bytes"] = progress.total_bytes
+                    state["action_index"] = action_index if action_index is not None else state.get("action_index")
+                    state["action_count"] = len(plan.actions)
+                    if progress.phase == "completed":
+                        state["message"] = "Installation verified"
+                    if progress.phase == "cancelled":
+                        state["error"] = "The installation was cancelled"
+
+            results = execute_install_plan(
+                plan,
+                approved_plan_id=plan_id,
+                cancellation=cancellation,
+                progress_callback=callback,
+                cache_dir=cache_dir,
+            )
+            installed_ids = {
+                dependency_id
+                for result in results
+                for dependency_id in result.dependency_ids
+            }
+            settings = self.service.get_settings()
+            runtime = dict(settings["runtime"])
+            runtime_root = get_application_runtime_root()
+            if {"ffmpeg", "ffprobe"}.issubset(installed_ids):
+                ffmpeg_path, ffprobe_path = get_managed_ffmpeg_paths(runtime_root)
+                if not ffmpeg_path or not ffprobe_path:
+                    raise RuntimeError("Managed FFmpeg completed but its verified paths are unavailable")
+                runtime["ffmpeg_path"] = ffmpeg_path
+                runtime["ffprobe_path"] = ffprobe_path
+            if any(dependency_id.startswith("whisper:") for dependency_id in installed_ids):
+                runtime["whisper_cache"] = str(cache_dir)
+            if runtime != settings["runtime"]:
+                settings["runtime"] = runtime
+                self.service.update_settings(settings)
+
+            with self._install_lock:
+                state = self._install_jobs[install_id]
+                state["status"] = "completed"
+                state["phase"] = "completed"
+                state["message"] = "Installation complete and verified"
+                state["error"] = None
+                state["completed_bytes"] = None
+                state["total_bytes"] = None
+                state["action_id"] = results[-1].action_id if results else state.get("action_id")
+                state["action_index"] = len(plan.actions) if results else state.get("action_index")
+        except Exception as exc:
+            with self._install_lock:
+                state = self._install_jobs[install_id]
+                state["status"] = "failed"
+                if cancellation.is_set():
+                    state["phase"] = "cancelled"
+                state["message"] = "Installation failed"
+                state["error"] = str(exc)
+
+    def _cancel_install(self, install_id: str) -> dict[str, Any]:
+        with self._install_lock:
+            state = self._install_jobs[install_id]
+            cancel_event = state.get("cancel_event")
+            if cancel_event is not None:
+                cancel_event.set()
+            state["status"] = "canceling"
+            state["message"] = "Cancelling installation"
+        return self._serialize_install_state(install_id)
 
     def handle(self, method: str, params: Mapping[str, Any] | None = None) -> object:
         params = params or {}
@@ -144,35 +251,46 @@ class DesktopBridge:
             plan = self._install_plans.get(plan_id)
             if plan is None:
                 raise ValueError("Dependency plan is unknown or expired; review it again")
-            runtime_root = get_application_runtime_root()
-            cache_dir = (
-                self.service.settings.runtime.whisper_cache
-                or get_managed_whisper_cache_dir(runtime_root)
-            )
-            results = execute_install_plan(
-                plan,
-                approved_plan_id=plan_id,
-                cache_dir=cache_dir,
-            )
-            installed_ids = {
-                dependency_id
-                for result in results
-                for dependency_id in result.dependency_ids
+            install_id = uuid.uuid4().hex
+            started_at = datetime.now(timezone.utc).isoformat()
+            state = {
+                "status": "running",
+                "action_id": None,
+                "action_index": 0,
+                "action_count": len(plan.actions),
+                "phase": "starting",
+                "message": "Preparing required components",
+                "completed_bytes": None,
+                "total_bytes": None,
+                "started_at": started_at,
+                "error": None,
+                "plan_id": plan_id,
+                "plan": plan,
+                "cancel_event": None,
             }
-            settings = self.service.get_settings()
-            runtime = dict(settings["runtime"])
-            if {"ffmpeg", "ffprobe"}.issubset(installed_ids):
-                ffmpeg_path, ffprobe_path = get_managed_ffmpeg_paths(runtime_root)
-                if not ffmpeg_path or not ffprobe_path:
-                    raise RuntimeError("Managed FFmpeg completed but its verified paths are unavailable")
-                runtime["ffmpeg_path"] = ffmpeg_path
-                runtime["ffprobe_path"] = ffprobe_path
-            if any(dependency_id.startswith("whisper:") for dependency_id in installed_ids):
-                runtime["whisper_cache"] = str(cache_dir)
-            if runtime != settings["runtime"]:
-                settings["runtime"] = runtime
-                self.service.update_settings(settings)
-            return [asdict(result) for result in results]
+            self._install_jobs[install_id] = state
+            snapshot = self._serialize_install_state(install_id)
+            self._install_executor.submit(
+                self._run_install_task,
+                install_id,
+                plan_id,
+                plan,
+                (
+                    self.service.settings.runtime.whisper_cache
+                    or get_managed_whisper_cache_dir(get_application_runtime_root())
+                ),
+            )
+            return snapshot
+        if method == "dependencies.status":
+            install_id = params["install_id"]
+            if install_id not in self._install_jobs:
+                raise ValueError("Dependency install is unknown or expired")
+            return self._serialize_install_state(install_id)
+        if method == "dependencies.cancel":
+            install_id = params["install_id"]
+            if install_id not in self._install_jobs:
+                raise ValueError("Dependency install is unknown or expired")
+            return self._cancel_install(install_id)
         if method == "dependencies.inspect_ffmpeg":
             return self._inspect_ffmpeg_selection(params.get("path"))
         if method == "dependencies.locate_ffmpeg":

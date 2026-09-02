@@ -11,20 +11,24 @@ import {
 import { NavLink } from 'react-router-dom'
 import appIconUrl from '../assets/expletive-deleted-icon.svg'
 import { APPLICATION_DISPLAY_NAME } from '../constants/application'
-import type { Capabilities, Theme } from '../types/domain'
+import type { Capabilities, InstallStatus, Theme } from '../types/domain'
 
 type AppHeaderProps = {
   capabilities: Capabilities | null
   checking: boolean
+  installState: InstallStatus | null
   theme: Theme
   toggleTheme: () => void
+  onOpenInstall: () => void
 }
 
 export function AppHeader({
   capabilities,
   checking,
+  installState,
   theme,
   toggleTheme,
+  onOpenInstall,
 }: AppHeaderProps) {
   return (
     <header className="app-header">
@@ -49,14 +53,21 @@ export function AppHeader({
         >
           {theme === 'light' ? <MoonIcon size={16} /> : <SunIcon size={16} />}
         </button>
-        <div className={`runtime-pill ${checking ? 'checking' : capabilities?.ready ? 'ready' : 'attention'}`}>
-          {checking
-            ? <LoaderCircle className="spin" size={16} />
-            : capabilities?.ready
-              ? <ShieldCheck size={16} />
-              : <AlertCircle size={16} />}
-          {checking ? 'Checking system' : capabilities?.ready ? 'System ready' : 'Setup required'}
-        </div>
+        {installState && ['running', 'canceling'].includes(installState.status) ? (
+          <button className="runtime-pill installing" type="button" onClick={onOpenInstall}>
+            <LoaderCircle className="spin" size={16} />
+            {installState.message || 'Installing…'}
+          </button>
+        ) : (
+          <div className={`runtime-pill ${checking ? 'checking' : capabilities?.ready ? 'ready' : 'attention'}`}>
+            {checking
+              ? <LoaderCircle className="spin" size={16} />
+              : capabilities?.ready
+                ? <ShieldCheck size={16} />
+                : <AlertCircle size={16} />}
+            {checking ? 'Checking system' : capabilities?.ready ? 'System ready' : 'Setup required'}
+          </div>
+        )}
       </div>
     </header>
   )

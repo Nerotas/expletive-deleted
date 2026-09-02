@@ -9,6 +9,7 @@ import type {
   DictionaryTarget,
   DiscoveredWords,
   InstallPlan,
+  InstallStatus,
   ImportResult,
   Job,
   JobEvent,
@@ -65,7 +66,11 @@ export const desktopClient = {
   planDependencies: (components: string[]) =>
     invoke<InstallPlan>('dependencies.plan', { components }),
   installDependencies: (planId: string) =>
-    invoke<unknown>('dependencies.install', { plan_id: planId }),
+    invoke<InstallStatus>('dependencies.install', { plan_id: planId }),
+  getInstallStatus: (installId: string) =>
+    invoke<InstallStatus>('dependencies.status', { install_id: installId }),
+  cancelInstall: (installId: string) =>
+    invoke<InstallStatus>('dependencies.cancel', { install_id: installId }),
   inspectExistingFfmpeg: (path: string) =>
     invoke<{ ffmpeg_path: string; ffprobe_path: string; version: string | null }>(
       'dependencies.inspect_ffmpeg',
