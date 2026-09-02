@@ -167,9 +167,13 @@ jobs:
         run: |
           $tag = 'v${{ steps.version.outputs.version }}'
           git config user.name 'github-actions[bot]'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git add frontend/package.json frontend/package-lock.json frontend/src/features/settings/SettingsPage.tsx README.md docs/index.html
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git fetch --tags origin
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           $releaseTree = git write-tree
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
