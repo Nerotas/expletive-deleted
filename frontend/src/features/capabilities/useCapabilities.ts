@@ -37,34 +37,40 @@ export function useCapabilities({
   useEffect(() => {
     if (!installState) return
     const active = ['running', 'canceling'].includes(installState.status)
-    if (!active) {
-      const settledKey = `${installState.install_id}:${installState.status}`
-      if (settledInstallRef.current === settledKey) return
-      settledInstallRef.current = settledKey
+    if (active) return
 
-      void (async () => {
-        if (installState.status === 'completed') {
-          await Promise.all([
-            query.refetch(),
-            queryClient.invalidateQueries({ queryKey: ['settings'] }),
-          ])
-          onNotice('Installation complete and verified')
-        } else if (installState.status === 'failed') {
-          onError(installState.error ?? 'Dependency installation failed')
-        }
-        setInstallState(null)
-      })()
-      return
-    }
+    const settledKey = `${installState.install_id}:${installState.status}`
+    if (settledInstallRef.current === settledKey) return
+    settledInstallRef.current = settledKey
 
+    void (async () => {
+      if (installState.status === 'completed') {
+        await Promise.all([
+          query.refetch(),
+          queryClient.invalidateQueries({ queryKey: ['settings'] }),
+        ])
+        onNotice('Installation complete and verified')
+      } else if (installState.status === 'failed') {
+        onError(installState.error ?? 'Dependency installation failed')
+      }
+      setInstallState(null)
+    })()
+  }, [installState, onError, onNotice, query, queryClient])
+
+  const activeInstallId = installState && ['running', 'canceling'].includes(installState.status)
+    ? installState.install_id
+    : null
+
+  useEffect(() => {
+    if (!activeInstallId) return
     const timer = window.setInterval(() => {
-      void client.getInstallStatus(installState.install_id)
+      void client.getInstallStatus(activeInstallId)
         .then((status) => setInstallState(status))
         .catch(() => undefined)
     }, 1200)
 
     return () => window.clearInterval(timer)
-  }, [client, installState, onError, onNotice, query, queryClient])
+  }, [activeInstallId, client])
 
   const installMutation = useMutation({
     mutationFn: (planId: string) => client.installDependencies(planId),

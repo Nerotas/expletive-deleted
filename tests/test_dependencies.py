@@ -1,5 +1,6 @@
 import json
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from threading import Event
@@ -339,6 +340,15 @@ class DependencyPlanTests(unittest.TestCase):
             self.assertEqual(status["total_bytes"], 4096)
 
             finish.set()
+
+            deadline = time.monotonic() + 2
+            status = bridge.handle("dependencies.status", {"install_id": started["install_id"]})
+            while status["status"] not in ("completed", "failed") and time.monotonic() < deadline:
+                status = bridge.handle("dependencies.status", {"install_id": started["install_id"]})
+            self.assertEqual(status["status"], "completed")
+
+        bridge._install_executor.shutdown(wait=True)
+        bridge.close()
 
 
 if __name__ == "__main__":

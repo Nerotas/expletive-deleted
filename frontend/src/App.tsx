@@ -213,7 +213,7 @@ function SetupProgressDialog({ installState, onClose, onCancel }: SetupProgressD
     : null
   const hasMeasurableProgress = progressPercent !== null
   const etaSeconds = completedBytes !== null && totalBytes !== null && progressPercent !== null && progressPercent > 0 && progressPercent < 100
-    ? Math.max(0, ((totalBytes - completedBytes) / Math.max(1, completedBytes / Math.max(1, elapsedMs / 1000))) / 1000)
+    ? Math.max(0, (totalBytes - completedBytes) / Math.max(1, completedBytes / Math.max(1, elapsedMs / 1000)))
     : null
 
   return (

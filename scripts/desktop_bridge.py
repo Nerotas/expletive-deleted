@@ -42,68 +42,54 @@ class DesktopBridge:
         self.policy_store = policy_store or PolicyStore()
         self._install_plans = {}
         self._install_jobs = {}
+        self._install_lock = Lock()
         self._install_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="desktop-install")
 
     def _serialize_install_state(self, install_id: str) -> dict[str, Any]:
-        state = self._install_jobs[install_id]
-        return {
-            "install_id": install_id,
-            "status": state["status"],
-            "action_id": state.get("action_id"),
-            "action_index": state.get("action_index"),
-            "action_count": state.get("action_count"),
-            "phase": state.get("phase"),
-            "message": state.get("message"),
-            "completed_bytes": state.get("completed_bytes"),
-            "total_bytes": state.get("total_bytes"),
-            "started_at": state.get("started_at"),
-            "error": state.get("error"),
-        }
-
-    def _install_progress_callback(self, install_id: str, plan: object):
-        def callback(progress: object) -> None:
-            if install_id not in self._install_jobs:
-                return
+        with self._install_lock:
             state = self._install_jobs[install_id]
-            state["status"] = "running" if progress.phase not in {"completed", "cancelled"} else "completed" if progress.phase == "completed" else "cancelled"
-            state["action_id"] = progress.action_id
-            state["phase"] = progress.phase
-            state["message"] = progress.message
-            state["completed_bytes"] = progress.completed_bytes
-            state["total_bytes"] = progress.total_bytes
-            action_index = next(
-                (index + 1 for index, action in enumerate(plan.actions) if action.id == progress.action_id),
-                state.get("action_index"),
-            )
-            state["action_index"] = action_index
-            state["action_count"] = len(plan.actions)
-            if not state.get("error") and progress.phase == "completed":
-                state["message"] = "Installation verified"
-        return callback
+            return {
+                "install_id": install_id,
+                "status": state["status"],
+                "action_id": state.get("action_id"),
+                "action_index": state.get("action_index"),
+                "action_count": state.get("action_count"),
+                "phase": state.get("phase"),
+                "message": state.get("message"),
+                "completed_bytes": state.get("completed_bytes"),
+                "total_bytes": state.get("total_bytes"),
+                "started_at": state.get("started_at"),
+                "error": state.get("error"),
+            }
 
     def _run_install_task(self, install_id: str, plan_id: str, plan: object, cache_dir: Path | None) -> None:
-        state = self._install_jobs[install_id]
         cancellation = Event()
-        state["cancel_event"] = cancellation
+        with self._install_lock:
+            self._install_jobs[install_id]["cancel_event"] = cancellation
         try:
             def callback(progress: object) -> None:
-                state["status"] = "running" if progress.phase not in {"completed", "cancelled"} else "completed" if progress.phase == "completed" else "cancelled"
-                state["action_id"] = progress.action_id
-                state["phase"] = progress.phase
-                state["message"] = progress.message
-                state["completed_bytes"] = progress.completed_bytes
-                state["total_bytes"] = progress.total_bytes
                 action_index = next(
                     (index + 1 for index, action in enumerate(plan.actions) if action.id == progress.action_id),
-                    state.get("action_index"),
+                    None,
                 )
-                state["action_index"] = action_index
-                state["action_count"] = len(plan.actions)
-                if progress.phase == "completed":
-                    state["message"] = "Installation verified"
-                if progress.phase == "cancelled":
-                    state["status"] = "cancelled"
-                    state["error"] = "The installation was cancelled"
+                with self._install_lock:
+                    state = self._install_jobs[install_id]
+                    state["status"] = (
+                        "completed" if progress.phase == "completed"
+                        else "cancelled" if progress.phase == "cancelled"
+                        else "running"
+                    )
+                    state["action_id"] = progress.action_id
+                    state["phase"] = progress.phase
+                    state["message"] = progress.message
+                    state["completed_bytes"] = progress.completed_bytes
+                    state["total_bytes"] = progress.total_bytes
+                    state["action_index"] = action_index if action_index is not None else state.get("action_index")
+                    state["action_count"] = len(plan.actions)
+                    if progress.phase == "completed":
+                        state["message"] = "Installation verified"
+                    if progress.phase == "cancelled":
+                        state["error"] = "The installation was cancelled"
 
             results = execute_install_plan(
                 plan,
@@ -132,27 +118,33 @@ class DesktopBridge:
                 settings["runtime"] = runtime
                 self.service.update_settings(settings)
 
-            state["status"] = "completed"
-            state["phase"] = "completed"
-            state["message"] = "Installation complete and verified"
-            state["error"] = None
-            state["completed_bytes"] = None
-            state["total_bytes"] = None
-            state["action_id"] = results[-1].action_id if results else state.get("action_id")
-            state["action_index"] = len(plan.actions) if results else state.get("action_index")
+            with self._install_lock:
+                state = self._install_jobs[install_id]
+                state["status"] = "completed"
+                state["phase"] = "completed"
+                state["message"] = "Installation complete and verified"
+                state["error"] = None
+                state["completed_bytes"] = None
+                state["total_bytes"] = None
+                state["action_id"] = results[-1].action_id if results else state.get("action_id")
+                state["action_index"] = len(plan.actions) if results else state.get("action_index")
         except Exception as exc:
-            state["status"] = "failed"
-            state["phase"] = "cancelled" if cancellation.is_set() else "running"
-            state["message"] = "Installation failed"
-            state["error"] = str(exc)
+            with self._install_lock:
+                state = self._install_jobs[install_id]
+                state["status"] = "failed"
+                if cancellation.is_set():
+                    state["phase"] = "cancelled"
+                state["message"] = "Installation failed"
+                state["error"] = str(exc)
 
     def _cancel_install(self, install_id: str) -> dict[str, Any]:
-        state = self._install_jobs[install_id]
-        cancel_event = state.get("cancel_event")
-        if cancel_event is not None:
-            cancel_event.set()
-        state["status"] = "canceling"
-        state["message"] = "Cancelling installation"
+        with self._install_lock:
+            state = self._install_jobs[install_id]
+            cancel_event = state.get("cancel_event")
+            if cancel_event is not None:
+                cancel_event.set()
+            state["status"] = "canceling"
+            state["message"] = "Cancelling installation"
         return self._serialize_install_state(install_id)
 
     def handle(self, method: str, params: Mapping[str, Any] | None = None) -> object:
@@ -277,19 +269,7 @@ class DesktopBridge:
                 "cancel_event": None,
             }
             self._install_jobs[install_id] = state
-            snapshot = {
-                "install_id": install_id,
-                "status": state["status"],
-                "action_id": state.get("action_id"),
-                "action_index": state.get("action_index"),
-                "action_count": state.get("action_count"),
-                "phase": state.get("phase"),
-                "message": state.get("message"),
-                "completed_bytes": state.get("completed_bytes"),
-                "total_bytes": state.get("total_bytes"),
-                "started_at": state.get("started_at"),
-                "error": state.get("error"),
-            }
+            snapshot = self._serialize_install_state(install_id)
             self._install_executor.submit(
                 self._run_install_task,
                 install_id,
