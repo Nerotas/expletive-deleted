@@ -6,6 +6,10 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     restoreMocks: true,
     clearMocks: true,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json-summary'],
+    },
   },
 })
 

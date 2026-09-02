@@ -18,6 +18,10 @@ __pycache__/
 dist/
 build/
 .pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
 *.egg
 
 # Electron + React Frontend
