@@ -129,7 +129,7 @@ The package audit fails if the installer contains the external processing FFmpeg
 
 ## Releases and versioning
 
-`frontend/package.json` is the source of truth for the application version. Run the synchronizer after choosing a version locally:
+`frontend/package.json` records the source-tree application version. Run the synchronizer after choosing a version locally:
 
 ```powershell
 cd frontend
@@ -138,11 +138,11 @@ npm run version:sync
 npm run version:check
 ```
 
-When a pull request containing application changes merges into `main`, the [Release workflow](.github/workflows/release.yml) prepares the next patch version in a `release/v*` pull request. Documentation and workflow-only changes do not trigger a release. Merging the version pull request runs backend, renderer, native, packaging, and installed-app checks, then creates the `v<version>` tag and publishes the Windows installer to GitHub Releases.
+When application changes reach `main`, the [Release workflow](.github/workflows/release.yml) chooses the next patch version from the latest published release, synchronizes version metadata only in the build runner, runs backend, renderer, native, packaging, and installed-app checks, then tags the merged `main` commit and publishes the Windows installer. Documentation and workflow-only changes do not trigger a release.
 
-If an application pull request deliberately changes `frontend/package.json`, that version is preserved instead of receiving another patch bump. Use this path for minor or major releases. Manual workflow runs may choose `patch`, `minor`, `major`, or `none`; version changes are still proposed through a pull request.
+If an application pull request deliberately raises `frontend/package.json` above the latest published version, that version is used. Manual workflow runs may choose `patch`, `minor`, `major`, or `none`.
 
-Repository Actions must have **Read and write permissions** and permission to create pull requests. The workflow explicitly starts CI for bot-created version pull requests, which do not trigger another workflow automatically. It never pushes commits directly to protected `main`. A failed validation does not tag or publish the release.
+Repository Actions must have **Read and write permissions** so the workflow can push the release tag and create the GitHub Release. It never pushes commits to protected `main` or creates a release pull request. A failed validation does not tag or publish the release.
 
 ## Validation
 
