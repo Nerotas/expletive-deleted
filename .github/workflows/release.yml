@@ -65,8 +65,11 @@ jobs:
           $packageVersion = node -p "require('./frontend/package.json').version"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-          $latestTag = gh release view --repo '${{ github.repository }}' --json tagName --jq '.tagName' 2>$null
-          $hasPublishedRelease = $LASTEXITCODE -eq 0
+          $releaseTagsJson = gh release list --exclude-drafts --exclude-pre-releases --limit 100 --repo '${{ github.repository }}' --json tagName
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $releaseTags = @($releaseTagsJson | ConvertFrom-Json | ForEach-Object { $_.tagName })
+          $latestTag = $releaseTags | Select-Object -First 1
+          $hasPublishedRelease = -not [string]::IsNullOrWhiteSpace($latestTag)
 
           if ($hasPublishedRelease) {
             $latestVersion = $latestTag.TrimStart('v')
@@ -98,8 +101,7 @@ jobs:
 
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
-          gh release view "v$version" --repo '${{ github.repository }}' *> $null
-          if ($LASTEXITCODE -eq 0) {
+          if ($releaseTags -contains "v$version") {
             "published=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
             Write-Host "Version $version is already published; nothing to do."
           } else {
@@ -164,11 +166,36 @@ jobs:
         shell: pwsh
         run: |
           $tag = 'v${{ steps.version.outputs.version }}'
+          git config user.name 'github-actions[bot]'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git add frontend/package.json frontend/package-lock.json frontend/src/features/settings/SettingsPage.tsx README.md docs/index.html
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git fetch --tags origin
-          if (-not (git tag --list $tag)) {
-            git tag -a $tag -m "Expletive Deleted $tag"
-            git push origin $tag
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $releaseTree = git write-tree
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (git tag --list $tag) {
+            $taggedTree = git rev-parse "$tag^{tree}"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            if ($taggedTree -ne $releaseTree) {
+              throw "Existing tag $tag does not match the validated release source."
+            }
+            Write-Host "Using existing matching tag $tag."
+            exit 0
           }
+
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "chore(release): $tag"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          git tag -a $tag -m "Expletive Deleted $tag"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git push origin $tag
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Publish GitHub Release
         if: steps.version.outputs.published != 'true'
