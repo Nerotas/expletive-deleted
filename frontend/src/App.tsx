@@ -22,7 +22,7 @@ import './theme.css'
 function App() {
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [installDialogOpen, setInstallDialogOpen] = useState(false)
+  const [dismissedInstallId, setDismissedInstallId] = useState<string | null>(null)
   const { theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
   const location = useLocation()
@@ -42,11 +42,11 @@ function App() {
     onNotice: reportNotice,
     onSaved: capabilities.refresh,
   })
-  useEffect(() => {
-    if (capabilities.installState && ['running', 'canceling'].includes(capabilities.installState.status)) {
-      setInstallDialogOpen(true)
-    }
-  }, [capabilities.installState])
+  const installDialogOpen = Boolean(
+    capabilities.installState
+    && ['running', 'canceling'].includes(capabilities.installState.status)
+    && capabilities.installState.install_id !== dismissedInstallId,
+  )
 
   const queue = useQueue({
     enabled: location.pathname === '/' && settings.persisted?.onboarding.completed === true,
@@ -67,7 +67,7 @@ function App() {
         installState={capabilities.installState}
         theme={theme}
         toggleTheme={toggleTheme}
-        onOpenInstall={() => setInstallDialogOpen(true)}
+        onOpenInstall={() => setDismissedInstallId(null)}
       />
       <main>
         {error && <AlertBanner tone="error" message={error} onDismiss={() => setError(null)} />}
@@ -168,10 +168,10 @@ function App() {
       {capabilities.installState && installDialogOpen && (
         <SetupProgressDialog
           installState={capabilities.installState}
-          onClose={() => setInstallDialogOpen(false)}
+          onClose={() => setDismissedInstallId(capabilities.installState?.install_id ?? null)}
           onCancel={() => {
             void capabilities.cancelCurrentInstall?.()
-            setInstallDialogOpen(false)
+            setDismissedInstallId(capabilities.installState?.install_id ?? null)
           }}
         />
       )}
@@ -186,6 +186,12 @@ type SetupProgressDialogProps = {
 }
 
 function SetupProgressDialog({ installState, onClose, onCancel }: SetupProgressDialogProps) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+
   const phaseLabel = (() => {
     if (installState.status === 'completed') return 'Complete'
     if (installState.phase === 'starting') return 'Preparing…'
@@ -196,16 +202,18 @@ function SetupProgressDialog({ installState, onClose, onCancel }: SetupProgressD
     return 'Processing…'
   })()
 
-  const startedAt = installState.started_at ? new Date(installState.started_at).getTime() : Date.now()
-  const elapsedMs = Math.max(0, Date.now() - startedAt)
+  const startedAt = installState.started_at ? new Date(installState.started_at).getTime() : now
+  const elapsedMs = Math.max(0, now - startedAt)
   const elapsedLabel = formatDuration(elapsedMs)
 
-  const hasMeasurableProgress = installState.completed_bytes !== null && installState.total_bytes !== null && installState.total_bytes > 0
-  const progressPercent = hasMeasurableProgress
-    ? Math.min(100, Math.max(0, (installState.completed_bytes / installState.total_bytes) * 100))
+  const completedBytes = installState.completed_bytes
+  const totalBytes = installState.total_bytes
+  const progressPercent = completedBytes !== null && totalBytes !== null && totalBytes > 0
+    ? Math.min(100, Math.max(0, (completedBytes / totalBytes) * 100))
     : null
-  const etaSeconds = hasMeasurableProgress && progressPercent !== null && progressPercent > 0 && progressPercent < 100
-    ? Math.max(0, ((installState.total_bytes - installState.completed_bytes) / Math.max(1, installState.completed_bytes / Math.max(1, elapsedMs / 1000))) / 1000)
+  const hasMeasurableProgress = progressPercent !== null
+  const etaSeconds = completedBytes !== null && totalBytes !== null && progressPercent !== null && progressPercent > 0 && progressPercent < 100
+    ? Math.max(0, ((totalBytes - completedBytes) / Math.max(1, completedBytes / Math.max(1, elapsedMs / 1000))) / 1000)
     : null
 
   return (

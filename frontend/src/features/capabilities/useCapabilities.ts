@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { desktopClient, type DesktopClient } from '../../services/desktop-client'
 import type { InstallPlan, InstallStatus } from '../../types/domain'
@@ -22,6 +22,7 @@ export function useCapabilities({
     queryKey: ['capabilities'],
     queryFn: () => client.getCapabilities(),
   })
+  const settledInstallRef = useRef<string | null>(null)
 
   useEffect(() => {
     if (query.error) onError(errorMessage(query.error))
@@ -37,20 +38,22 @@ export function useCapabilities({
     if (!installState) return
     const active = ['running', 'canceling'].includes(installState.status)
     if (!active) {
-      if (installState.status === 'completed') {
-        void Promise.all([
-          query.refetch(),
-          queryClient.invalidateQueries({ queryKey: ['settings'] }),
-        ]).then(() => {
+      const settledKey = `${installState.install_id}:${installState.status}`
+      if (settledInstallRef.current === settledKey) return
+      settledInstallRef.current = settledKey
+
+      void (async () => {
+        if (installState.status === 'completed') {
+          await Promise.all([
+            query.refetch(),
+            queryClient.invalidateQueries({ queryKey: ['settings'] }),
+          ])
           onNotice('Installation complete and verified')
-          setInstallState(null)
-        })
-      } else if (installState.status === 'failed') {
-        onError(installState.error ?? 'Dependency installation failed')
+        } else if (installState.status === 'failed') {
+          onError(installState.error ?? 'Dependency installation failed')
+        }
         setInstallState(null)
-      } else if (installState.status === 'cancelled') {
-        setInstallState(null)
-      }
+      })()
       return
     }
 
@@ -68,12 +71,6 @@ export function useCapabilities({
     onSuccess: (result) => {
       setPendingPlan(null)
       setInstallState(result)
-      if (result.status === 'completed') {
-        void Promise.all([
-          query.refetch(),
-          queryClient.invalidateQueries({ queryKey: ['settings'] }),
-        ]).then(() => onNotice('Installation complete and verified'))
-      }
     },
     onError: (reason) => onError(errorMessage(reason)),
   })
