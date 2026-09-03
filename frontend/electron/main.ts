@@ -146,6 +146,10 @@ app.whenReady().then(() => {
     if (url.protocol !== 'https:') throw new Error('Only secure project links can be opened')
     await shell.openExternal(url.toString())
   })
+  ipcMain.handle('expletive-deleted:open-folder', async (_event: IpcMainInvokeEvent, folderPath: string) => {
+    const error = await shell.openPath(folderPath)
+    if (error) throw new Error(`Could not open the transcode folder: ${error}`)
+  })
   createWindow()
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })
 })

@@ -69,6 +69,7 @@ export function useQueue({
     loading: query.isLoading,
     busy: actionMutation.isPending,
     refresh: async () => { await query.refetch() },
+    openFolder: (folderPath: string) => run(() => client.openFolder(folderPath)).then(() => undefined),
     submitFile: (source: string, mode: Job['mode'], options?: JobSubmissionOptions) => run(async () => {
       if (options) await client.submitJob(source, mode, options)
       else await client.submitJob(source, mode)

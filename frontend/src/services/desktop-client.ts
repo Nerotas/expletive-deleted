@@ -99,6 +99,7 @@ export const desktopClient = {
   selectDictionaryImport: () => bridge().selectDictionaryImport(),
   selectDictionaryExport: () => bridge().selectDictionaryExport(),
   openExternal: (url: string) => bridge().openExternal(url),
+  openFolder: (folderPath: string) => bridge().openFolder(folderPath),
   getDroppedFilePath: (file: File) => bridge().getPathForFile(file),
 }
 

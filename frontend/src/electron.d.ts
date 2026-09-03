@@ -10,6 +10,7 @@ declare global {
       selectDictionaryImport: () => Promise<string | undefined>
       selectDictionaryExport: () => Promise<string | undefined>
       openExternal: (url: string) => Promise<void>
+      openFolder: (folderPath: string) => Promise<void>
       getPathForFile: (file: File) => string
     }
   }
