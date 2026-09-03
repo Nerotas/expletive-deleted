@@ -10,37 +10,45 @@ type ReviewDialogProps = {
 }
 
 export function ReviewDialog({ review, busy, onClose, onClassify }: ReviewDialogProps) {
-  const [revealed, setRevealed] = useState(false)
+  const [category, setCategory] = useState<'discovered' | 'censored'>('discovered')
+  const words = category === 'discovered' ? review.candidates : review.censored
 
   return (
     <div className="modal-backdrop">
       <section className="modal review-dialog" role="dialog" aria-modal="true" aria-labelledby="review-title">
         <span className="eyebrow">Potential profanity</span>
         <h2 id="review-title">Review discovered words</h2>
-        <p>{fileName(review.source)} · These vendor-list matches are not in your current policy.</p>
-        <div className="review-toolbar">
+        <p>{fileName(review.source)} · Review words found in this transcript and update your policy when needed.</p>
+        <div className="review-tabs" role="group" aria-label="Review word category">
           <button
             type="button"
-            className="button secondary"
-            aria-pressed={revealed}
-            onClick={() => setRevealed((current) => !current)}
+            aria-pressed={category === 'discovered'}
+            onClick={() => setCategory('discovered')}
           >
-            {revealed ? 'Hide words' : 'Reveal words'}
+            {`Discovered words (${review.candidates.length})`}
           </button>
-          <small>Words stay masked until you choose to reveal them.</small>
+          <button
+            type="button"
+            aria-pressed={category === 'censored'}
+            onClick={() => setCategory('censored')}
+          >
+            {`Censored words (${review.censored.length})`}
+          </button>
         </div>
-        {review.candidates.length ? (
+        {words.length ? (
           <div className="review-list">
-            {review.candidates.map((candidate, index) => (
+            {words.map((candidate, index) => (
               <div key={`${candidate.word}-${candidate.start}-${index}`}>
-                <strong>{revealed ? candidate.word : candidate.word.replace(/\S/g, '•')}</strong>
+                <strong>{candidate.word}</strong>
                 <span>{candidate.start != null ? `${formatEta(candidate.start)} in` : 'Timestamp unavailable'}</span>
-                <button disabled={busy} onClick={() => onClassify(candidate.word, 'censor')}>Censor</button>
-                <button disabled={busy} onClick={() => onClassify(candidate.word, 'exclude')}>Ignore</button>
+                {category === 'discovered' && <>
+                  <button disabled={busy} onClick={() => onClassify(candidate.word, 'censor')}>Censor</button>
+                  <button disabled={busy} onClick={() => onClassify(candidate.word, 'exclude')}>Ignore</button>
+                </>}
               </div>
             ))}
           </div>
-        ) : <div className="empty-review">No unclassified potential profanity was found.</div>}
+        ) : <div className="empty-review">{category === 'discovered' ? 'No unclassified potential profanity was found.' : 'No censored words were found in this transcript.'}</div>}
         <div className="modal-actions">
           <button className="button secondary" onClick={onClose}>Close</button>
         </div>

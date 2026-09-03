@@ -143,6 +143,7 @@ export type ReviewCandidate = {
 export type ReviewResult = {
   source: string
   candidates: ReviewCandidate[]
+  censored: ReviewCandidate[]
 }
 
 export type Settings = {

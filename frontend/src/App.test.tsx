@@ -81,7 +81,7 @@ describe('desktop application renderer', () => {
     vi.spyOn(desktopClient, 'restoreDictionaryDefaults').mockResolvedValue(emptyDictionary)
     vi.spyOn(desktopClient, 'importDictionary').mockResolvedValue(emptyDictionary)
     vi.spyOn(desktopClient, 'exportDictionary').mockResolvedValue({ path: 'C:\\backup\\dictionary.json' })
-    vi.spyOn(desktopClient, 'getReview').mockResolvedValue({ source: '', candidates: [] })
+    vi.spyOn(desktopClient, 'getReview').mockResolvedValue({ source: '', candidates: [], censored: [] })
     vi.spyOn(desktopClient, 'openExternal').mockResolvedValue()
     localStorage.clear()
   })
@@ -447,7 +447,7 @@ describe('desktop application renderer', () => {
     ))
   })
 
-  it('masks review words by default and reveals them from the dialog toggle', async () => {
+  it('defaults reviews to discovered words and shows timestamped censored words on request', async () => {
     const source = 'C:\\Media\\Ready\\movie.mkv'
     vi.mocked(desktopClient.listLibrary).mockResolvedValue([{
       source,
@@ -457,19 +457,22 @@ describe('desktop application renderer', () => {
     }])
     vi.mocked(desktopClient.getReview).mockResolvedValueOnce({
       source,
-      candidates: [{ word: 'forbidden', start: 12.5, end: 13.1 }],
+      candidates: [{ word: 'unclassified', start: 12.5, end: 13.1 }],
+      censored: [{ word: 'forbidden', start: 20.5, end: 21.1 }],
     })
     const user = userEvent.setup()
     renderApp('/')
 
     await user.click(await screen.findByRole('button', { name: 'Review words' }))
     const dialog = await screen.findByRole('dialog', { name: 'Review discovered words' })
+    expect(within(dialog).getByText('unclassified')).toBeInTheDocument()
     expect(within(dialog).queryByText('forbidden')).not.toBeInTheDocument()
     expect(within(dialog).getByText(/13s in/)).toBeInTheDocument()
 
-    await user.click(within(dialog).getByRole('button', { name: 'Reveal words' }))
+    await user.click(within(dialog).getByRole('button', { name: 'Censored words (1)' }))
     expect(within(dialog).getByText('forbidden')).toBeInTheDocument()
-    expect(within(dialog).getByRole('button', { name: 'Hide words' })).toBeInTheDocument()
+    expect(within(dialog).getByText(/21s in/)).toBeInTheDocument()
+    expect(within(dialog).queryByText('unclassified')).not.toBeInTheDocument()
   })
 
   it('queues selected files in displayed order and retains rejected selections', async () => {

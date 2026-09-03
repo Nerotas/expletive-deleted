@@ -210,8 +210,17 @@ class DesktopBridge:
                 set(policy.censor_words),
                 set(policy.exclusions),
             )
+            censored = []
+            for word_obj in words_data.get("words", []):
+                word = str(word_obj.get("word", "")).strip(".,!?;:\"' \t")
+                if word and word.lower() in policy.censor_words and word.lower() not in policy.exclusions:
+                    censored.append({
+                        "word": word.lower(),
+                        "start": word_obj.get("start"),
+                        "end": word_obj.get("end"),
+                    })
             self.policy_store.add_discovered({candidate["word"] for candidate in candidates})
-            return {"source": str(source), "candidates": candidates}
+            return {"source": str(source), "candidates": candidates, "censored": censored}
         if method == "dependencies.plan":
             runtime_root = get_application_runtime_root()
             cache_dir = (

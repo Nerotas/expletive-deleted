@@ -270,13 +270,16 @@ class DesktopBridgeTests(unittest.TestCase):
         )
         self.assertEqual(result["id"], "job-1")
 
-    def test_review_list_reads_a_saved_transcript_and_excludes_classified_words(self):
+    def test_review_list_returns_discovered_and_configured_censored_words(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             source = root / "movie.mkv"
             transcript = root / "movie-transcript.json"
             transcript.write_text(
-                json.dumps({"words": [{"word": "weirdo", "start": 3.0, "end": 3.4}]}),
+                json.dumps({"words": [
+                    {"word": "weirdo", "start": 3.0, "end": 3.4},
+                    {"word": "fuck", "start": 4.0, "end": 4.4},
+                ]}),
                 encoding="utf-8",
             )
             service = MagicMock()
@@ -288,6 +291,7 @@ class DesktopBridgeTests(unittest.TestCase):
             result = bridge.handle("reviews.list", {"source": str(source)})
 
         self.assertEqual(result["candidates"], [{"word": "weirdo", "start": 3.0, "end": 3.4}])
+        self.assertEqual(result["censored"], [{"word": "fuck", "start": 4.0, "end": 4.4}])
 
     def test_dictionary_discovered_reads_only_its_own_store(self):
         policy_store = MagicMock()
