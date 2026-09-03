@@ -3,6 +3,7 @@ export type Theme = 'light' | 'dark'
 export type LibraryStatus = 'ready' | 'transcribed' | 'finished'
 export type JobStatus =
   | 'queued'
+  | 'copying'
   | 'transcribing'
   | 'transcribed'
   | 'censoring'
@@ -43,7 +44,7 @@ export type JobError = {
 export type Job = {
   id: string
   source: string
-  mode: 'report_only' | 'censor'
+  mode: 'copy' | 'report_only' | 'censor'
   status: JobStatus
   progress_percent: number | null
   error: JobError | null

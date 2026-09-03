@@ -42,7 +42,7 @@ type QueueFilter = 'all' | 'ready' | 'queued' | 'active' | 'transcribed' | 'fini
 type QueueSort = 'queue' | 'name' | 'status'
 
 const TERMINAL_STATUSES = new Set<Job['status']>(['completed', 'failed', 'cancelled', 'transcribed'])
-const RUNNING_STATUSES = new Set<Job['status']>(['transcribing', 'censoring', 'verifying'])
+const RUNNING_STATUSES = new Set<Job['status']>(['copying', 'transcribing', 'censoring', 'verifying'])
 
 export function QueuePage({ queue, settings, capabilities, onChangeFolder, onReview }: QueuePageProps) {
   const [view, setView] = useState<View>('queue')

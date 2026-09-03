@@ -2,7 +2,7 @@ import { LoaderCircle } from 'lucide-react'
 import type { JobStatus, LibraryStatus } from '../../types/domain'
 import { statusLabel } from '../../utils/format'
 
-const ACTIVE_STATUSES: ReadonlyArray<JobStatus> = ['transcribing', 'censoring', 'verifying']
+const ACTIVE_STATUSES: ReadonlyArray<JobStatus> = ['copying', 'transcribing', 'censoring', 'verifying']
 
 export function StatusBadge({ status }: { status: LibraryStatus | JobStatus }) {
   return (

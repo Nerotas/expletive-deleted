@@ -361,7 +361,7 @@ class DesktopBridge:
             overwrite_output = params.get("overwrite_output", False)
             if (
                 not isinstance(source, str)
-                or mode not in ("report_only", "censor")
+                or mode not in ("copy", "report_only", "censor")
                 or not isinstance(force_transcribe, bool)
                 or not isinstance(overwrite_output, bool)
             ):
@@ -377,7 +377,7 @@ class DesktopBridge:
             mode = params.get("mode")
             sources = params.get("sources")
             if (
-                mode not in ("report_only", "censor")
+                mode not in ("copy", "report_only", "censor")
                 or not isinstance(sources, list)
                 or not all(isinstance(source, str) for source in sources)
             ):
