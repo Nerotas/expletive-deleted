@@ -65,6 +65,9 @@ tr:last-child td { border-bottom: 0; }
 
 .actions-cell { min-width: 0; }
 .row-detail { display: block; margin-bottom: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.job-diagnostic { margin: 0 0 6px; color: var(--muted); font-size: 11px; }
+.job-diagnostic summary { width: fit-content; cursor: pointer; color: var(--signal); font-weight: 800; }
+.job-diagnostic pre { max-width: 100%; max-height: 180px; margin: 6px 0 0; overflow: auto; padding: 8px; border: 1px solid var(--line); background: var(--surface-raised); color: var(--ink); font: 10px/1.45 var(--mono); white-space: pre-wrap; word-break: break-word; }
 .row-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 10px; }
 .row-actions button, .details-cell button { display: inline-flex; align-items: center; gap: 4px; padding: 2px 0; border: 0; color: var(--signal); background: none; font-size: 11px; font-weight: 800; }
 .row-actions button:disabled, .details-cell button:disabled { opacity: .72; cursor: not-allowed; color: var(--muted); }

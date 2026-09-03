@@ -43,9 +43,7 @@ WHISPER_MODEL_FILES = (
     "vocabulary.json",
 )
 WHISPER_MODELS = ("tiny", "base", "small", "medium", "large-v3")
-WHISPER_LIBRARIES = ("faster-whisper", "openai-whisper")
-OPENAI_WHISPER_VERSION = "20250625"
-OPENAI_WHISPER_NUMPY_VERSION = "2.4.4"
+WHISPER_LIBRARIES = ("faster-whisper",)
 PYTHON_DEPENDENCIES = (
     ("faster-whisper", "1.2.1"),
     ("better-profanity", "0.7.0"),
@@ -60,17 +58,9 @@ PYTHON_REQUIREMENTS = tuple(f"{name}=={version}" for name, version in PYTHON_DEP
 def _python_dependencies_for_library(
     whisper_library: str,
 ) -> tuple[tuple[str, str], ...]:
-    dependencies = list(PYTHON_DEPENDENCIES)
-    if whisper_library == "openai-whisper":
-        dependencies = [
-            (
-                distribution,
-                OPENAI_WHISPER_NUMPY_VERSION if distribution == "numpy" else version,
-            )
-            for distribution, version in dependencies
-        ]
-        dependencies.append(("openai-whisper", OPENAI_WHISPER_VERSION))
-    return tuple(dependencies)
+    if whisper_library != "faster-whisper":
+        raise DependencyPlanError("Only faster-whisper is supported")
+    return PYTHON_DEPENDENCIES
 
 
 def _python_requirements_for_library(whisper_library: str) -> tuple[str, ...]:
@@ -219,6 +209,9 @@ def build_install_plan(
     runtime_root = (runtime_root or get_application_runtime_root()).resolve()
     platform_name = platform_name or platform.system()
     actions: list[InstallAction] = []
+    python_dependencies_ready = all(
+        status.ready for status in inspect_python_dependencies(whisper_library)
+    )
 
     if "ffmpeg" in requested:
         actions.append(
@@ -257,7 +250,9 @@ def build_install_plan(
             )
         )
 
-    if "python" in requested:
+    if "python" in requested or (
+        "whisper_model" in requested and not python_dependencies_ready
+    ):
         requirements = _python_requirements_for_library(whisper_library)
         dependency_ids = [
             f"python:{distribution}"
@@ -284,16 +279,12 @@ def build_install_plan(
 
     if "whisper_model" in requested:
         model_dependency_id = _whisper_dependency_id(whisper_library, whisper_model)
-        if whisper_library == "faster-whisper":
-            source_name = "Hugging Face / Systran"
-            source_url = (
-                f"https://huggingface.co/{WHISPER_MODEL_ID}/tree/{WHISPER_MODEL_REVISION}"
-                if whisper_model == "large-v3"
-                else f"https://huggingface.co/Systran/faster-whisper-{whisper_model}"
-            )
-        else:
-            source_name = "OpenAI Whisper model repository"
-            source_url = "https://github.com/openai/whisper"
+        source_name = "Hugging Face / Systran"
+        source_url = (
+            f"https://huggingface.co/{WHISPER_MODEL_ID}/tree/{WHISPER_MODEL_REVISION}"
+            if whisper_model == "large-v3"
+            else f"https://huggingface.co/Systran/faster-whisper-{whisper_model}"
+        )
         actions.append(
             InstallAction(
                 id=f"download-{whisper_library}-{whisper_model}",
@@ -308,14 +299,12 @@ def build_install_plan(
                     "scripts.download_whisper_model",
                     "--cache-dir",
                     str(cache_dir),
-                    "--library",
-                    whisper_library,
                     "--model",
                     whisper_model,
                 ),
                 estimated_download_bytes=(
                     WHISPER_MODEL_SIZE_BYTES
-                    if whisper_library == "faster-whisper" and whisper_model == "large-v3"
+                    if whisper_model == "large-v3"
                     else None
                 ),
                 progress_path=cache_dir,
@@ -557,45 +546,6 @@ def inspect_whisper_model(
     cache_dir = (cache_dir or get_whisper_cache_dir()).resolve()
     dependency_id = _whisper_dependency_id(library, model)
     display_name = f"Whisper {model} model ({library})"
-    if library == "openai-whisper":
-        try:
-            whisper_module = importlib.import_module("whisper")
-            model_url = whisper_module._MODELS[model]
-            expected_hash = model_url.split("/")[-2]
-            model_path = cache_dir / Path(model_url).name
-        except (ImportError, KeyError, AttributeError) as exc:
-            return DependencyStatus(
-                id=dependency_id,
-                name=display_name,
-                state="missing",
-                required_version=None,
-                installed_version=None,
-                path=None,
-                detail=f"OpenAI Whisper or its model definition is unavailable: {exc}",
-                install_supported=True,
-            )
-        if not model_path.is_file() or model_path.stat().st_size == 0:
-            return DependencyStatus(
-                id=dependency_id,
-                name=display_name,
-                state="missing",
-                required_version=expected_hash,
-                installed_version=None,
-                path=None,
-                detail="model is not cached",
-                install_supported=True,
-            )
-        return DependencyStatus(
-            id=dependency_id,
-            name=display_name,
-            state="ready",
-            required_version=expected_hash,
-            installed_version=expected_hash,
-            path=model_path,
-            detail="model file is cached",
-            install_supported=True,
-        )
-
     revision = WHISPER_MODEL_REVISION if model == "large-v3" else None
     try:
         from faster_whisper.utils import download_model

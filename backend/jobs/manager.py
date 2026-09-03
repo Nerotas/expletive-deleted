@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+import traceback
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import replace
 from pathlib import Path
@@ -11,6 +12,7 @@ from typing import Callable
 from uuid import uuid4
 
 from backend.censor import ProfanityCensor
+from backend.runtime import FFMPEG_VERSION, inspect_executable
 from backend.settings import AppSettings
 
 from .events import JobEvent
@@ -246,6 +248,18 @@ class JobManager:
                 message=progress.get("message"),
             )
 
+    def _configured_runtime_path(self, name: str, executable: Path | None) -> str | None:
+        """Return a verified override or fail before any media processing begins."""
+        if executable is None:
+            return None
+        status = inspect_executable(name.lower(), name, str(executable), FFMPEG_VERSION)
+        if not status.ready or status.path is None:
+            raise RuntimeError(
+                f"Configured {name} is unavailable: {executable}. {status.detail}. "
+                "Open Settings and choose a valid FFmpeg installation, then retry."
+            )
+        return str(status.path)
+
     def _run(self, job_id: str) -> None:
         cancellation = self._cancellations[job_id]
         source = self._jobs[job_id].source
@@ -278,6 +292,12 @@ class JobManager:
                     "existing_output",
                     f"Output already exists: {destination}",
                 )
+            ffmpeg_bin = self._configured_runtime_path(
+                "FFmpeg", self.settings.runtime.ffmpeg_path
+            )
+            ffprobe_bin = self._configured_runtime_path(
+                "FFprobe", self.settings.runtime.ffprobe_path
+            )
             destination.parent.mkdir(parents=True, exist_ok=True)
 
             with self._lock:
@@ -298,12 +318,8 @@ class JobManager:
                 video_mode=self.settings.video.mode,
                 progress_callback=lambda progress: self._on_progress(job_id, progress),
                 cancellation=cancellation,
-                ffmpeg_bin=str(self.settings.runtime.ffmpeg_path)
-                if self.settings.runtime.ffmpeg_path
-                else None,
-                ffprobe_bin=str(self.settings.runtime.ffprobe_path)
-                if self.settings.runtime.ffprobe_path
-                else None,
+                ffmpeg_bin=ffmpeg_bin,
+                ffprobe_bin=ffprobe_bin,
                 whisper_cache_dir=self.settings.runtime.whisper_cache,
             )
             process_options = {
@@ -354,6 +370,7 @@ class JobManager:
                 "Media processing failed",
                 str(exc),
                 retryable=True,
+                diagnostic=traceback.format_exc(),
             )
             with self._lock:
                 self._set_status(job_id, "failed", error=error, message=error.message)

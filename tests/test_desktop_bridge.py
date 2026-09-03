@@ -370,8 +370,12 @@ class DesktopBridgeTests(unittest.TestCase):
         ):
             result = bridge.handle("dependencies.plan", {"components": ["whisper_model"]})
 
+        model_action = next(
+            action for action in result["actions"] if action["id"].startswith("download-")
+        )
+
         self.assertEqual(
-            result["actions"][0]["destination"],
+            model_action["destination"],
             str((Path("/tmp/expletive-runtime") / "models" / "whisper").resolve()),
         )
         service.update_settings.assert_not_called()

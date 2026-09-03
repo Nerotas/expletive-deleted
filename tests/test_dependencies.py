@@ -10,6 +10,7 @@ from backend.runtime.dependencies import (
     DependencyConsentError,
     DependencyInstallError,
     DependencyNotReadyError,
+    DependencyPlanError,
     DependencyInventory,
     DependencyStatus,
     PYTHON_DEPENDENCIES,
@@ -107,15 +108,9 @@ class DependencyInventoryTests(unittest.TestCase):
         self.assertEqual(faster_whisper.state, "invalid")
         self.assertEqual(faster_whisper.required_version, required["faster-whisper"])
 
-    def test_openai_whisper_uses_numpy_compatible_with_numba(self):
-        with patch(
-            "backend.runtime.dependencies.importlib.metadata.version",
-            side_effect=lambda _name: "0.0.0",
-        ):
-            statuses = inspect_python_dependencies("openai-whisper")
-
-        numpy_status = next(status for status in statuses if status.id == "python:numpy")
-        self.assertEqual(numpy_status.required_version, "2.4.4")
+    def test_retired_library_is_rejected(self):
+        with self.assertRaisesRegex(DependencyPlanError, "Only faster-whisper is supported"):
+            inspect_python_dependencies("openai-whisper")
 
     def test_model_verification_is_local_only_and_revision_pinned(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

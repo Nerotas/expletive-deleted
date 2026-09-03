@@ -1,8 +1,10 @@
 import tempfile
 import unittest
 import json
+from dataclasses import replace
 from pathlib import Path
 from threading import Event
+from unittest.mock import MagicMock, patch
 
 from backend.jobs import JobManager, JobSubmissionError
 from backend.jobs.media import output_path
@@ -231,6 +233,33 @@ class JobManagerTests(unittest.TestCase):
         self.assertEqual([result.status for result in results], ["queued", "rejected", "queued"])
         self.assertEqual(results[1].code, "unavailable")
         self.assertEqual([job.source.name for job in completed], ["first.mkv", "second.mkv"])
+
+    def test_missing_configured_ffmpeg_fails_before_processing_media(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            settings = self.create_settings(Path(temporary_directory))
+            settings = replace(
+                settings,
+                runtime=replace(
+                    settings.runtime,
+                    ffmpeg_path=Path("C:/Missing/ffmpeg.exe"),
+                ),
+            )
+            source = settings.directories.input / "movie.mkv"
+            source.write_bytes(b"source")
+            missing = MagicMock(ready=False, path=None, detail="[WinError 2] The system cannot find the file specified")
+            manager = JobManager(settings, censor_factory=FakeCensor)
+            try:
+                with patch("backend.jobs.manager.inspect_executable", return_value=missing):
+                    job = manager.submit(source, "report_only")
+                    completed = manager.wait(job.id, timeout=2)
+            finally:
+                manager.close()
+
+        self.assertEqual(completed.status, "failed")
+        self.assertEqual(FakeCensor.instances, [])
+        self.assertIn("Configured FFmpeg is unavailable", completed.error.detail)
+        self.assertIn("Open Settings", completed.error.detail)
+        self.assertIn("_configured_runtime_path", completed.error.diagnostic)
 
     def test_submission_rejection_codes_cover_path_type_and_output_conflicts(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

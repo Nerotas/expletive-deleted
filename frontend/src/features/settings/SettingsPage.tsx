@@ -2,7 +2,7 @@ import { AlertCircle, CheckCircle2, ExternalLink, FileSearch, FolderOpen, Heart,
 import { NumberInput } from '../../components/ui/NumberInput'
 import { PageHeading } from '../../components/ui/PageHeading'
 import { SegmentedControl } from '../../components/ui/SegmentedControl'
-import type { Capabilities, Settings, WhisperLibrary, WhisperModel } from '../../types/domain'
+import type { Capabilities, Settings, WhisperModel } from '../../types/domain'
 import { Field, SettingsSection } from './SettingsControls'
 import type { SettingsController } from './useSettingsController'
 import './settings.css'
@@ -187,19 +187,6 @@ export function SettingsPage({ controller, capabilities, checkingSystem, onCheck
         </SettingsSection>
 
         <SettingsSection title="Whisper" description="Choose the accuracy and speed profile for transcription">
-          <Field label="Library">
-            <select
-              aria-label="Library"
-              value={settings.whisper.library}
-              onChange={(event) => setGroup('whisper', {
-                ...settings.whisper,
-                library: event.target.value as WhisperLibrary,
-              })}
-            >
-              <option value="faster-whisper">faster-whisper — recommended, much faster</option>
-              <option value="openai-whisper">OpenAI Whisper — accuracy-first, much slower</option>
-            </select>
-          </Field>
           <Field label="Model">
             <select
               aria-label="Model"
@@ -232,8 +219,8 @@ export function SettingsPage({ controller, capabilities, checkingSystem, onCheck
             </div>
           </div>
           <small className="whisper-library-note">
-            Changing the library or model requires its local component download. Existing
-            transcripts from another profile will be regenerated.
+            faster-whisper is used for all transcription. Changing the model requires its local
+            component download, and existing transcripts from another model will be regenerated.
           </small>
         </SettingsSection>
 

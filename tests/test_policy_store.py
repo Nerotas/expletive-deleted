@@ -136,11 +136,7 @@ class PolicyStoreTests(unittest.TestCase):
             with (
                 patch("backend.censor.engine.find_ffmpeg", return_value="ffmpeg"),
                 patch("backend.censor.engine.find_ffprobe", return_value="ffprobe"),
-                patch("backend.censor.engine.available_encoders", return_value={"libx264"}),
-                patch(
-                    "backend.censor.engine.select_working_video_encoder",
-                    return_value="libx264",
-                ),
+                patch("backend.censor.engine.available_encoders") as available_encoders,
             ):
                 censor = ProfanityCensor(
                     "input.mkv",
@@ -149,6 +145,7 @@ class PolicyStoreTests(unittest.TestCase):
                     policy_store=policy_store,
                 )
 
+            available_encoders.assert_not_called()
             self.assertEqual(censor.censor_words, {"custom-censor"})
             self.assertEqual(censor.exclude_words, {"custom-exclusion"})
             self.assertEqual(censor.dictionary_directory, root / "dictionary")

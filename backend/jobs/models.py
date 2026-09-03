@@ -35,6 +35,7 @@ class JobError:
     message: str
     detail: str | None = None
     retryable: bool = False
+    diagnostic: str | None = None
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -42,6 +43,7 @@ class JobError:
             "message": self.message,
             "detail": self.detail,
             "retryable": self.retryable,
+            "diagnostic": self.diagnostic,
         }
 
 

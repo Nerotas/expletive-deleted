@@ -489,6 +489,10 @@ function QueueRow({
     <td>{percent != null ? <div className="progress-wrap"><div className="progress-track"><span style={{ width: `${percent}%` }} /></div><span>{Math.round(percent)}%</span></div> : <span className="muted">—</span>}</td>
     <td className="actions-cell">
       <span className="row-detail">{detail}</span>
+      {displayJob?.error?.diagnostic && <details className="job-diagnostic">
+        <summary>Technical details</summary>
+        <pre>{displayJob.error.diagnostic}</pre>
+      </details>}
       <div className="row-actions" aria-label={`Actions for ${fileName(item.source)}`}>
         {item.transcript && <button onClick={() => onReview(item.source)}>Review words</button>}
         {active && <button disabled={busy} title="Cancel this running job and keep the source file" onClick={() => void onCancelRunning()}><CircleStop size={13} />Cancel job</button>}

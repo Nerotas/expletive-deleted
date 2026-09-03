@@ -16,7 +16,7 @@ ProcessingDevice = Literal["auto", "cpu", "cuda"]
 StereoCensorMethod = Literal["drop_audio", "karaoke"]
 SurroundOutput = Literal["preserve_5_1", "downmix_stereo"]
 VideoMode = Literal["h264", "preserve_source"]
-WhisperLibrary = Literal["faster-whisper", "openai-whisper"]
+WhisperLibrary = Literal["faster-whisper"]
 WhisperModel = Literal["tiny", "base", "small", "medium", "large-v3"]
 
 
@@ -183,7 +183,7 @@ class AppSettings:
             ("censoring.stereo_method", self.censoring.stereo_method, {"drop_audio", "karaoke"}),
             ("audio.surround_output", self.audio.surround_output, {"preserve_5_1", "downmix_stereo"}),
             ("video.mode", self.video.mode, {"h264", "preserve_source"}),
-            ("whisper.library", self.whisper.library, {"faster-whisper", "openai-whisper"}),
+            ("whisper.library", self.whisper.library, {"faster-whisper"}),
             ("whisper.model", self.whisper.model, {"tiny", "base", "small", "medium", "large-v3"}),
         )
         for name, value, allowed in allowed_values:
