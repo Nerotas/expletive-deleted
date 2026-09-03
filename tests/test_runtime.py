@@ -43,6 +43,14 @@ from backend.runtime.environment import (
 
 
 class RuntimeTests(unittest.TestCase):
+    def test_censor_requires_ffmpeg_and_ffprobe_before_processing(self):
+        with (
+            patch("backend.censor.engine.find_ffmpeg", return_value=None),
+            patch("backend.censor.engine.find_ffprobe", return_value="ffprobe"),
+            self.assertRaisesRegex(RuntimeError, "FFmpeg and FFprobe"),
+        ):
+            ProfanityCensor("input.mkv", "output.mkv")
+
     def test_user_policy_edits_preserve_comments_and_validate_entries(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             policy = Path(temporary_directory) / "policy.txt"

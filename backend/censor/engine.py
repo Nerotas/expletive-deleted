@@ -366,9 +366,10 @@ class ProfanityCensor:
         self.cancellation = cancellation or Event()
         self.ffmpeg_bin = ffmpeg_bin or find_ffmpeg()
         self.ffprobe_bin = ffprobe_bin or find_ffprobe()
-        if not self.ffprobe_bin:
+        if not self.ffmpeg_bin or not self.ffprobe_bin:
             raise RuntimeError(
-                "FFprobe must be available on PATH or configured with CENSOR_FFPROBE."
+                "FFmpeg and FFprobe must be available on PATH or configured with "
+                "CENSOR_FFMPEG and CENSOR_FFPROBE."
             )
         self.encoders: set[str] = set()
         self.video_encoder: str | None = None
