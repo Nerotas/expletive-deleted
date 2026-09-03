@@ -81,6 +81,7 @@ describe('desktop application renderer', () => {
     vi.spyOn(desktopClient, 'restoreDictionaryDefaults').mockResolvedValue(emptyDictionary)
     vi.spyOn(desktopClient, 'importDictionary').mockResolvedValue(emptyDictionary)
     vi.spyOn(desktopClient, 'exportDictionary').mockResolvedValue({ path: 'C:\\backup\\dictionary.json' })
+    vi.spyOn(desktopClient, 'getReview').mockResolvedValue({ source: '', candidates: [], censored: [] })
     vi.spyOn(desktopClient, 'openExternal').mockResolvedValue()
     localStorage.clear()
   })
@@ -444,6 +445,34 @@ describe('desktop application renderer', () => {
       'censor',
       { overwrite_output: true },
     ))
+  })
+
+  it('defaults reviews to discovered words and shows timestamped censored words on request', async () => {
+    const source = 'C:\\Media\\Ready\\movie.mkv'
+    vi.mocked(desktopClient.listLibrary).mockResolvedValue([{
+      source,
+      status: 'finished',
+      transcript: 'C:\\Media\\Transcripts\\movie-transcript.json',
+      output: 'C:\\Media\\Finished\\movie-censored.mkv',
+    }])
+    vi.mocked(desktopClient.getReview).mockResolvedValueOnce({
+      source,
+      candidates: [{ word: 'unclassified', start: 12.5, end: 13.1 }],
+      censored: [{ word: 'forbidden', start: 20.5, end: 21.1 }],
+    })
+    const user = userEvent.setup()
+    renderApp('/')
+
+    await user.click(await screen.findByRole('button', { name: 'Review words' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Review discovered words' })
+    expect(within(dialog).getByText('unclassified')).toBeInTheDocument()
+    expect(within(dialog).queryByText('forbidden')).not.toBeInTheDocument()
+    expect(within(dialog).getByText(/13s in/)).toBeInTheDocument()
+
+    await user.click(within(dialog).getByRole('button', { name: 'Censored words (1)' }))
+    expect(within(dialog).getByText('forbidden')).toBeInTheDocument()
+    expect(within(dialog).getByText(/21s in/)).toBeInTheDocument()
+    expect(within(dialog).queryByText('unclassified')).not.toBeInTheDocument()
   })
 
   it('queues selected files in displayed order and retains rejected selections', async () => {

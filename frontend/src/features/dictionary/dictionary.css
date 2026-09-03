@@ -66,6 +66,9 @@
 	.dictionary-table th:nth-child(3) { width: 21%; }
 }
 .review-dialog { width: min(630px, 100%); }
+.review-tabs { display: inline-flex; margin-top: 14px; border: 1px solid var(--line); border-radius: 5px; padding: 2px; background: var(--soft); }
+.review-tabs button { min-height: 32px; border: 0; border-radius: 3px; padding: 0 10px; background: transparent; color: var(--muted); font: 800 11px var(--sans); }
+.review-tabs button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgb(0 0 0 / 10%); }
 .review-list { border: 1px solid var(--line); margin: 18px 0; max-height: 360px; overflow: auto; }
 .review-list > div { display: grid; grid-template-columns: 1fr 125px auto auto; gap: 8px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line); font-size: 12px; }
 .review-list > div:last-child { border-bottom: 0; }
