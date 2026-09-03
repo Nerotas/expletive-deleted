@@ -28,6 +28,7 @@ export function statusLabel(status: LibraryStatus | JobStatus): string {
     transcribed: 'Transcribed',
     finished: 'Finished',
     queued: 'Queued',
+    copying: 'Copying',
     transcribing: 'Transcribing',
     censoring: 'Censoring',
     verifying: 'Verifying',

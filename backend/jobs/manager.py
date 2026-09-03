@@ -80,12 +80,13 @@ class JobManager:
     ) -> JobRecord:
         source = source.expanduser().resolve()
         selected_mode = mode or self.settings.processing.mode
-        if selected_mode not in ("report_only", "censor"):
+        if selected_mode not in ("copy", "report_only", "censor"):
             raise JobSubmissionError("invalid_mode", f"Unsupported processing mode: {selected_mode}")
-        try:
-            relative_media_path(source, self.settings.directories.input)
-        except ValueError as exc:
-            raise JobSubmissionError("outside_input", str(exc)) from exc
+        if selected_mode != "copy":
+            try:
+                relative_media_path(source, self.settings.directories.input)
+            except ValueError as exc:
+                raise JobSubmissionError("outside_input", str(exc)) from exc
         if not source.is_file():
             raise JobSubmissionError("unavailable", f"Source file does not exist: {source}")
         if source.suffix.lower() not in MEDIA_EXTENSIONS:
@@ -120,7 +121,14 @@ class JobManager:
                     "already_queued",
                     f"A job is already queued or running for {source.name}",
                 )
-            if selected_mode == "censor" and not overwrite_output and output_path(
+            if selected_mode == "copy":
+                destination = self.settings.directories.input.resolve() / source.name
+                if destination.exists():
+                    raise JobSubmissionError(
+                        "existing_output",
+                        f"A file named {source.name} is already in Ready",
+                    )
+            elif selected_mode == "censor" and not overwrite_output and output_path(
                 source,
                 self.settings.directories.output,
                 self.settings.directories.input,
@@ -142,7 +150,7 @@ class JobManager:
         mode: JobMode,
     ) -> tuple[JobSubmissionResult, ...]:
         """Queue valid sources in request order and retain per-source rejections."""
-        if mode not in ("report_only", "censor"):
+        if mode not in ("copy", "report_only", "censor"):
             raise JobSubmissionError("invalid_mode", f"Unsupported processing mode: {mode}")
 
         results: list[JobSubmissionResult] = []
@@ -248,7 +256,12 @@ class JobManager:
                 )
                 return
             stage = progress.get("stage")
-            status: JobStatus = "censoring" if stage == "censoring" else "transcribing"
+            if stage == "copying":
+                status: JobStatus = "copying"
+            elif stage == "censoring":
+                status = "censoring"
+            else:
+                status = "transcribing"
             percent_value = progress.get("percent")
             percent = float(percent_value) if isinstance(percent_value, (int, float)) else None
             current = self._jobs[job_id]

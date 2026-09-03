@@ -37,7 +37,7 @@ FFmpeg/FFprobe processing runtime described in section 2.
 
 Electron notice:
 
-> Copyright (c) Electron contributors  
+> Copyright (c) Electron contributors
 > Copyright (c) 2013-2020 GitHub Inc.
 
 Electron is licensed under the MIT License text in Appendix A. See the
@@ -98,7 +98,7 @@ The current `requirements.txt` pins these direct packages:
 | better-profanity | 0.7.0 | MIT | [PyPI metadata](https://pypi.org/project/better-profanity/0.7.0/), [source](https://github.com/snguyenthanh/better_profanity) |
 | NumPy | 2.5.2 | `BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0` | [PyPI metadata](https://pypi.org/project/numpy/2.5.2/), including bundled-component notices in the distribution |
 | CTranslate2 | 4.8.1 | MIT | [PyPI metadata](https://pypi.org/project/ctranslate2/4.8.1/), [source](https://github.com/OpenNMT/CTranslate2) |
-| PyAV | 18.1.0 | BSD-3-Clause | [PyPI metadata](https://pypi.org/project/av/18.1.0/), [source](https://github.com/PyAV-Org/PyAV) |
+| PyAV source | 18.1.0 | BSD-3-Clause | [PyPI metadata](https://pypi.org/project/av/18.1.0/), [source](https://github.com/PyAV-Org/PyAV) |
 | huggingface-hub | 1.28.0 | Apache-2.0 | [PyPI metadata](https://pypi.org/project/huggingface-hub/1.28.0/), [source](https://github.com/huggingface/huggingface_hub) |
 
 Package installers may also resolve transitive dependencies and
@@ -106,6 +106,17 @@ platform-specific binary components. Their exact set can vary with the Python
 version, platform, package index, and selected wheel. Their own distribution
 metadata and bundled license files are controlling for those separately
 installed copies.
+
+Important Windows-wheel qualification: the official
+`av-18.1.0-cp311-abi3-win_amd64.whl` available from PyPI was inspected for
+this inventory. Although its package metadata identifies the PyAV source as
+BSD-3-Clause, the wheel bundles FFmpeg shared libraries together with
+`libx264` and `libx265`. Those libraries make the bundled FFmpeg build subject
+to GPL terms; this is also documented in
+[PyAV issue #2270](https://github.com/PyAV-Org/PyAV/issues/2270). Anyone who
+redistributes that binary wheel should evaluate and satisfy the GPL and all
+included-library notice/source obligations, rather than relying only on the
+BSD-3-Clause label in PyAV's package metadata.
 
 The setup code also supports `openai-whisper==20250625` (MIT) as an optional
 alternative Whisper library, although it is not in the default
@@ -116,19 +127,28 @@ and the [OpenAI Whisper source license](https://github.com/openai/whisper/blob/m
 
 FFmpeg and FFprobe executables are **not bundled** with the Windows installer.
 If the user chooses managed setup, the application first installs
-`static-ffmpeg==3.0` (MIT) from PyPI, then asks that package to retrieve
-platform executables and copies the resulting files into the user's local
-application runtime directory. See the
-[`static-ffmpeg` PyPI metadata](https://pypi.org/project/static-ffmpeg/3.0/).
+`static-ffmpeg==3.0` (the downloader is MIT-licensed) from PyPI, then asks that
+package to retrieve platform executables and copies the resulting files into
+the user's local application runtime directory. See the
+[`static-ffmpeg` PyPI metadata](https://pypi.org/project/static-ffmpeg/3.0/)
+and [upstream source](https://github.com/zackees/static_ffmpeg).
+
+For Windows, `static-ffmpeg==3.0` currently resolves its fixed legacy URL to
+the Gyan FFmpeg 8.0.1 essentials build. Inspection of the retrieved executable
+shows `--enable-gpl`, `--enable-version3`, `--enable-libx264`, and
+`--enable-libx265`; Gyan identifies its static Windows builds as GPLv3. Thus,
+the managed Windows binary is not merely an unspecified LGPL build. See
+[Gyan's build and licensing information](https://www.gyan.dev/ffmpeg/builds/).
 
 FFmpeg does not have one license that applies identically to every binary.
 The FFmpeg project is primarily LGPL version 2.1 or later, but enabling
 optional GPL components makes a build GPL version 2 or later, and enabling
 certain nonfree components can make the resulting binary non-redistributable.
 The actual license and configuration therefore depend on the build the user
-already has or that the retrieval tool obtains. Users and redistributors
-should inspect that build's accompanying notices and `ffmpeg -version`
-configuration. See [FFmpeg Legal](https://ffmpeg.org/legal.html) and the
+already has or that the retrieval tool obtains; the current managed Windows
+path described above is GPLv3. Users and redistributors should inspect that
+build's accompanying notices and `ffmpeg -version` configuration. See
+[FFmpeg Legal](https://ffmpeg.org/legal.html) and the
 [FFmpeg license documentation](https://ffmpeg.org/doxygen/trunk/md_LICENSE.html).
 
 `ffprobe` is part of the same FFmpeg project and follows the applicable terms

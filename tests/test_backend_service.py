@@ -1,9 +1,10 @@
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from threading import Event
+from unittest.mock import MagicMock, patch
 
-from backend.jobs import JobRecord
+from backend.jobs import JobManager, JobRecord
 from backend.service import ArchiveSourceError, BackendService, ServiceBusyError
 from backend.service.capabilities import get_capabilities
 from backend.settings import AppSettings, DirectorySettings, SettingsStore
@@ -13,9 +14,13 @@ class StubManager:
     def __init__(self, settings):
         self.settings = settings
         self.closed = False
+        self._jobs = ()
 
     def list(self):
-        return ()
+        return self._jobs
+
+    def wait(self, job_id, timeout=None):
+        return None
 
     def close(self):
         self.closed = True
@@ -98,12 +103,14 @@ class BackendServiceTests(unittest.TestCase):
     def test_import_copies_supported_source_without_overwriting_or_touching_original(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
-            service = BackendService(self.create_store(root), manager_factory=StubManager)
+            service = BackendService(self.create_store(root), manager_factory=JobManager)
             original = root / "outside" / "movie.mkv"
             original.parent.mkdir()
             original.write_bytes(b"original")
             try:
                 result = service.import_sources([original])
+                queued_job = next(job for job in service.jobs.list() if job.source == original)
+                completed = service.jobs.wait(queued_job.id, timeout=2)
                 duplicate = service.import_sources([original])
             finally:
                 service.close()
@@ -112,28 +119,54 @@ class BackendServiceTests(unittest.TestCase):
             self.assertEqual(copied.read_bytes(), b"original")
             self.assertEqual(original.read_bytes(), b"original")
             self.assertEqual(result[0]["status"], "added")
+            self.assertEqual(queued_job.mode, "copy")
+            self.assertEqual(completed.status, "completed")
             self.assertEqual(duplicate[0]["status"], "already_exists")
 
     def test_import_remains_available_while_a_job_is_processing(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
-            service = BackendService(self.create_store(root), manager_factory=StubManager)
+            service = BackendService(self.create_store(root), manager_factory=JobManager)
             active_source = service.settings.directories.input / "active.mkv"
             active_source.write_bytes(b"active")
-            service.jobs.list = lambda: (
-                JobRecord("active-job", active_source, "censor", "transcribing", 25.0),
-            )
+            service.jobs._jobs["active-job"] = JobRecord("active-job", active_source, "censor", "transcribing", 25.0)
+            service.jobs._events["active-job"] = []
+            service.jobs._cancellations["active-job"] = Event()
+            service.jobs._futures["active-job"] = MagicMock()
             original = root / "outside" / "new.mkv"
             original.parent.mkdir()
             original.write_bytes(b"new")
             try:
                 result = service.import_sources([original])
+                queued_job = next(job for job in service.jobs.list() if job.source == original)
+                completed = service.jobs.wait(queued_job.id, timeout=2)
                 copied = (root / "Ready" / "new.mkv").read_bytes()
             finally:
                 service.close()
 
         self.assertEqual(result[0]["status"], "added")
+        self.assertEqual(completed.status, "completed")
         self.assertEqual(copied, b"new")
+
+    def test_import_creates_background_copy_job_and_completes_into_ready(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            service = BackendService(self.create_store(root), manager_factory=JobManager)
+            original = root / "outside" / "movie.mkv"
+            original.parent.mkdir()
+            original.write_bytes(b"queued-copy")
+            try:
+                result = service.import_sources([original])
+                queued_job = next(job for job in service.jobs.list() if job.source == original)
+                completed = service.jobs.wait(queued_job.id, timeout=2)
+                copied = (root / "Ready" / "movie.mkv").read_bytes()
+            finally:
+                service.close()
+
+        self.assertEqual(result[0]["status"], "added")
+        self.assertEqual(queued_job.mode, "copy")
+        self.assertEqual(completed.status, "completed")
+        self.assertEqual(copied, b"queued-copy")
 
     def test_archive_lists_and_purges_only_its_own_supported_files(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Literal
 
 
-JobMode = Literal["report_only", "censor"]
+JobMode = Literal["copy", "report_only", "censor"]
 JobSubmissionCode = Literal[
     "already_queued",
     "existing_output",
@@ -18,6 +18,7 @@ JobSubmissionCode = Literal[
 ]
 JobStatus = Literal[
     "queued",
+    "copying",
     "transcribing",
     "transcribed",
     "awaiting_review",
@@ -28,7 +29,7 @@ JobStatus = Literal[
     "cancelled",
 ]
 TERMINAL_STATUSES = frozenset({"completed", "failed", "cancelled", "transcribed"})
-ACTIVE_STATUSES = frozenset({"queued", "transcribing", "censoring", "verifying"})
+ACTIVE_STATUSES = frozenset({"queued", "copying", "transcribing", "censoring", "verifying"})
 
 
 def is_terminal_status(status: JobStatus | str) -> bool:
@@ -79,6 +80,8 @@ class JobRecord:
             raise ValueError("Failed jobs require an error")
         if self.status != "failed" and self.error is not None:
             raise ValueError("Only failed jobs may contain an error")
+        if self.mode == "copy" and (self.force_transcribe or self.overwrite_output):
+            raise ValueError("Copy jobs do not support transcript or overwrite flags")
         if self.force_transcribe and self.mode != "report_only":
             raise ValueError("Only report-only jobs can force a fresh transcript")
         if self.overwrite_output and self.mode != "censor":

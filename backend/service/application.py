@@ -134,7 +134,7 @@ class BackendService:
         return {"source": str(source), "archived_to": str(destination)}
 
     def import_sources(self, sources: list[Path]) -> list[dict[str, object]]:
-        """Copy explicitly selected media to Ready without overwriting originals or targets."""
+        """Queue a copy job for each selected file and report the accepted import."""
         ready = self.settings.directories.input.resolve()
         results: list[dict[str, object]] = []
         planned: set[Path] = set()
@@ -149,14 +149,16 @@ class BackendService:
                 results.append({"source": str(source), "status": "already_exists", "detail": f"A file named {source.name} is already in Ready"})
             else:
                 planned.add(destination)
-                temporary = destination.with_name(f".{destination.name}.{uuid4().hex}.partial")
                 try:
-                    shutil.copy2(source, temporary)
-                    temporary.replace(destination)
-                    results.append({"source": str(source), "status": "added", "destination": str(destination)})
-                except OSError as exc:
-                    temporary.unlink(missing_ok=True)
-                    results.append({"source": str(source), "status": "failed", "detail": f"Could not copy file: {exc}"})
+                    job = self.jobs.submit(source, "copy")
+                    results.append({
+                        "source": str(source),
+                        "status": "added",
+                        "destination": str(destination),
+                        "job_id": job.id,
+                    })
+                except Exception as exc:  # pragma: no cover - surfaced to UI as a rejected import
+                    results.append({"source": str(source), "status": "failed", "detail": str(exc)})
         return results
 
     def purge_archive_source(self, source: Path) -> dict[str, object]:

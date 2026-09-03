@@ -36,6 +36,51 @@ class JobRuntime:
 
     def run(self, job_id: str, cancellation: Event) -> None:
         source = self._current_source(job_id)
+        job = self._current_job(job_id)
+
+        if job.mode == "copy":
+            destination = self.settings.directories.input.resolve() / source.name
+            output_existed = destination.exists()
+            processing_destination = destination.with_name(f".{destination.name}.{uuid4().hex}.partial")
+            try:
+                if cancellation.is_set():
+                    self._on_status(job_id=job_id, status="cancelled", percent=None, error=None, message="Job cancelled")
+                    return
+                source_size = source.stat().st_size
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                self._on_status(job_id=job_id, status="copying", percent=0.0, error=None, message="Copying to Ready")
+                bytes_copied = 0
+                last_update = 0.0
+                with source.open("rb") as infile, processing_destination.open("wb") as outfile:
+                    while True:
+                        if cancellation.is_set():
+                            raise InterruptedError("Job cancelled")
+                        chunk = infile.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        outfile.write(chunk)
+                        bytes_copied += len(chunk)
+                        percent = 100.0 if source_size == 0 else min(100.0, (bytes_copied / source_size) * 100.0)
+                        if percent >= last_update + 5.0 or percent >= 99.0:
+                            self._on_progress(job_id, {"event": "progress", "stage": "copying", "percent": percent})
+                            last_update = percent
+                processing_destination.replace(destination)
+                self._on_status(job_id=job_id, status="completed", percent=100.0, error=None, message="Copy completed")
+            except InterruptedError:
+                self._remove_incomplete_output(processing_destination, destination, output_existed)
+                self._on_status(job_id=job_id, status="cancelled", percent=None, error=None, message="Job cancelled")
+            except Exception as exc:
+                self._remove_incomplete_output(processing_destination, destination, output_existed)
+                error = JobError(
+                    "copy_failed",
+                    "Copy failed",
+                    str(exc),
+                    retryable=True,
+                    diagnostic=traceback.format_exc(),
+                )
+                self._on_status(job_id=job_id, status="failed", percent=None, error=error, message=error.message)
+            return
+
         destination = output_path(
             source,
             self.settings.directories.output,
@@ -48,7 +93,6 @@ class JobRuntime:
         )
         output_existed = destination.exists()
         processing_destination = destination
-        job = self._current_job(job_id)
         if job.overwrite_output and output_existed:
             processing_destination = destination.with_name(
                 f".{destination.stem}.{uuid4().hex}.partial{destination.suffix}"

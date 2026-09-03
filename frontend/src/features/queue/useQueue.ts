@@ -5,7 +5,7 @@ import type { ArchiveItem, ImportResult, Job, JobEvent, JobSubmissionOptions, Jo
 import { errorMessage, fileName } from '../../utils/format'
 
 const TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled', 'transcribed'])
-const RUNNING_STATUSES = new Set(['transcribing', 'censoring', 'verifying'])
+const RUNNING_STATUSES = new Set(['copying', 'transcribing', 'censoring', 'verifying'])
 
 type QueueOptions = {
   client?: DesktopClient
