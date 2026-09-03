@@ -11,6 +11,7 @@ declare global {
       selectDictionaryExport: () => Promise<string | undefined>
       openExternal: (url: string) => Promise<void>
       openFolder: (folderPath: string) => Promise<void>
+      openFile: (filePath: string) => Promise<void>
       getPathForFile: (file: File) => string
     }
   }

@@ -52,7 +52,9 @@ tr:last-child td { border-bottom: 0; }
 .file-icon { width: 34px; height: 34px; display: grid; place-items: center; background: var(--surface-raised); color: var(--muted); font: 800 8px var(--sans); border-radius: 4px; flex: 0 0 auto; }
 .status-badge { display: inline-flex; align-items: center; gap: 6px; font-weight: 800; font-size: 11px; }
 .status-queued { color: var(--muted); }
-.status-transcribing, .status-censoring, .status-verifying { color: var(--signal); }
+.status-copying { color: var(--action-purple); }
+.status-transcribing { color: var(--signal); }
+.status-censoring, .status-verifying { color: var(--success); }
 .status-transcribed { color: var(--warning); }
 .status-finished, .status-completed { color: var(--success); }
 .status-failed { color: var(--danger); }
@@ -60,6 +62,8 @@ tr:last-child td { border-bottom: 0; }
 .progress-wrap { display: flex; align-items: center; gap: 9px; }
 .progress-track { height: 5px; flex: 1; background: var(--soft); min-width: 70px; }
 .progress-track span { display: block; height: 100%; background: var(--signal); }
+.progress-copying span { background: var(--action-purple); }
+.progress-censoring span, .progress-verifying span { background: var(--success); }
 .progress-wrap > span { width: 31px; text-align: right; font-size: 11px; }
 .muted, .details-cell, .row-detail { color: var(--muted); }
 
@@ -69,7 +73,12 @@ tr:last-child td { border-bottom: 0; }
 .job-diagnostic summary { width: fit-content; cursor: pointer; color: var(--signal); font-weight: 800; }
 .job-diagnostic pre { max-width: 100%; max-height: 180px; margin: 6px 0 0; overflow: auto; padding: 8px; border: 1px solid var(--line); background: var(--surface-raised); color: var(--ink); font: 10px/1.45 var(--mono); white-space: pre-wrap; word-break: break-word; }
 .row-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 10px; }
-.row-actions button, .details-cell button { display: inline-flex; align-items: center; gap: 4px; padding: 2px 0; border: 0; color: var(--signal); background: none; font-size: 11px; font-weight: 800; }
+.row-actions button, .details-cell button { display: inline-flex; align-items: center; gap: 4px; padding: 3px 6px; border: 1px solid currentColor; border-radius: 4px; color: var(--signal); background: transparent; font-size: 11px; font-weight: 800; }
+.row-actions .review-action { border-color: var(--line); background: var(--surface); color: var(--ink); }
+.row-actions .play-action { color: var(--action-blue); }
+.row-actions .transcribe-action { color: var(--signal); }
+.row-actions .censor-action { color: var(--success); }
+.row-actions .archive-action { color: var(--danger); }
 .row-actions button:disabled, .details-cell button:disabled { opacity: .72; cursor: not-allowed; color: var(--muted); }
 
 .empty-state { min-height: 250px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; color: var(--muted); }

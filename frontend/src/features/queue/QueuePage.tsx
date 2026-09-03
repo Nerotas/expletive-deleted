@@ -339,6 +339,7 @@ function QueueView({
             onToggleSelection={onToggleSelection}
             onReview={onReview}
             onArchive={queue.archiveSource}
+            onOpenFile={queue.openFile}
             onRetry={queue.retryJob}
             onSubmit={queue.submitFile}
             onCancelRunning={queue.cancelActive}
@@ -419,6 +420,7 @@ function QueueRow({
   onToggleSelection,
   onReview,
   onArchive,
+  onOpenFile,
   onRetry,
   onSubmit,
   onCancelRunning,
@@ -437,6 +439,7 @@ function QueueRow({
   onToggleSelection: (source: string) => void
   onReview: (source: string) => void
   onArchive: (source: string) => Promise<unknown>
+  onOpenFile: (filePath: string) => Promise<void>
   onRetry: (job: Job) => Promise<unknown>
   onSubmit: (source: string, mode: Job['mode'], options?: JobSubmissionOptions) => Promise<void>
   onCancelRunning: () => Promise<unknown>
@@ -445,6 +448,7 @@ function QueueRow({
   const displayJob = pendingJob ?? job
   const status = displayJob?.status ?? item.status
   const percent = displayJob?.progress_percent
+  const outputFile = item.status === 'finished' ? item.output : null
   const selectable = item.status === 'ready' && !pendingJob
   const processingDisabled = busy || !processingReady || Boolean(pendingJob)
   const transcribeDisabled = processingDisabled
@@ -489,7 +493,7 @@ function QueueRow({
     </div></td>
     <td><StatusBadge status={status} /></td>
     <td className="position-cell">{active ? <strong>Active</strong> : queuePosition != null ? <span>#{queuePosition}</span> : <span className="muted">—</span>}</td>
-    <td>{percent != null ? <div className="progress-wrap"><div className="progress-track"><span style={{ width: `${percent}%` }} /></div><span>{Math.round(percent)}%</span></div> : <span className="muted">—</span>}</td>
+    <td>{percent != null ? <div className="progress-wrap"><div className={`progress-track progress-${status}`}><span style={{ width: `${percent}%` }} /></div><span>{Math.round(percent)}%</span></div> : <span className="muted">—</span>}</td>
     <td className="actions-cell">
       <span className="row-detail">{detail}</span>
       {displayJob?.error?.diagnostic && <details className="job-diagnostic">
@@ -497,10 +501,12 @@ function QueueRow({
         <pre>{displayJob.error.diagnostic}</pre>
       </details>}
       <div className="row-actions" aria-label={`Actions for ${fileName(item.source)}`}>
-        {item.transcript && <button onClick={() => onReview(item.source)}>Review words</button>}
+        {item.transcript && <button className="review-action" onClick={() => onReview(item.source)}>Review words</button>}
+        {outputFile && <button className="play-action" title="Open the verified censored file in your default media player" onClick={() => void onOpenFile(outputFile)}><Play size={13} />Play</button>}
         {active && <button disabled={busy} title="Cancel this running job and keep the source file" onClick={() => void onCancelRunning()}><CircleStop size={13} />Cancel job</button>}
         {pendingJob?.status === 'queued' && <button disabled={busy} title="Remove this waiting job without cancelling the active job" onClick={() => void onRemoveQueued(pendingJob)}><X size={13} />Remove from queue</button>}
         <button
+          className="transcribe-action"
           aria-label={item.status === 'ready' ? 'Transcribe only' : 'Retranscribe'}
           disabled={transcribeDisabled}
           title={processingReason ?? (item.status === 'ready'
@@ -513,6 +519,7 @@ function QueueRow({
           )}
         ><FileText size={13} />{item.status === 'ready' ? 'Transcribe' : 'Retranscribe'}</button>
         <button
+          className="censor-action"
           aria-label={item.status === 'finished' ? 'Retranscode' : 'Transcribe + Transcode'}
           disabled={combinedDisabled}
           title={processingReason ?? (item.status === 'finished'
@@ -525,6 +532,7 @@ function QueueRow({
           )}
         ><Play size={13} />{item.status === 'finished' ? 'Retranscode' : 'Censor'}</button>
         <button
+          className="archive-action"
           disabled={archiveDisabled}
           title={!['transcribed', 'finished'].includes(item.status) ? 'Archive is available after a verified transcript or output exists' : !queueIdle ? 'Wait until the processing queue is idle before archiving' : 'Move the verified source to Processed'}
           onClick={() => void onArchive(item.source)}

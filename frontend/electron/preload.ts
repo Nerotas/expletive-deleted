@@ -9,5 +9,6 @@ contextBridge.exposeInMainWorld('expletiveDeleted', {
   selectDictionaryExport: () => ipcRenderer.invoke('expletive-deleted:select-dictionary-export') as Promise<string | undefined>,
   openExternal: (url: string) => ipcRenderer.invoke('expletive-deleted:open-external', url) as Promise<void>,
   openFolder: (folderPath: string) => ipcRenderer.invoke('expletive-deleted:open-folder', folderPath) as Promise<void>,
+  openFile: (filePath: string) => ipcRenderer.invoke('expletive-deleted:open-file', filePath) as Promise<void>,
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
 })

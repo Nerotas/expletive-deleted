@@ -150,6 +150,10 @@ app.whenReady().then(() => {
     const error = await shell.openPath(folderPath)
     if (error) throw new Error(`Could not open the transcode folder: ${error}`)
   })
+  ipcMain.handle('expletive-deleted:open-file', async (_event: IpcMainInvokeEvent, filePath: string) => {
+    const error = await shell.openPath(filePath)
+    if (error) throw new Error(`Could not open the censored file: ${error}`)
+  })
   createWindow()
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })
 })
