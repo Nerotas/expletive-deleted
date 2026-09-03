@@ -64,6 +64,9 @@ class JobRuntime:
                         if percent >= last_update + 5.0 or percent >= 99.0:
                             self._on_progress(job_id, {"event": "progress", "stage": "copying", "percent": percent})
                             last_update = percent
+                shutil.copystat(source, processing_destination, follow_symlinks=False)
+                if destination.exists():
+                    raise RuntimeError(f"A file named {source.name} is already in Ready")
                 processing_destination.replace(destination)
                 self._on_status(job_id=job_id, status="completed", percent=100.0, error=None, message="Copy completed")
             except InterruptedError:
