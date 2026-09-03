@@ -22,7 +22,6 @@ from .models import (
     SurroundOutput,
     VideoMode,
     VideoSettings,
-    WhisperLibrary,
     WhisperModel,
     WhisperSettings,
 )
@@ -186,10 +185,8 @@ def settings_from_dict(data: object, defaults: AppSettings | None = None) -> App
             )
         ),
         whisper=WhisperSettings(
-            library=cast(
-                WhisperLibrary,
-                _string(whisper, "library", base.whisper.library, "whisper.library"),
-            ),
+            # Preserve the retired library field as an input-only compatibility shim.
+            library="faster-whisper",
             model=cast(
                 WhisperModel,
                 _string(whisper, "model", base.whisper.model, "whisper.model"),

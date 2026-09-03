@@ -37,6 +37,7 @@ export type JobError = {
   message: string
   detail: string | null
   retryable: boolean
+  diagnostic: string | null
 }
 
 export type Job = {
@@ -78,7 +79,7 @@ export type JobEvent = {
   message: string | null
 }
 
-export type WhisperLibrary = 'faster-whisper' | 'openai-whisper'
+export type WhisperLibrary = 'faster-whisper'
 export type WhisperModel = 'tiny' | 'base' | 'small' | 'medium' | 'large-v3'
 
 export type Capabilities = {

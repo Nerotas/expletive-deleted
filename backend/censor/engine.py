@@ -366,17 +366,12 @@ class ProfanityCensor:
         self.cancellation = cancellation or Event()
         self.ffmpeg_bin = ffmpeg_bin or find_ffmpeg()
         self.ffprobe_bin = ffprobe_bin or find_ffprobe()
-        if not self.ffmpeg_bin or not self.ffprobe_bin:
+        if not self.ffprobe_bin:
             raise RuntimeError(
-                "FFmpeg and FFprobe must be available on PATH or configured with "
-                "CENSOR_FFMPEG and CENSOR_FFPROBE."
+                "FFprobe must be available on PATH or configured with CENSOR_FFPROBE."
             )
-        self.encoders = available_encoders(self.ffmpeg_bin)
-        self.video_encoder = select_working_video_encoder(
-            self.ffmpeg_bin,
-            self.encoders,
-            os.environ.get("CENSOR_VIDEO_ENCODER"),
-        )
+        self.encoders: set[str] = set()
+        self.video_encoder: str | None = None
         self.policy_store = policy_store or PolicyStore()
         policy = self.policy_store.load()
         self.censor_words_file = policy.censor_defaults_path
@@ -846,12 +841,33 @@ class ProfanityCensor:
 
     def censor_video(self, profane_segments: List[Dict]) -> bool:
         """Apply audio muting to video using ffmpeg."""
+        if not self.ffmpeg_bin:
+            self.last_error = "FFmpeg must be available before a censored output can be created."
+            print(f"[-] {self.last_error}")
+            return False
         os.makedirs(os.path.dirname(os.path.abspath(self.output_file)), exist_ok=True)
         source_has_center_channel = self.has_discrete_center_audio()
         audio_only = self.is_audio_only()
         video_mode = getattr(self, "video_mode", "h264")
         surround_output = getattr(self, "surround_output", "preserve_5_1")
         source_video_codec = "" if audio_only else self.get_video_codec()
+        requires_video_encoder = (
+            not audio_only
+            and video_mode != "preserve_source"
+            and source_video_codec != "h264"
+        )
+        if requires_video_encoder and self.video_encoder is None:
+            try:
+                self.encoders = available_encoders(self.ffmpeg_bin)
+                self.video_encoder = select_working_video_encoder(
+                    self.ffmpeg_bin,
+                    self.encoders,
+                    os.environ.get("CENSOR_VIDEO_ENCODER"),
+                )
+            except (OSError, RuntimeError, ValueError) as exc:
+                self.last_error = f"FFmpeg encoder setup failed: {exc}"
+                print(f"[-] {self.last_error}")
+                return False
         can_copy_clean = (
             not audio_only
             and (not source_has_center_channel or surround_output == "preserve_5_1")

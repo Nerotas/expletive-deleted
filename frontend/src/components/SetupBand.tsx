@@ -33,11 +33,7 @@ export function SetupBand({ capabilities, reviewInstall, locateExisting, checkAg
           }
         />
         <SetupItem
-          label={
-            capabilities.whisper_library === 'openai-whisper'
-              ? 'OpenAI Whisper'
-              : 'faster-whisper'
-          }
+          label="faster-whisper"
           ready={capabilities.whisper}
           busy={busy}
           action={!capabilities.whisper ? () => reviewInstall(['python']) : undefined}
