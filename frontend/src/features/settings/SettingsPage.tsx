@@ -284,7 +284,7 @@ export function SettingsPage({ controller, capabilities, checkingSystem, onCheck
 
         <SettingsSection title="About" description="Desktop application identity">
           <div className="about-setting">
-            <strong>{APPLICATION_DISPLAY_NAME} 1.0.1</strong>
+            <strong>{APPLICATION_DISPLAY_NAME} 1.0.8</strong>
             <span>Electron desktop · local processing · Windows</span>
           </div>
           <button className="button secondary" onClick={onOpenOnboarding}>Open setup walkthrough</button>
