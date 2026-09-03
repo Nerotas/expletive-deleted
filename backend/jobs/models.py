@@ -27,6 +27,16 @@ JobStatus = Literal[
     "failed",
     "cancelled",
 ]
+TERMINAL_STATUSES = frozenset({"completed", "failed", "cancelled", "transcribed"})
+ACTIVE_STATUSES = frozenset({"queued", "transcribing", "censoring", "verifying"})
+
+
+def is_terminal_status(status: JobStatus | str) -> bool:
+    return status in TERMINAL_STATUSES
+
+
+def is_active_status(status: JobStatus | str) -> bool:
+    return status in ACTIVE_STATUSES
 
 
 @dataclass(frozen=True)

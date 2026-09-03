@@ -16,7 +16,7 @@ from backend.runtime import FFMPEG_VERSION, inspect_executable
 from backend.settings import AppSettings
 
 from .events import JobEvent
-from .media import MEDIA_EXTENSIONS, archive_path, output_path, relative_media_path, transcript_path
+from .media import MEDIA_EXTENSIONS, output_path, relative_media_path
 from .models import (
     JobError,
     JobMode,
@@ -24,10 +24,9 @@ from .models import (
     JobStatus,
     JobSubmissionCode,
     JobSubmissionResult,
+    TERMINAL_STATUSES,
 )
-
-
-TERMINAL_STATUSES = {"completed", "failed", "cancelled", "transcribed"}
+from .runtime import JobRuntime
 
 
 class JobNotFoundError(KeyError):
@@ -62,6 +61,14 @@ class JobManager:
         self._cancellations: dict[str, Event] = {}
         self._futures: dict[str, Future[None]] = {}
         self._sequence = 0
+        self._runtime = JobRuntime(
+            settings,
+            censor_factory=censor_factory,
+            on_progress=self._on_progress,
+            on_status=self._set_status_callback,
+            get_job=lambda job_id: self._jobs[job_id],
+            get_source=lambda job_id: self._jobs[job_id].source,
+        )
 
     def submit(
         self,
@@ -201,6 +208,17 @@ class JobManager:
         self._events[job_id].append(item)
         return item
 
+    def _set_status_callback(
+        self,
+        job_id: str,
+        status: JobStatus,
+        percent: float | None = None,
+        error: JobError | None = None,
+        message: str | None = None,
+    ) -> JobRecord:
+        with self._lock:
+            return self._set_status(job_id, status, percent=percent, error=error, message=message)
+
     def _set_status(
         self,
         job_id: str,
@@ -248,132 +266,9 @@ class JobManager:
                 message=progress.get("message"),
             )
 
-    def _configured_runtime_path(self, name: str, executable: Path | None) -> str | None:
-        """Return a verified override or fail before any media processing begins."""
-        if executable is None:
-            return None
-        status = inspect_executable(name.lower(), name, str(executable), FFMPEG_VERSION)
-        if not status.ready or status.path is None:
-            raise RuntimeError(
-                f"Configured {name} is unavailable: {executable}. {status.detail}. "
-                "Open Settings and choose a valid FFmpeg installation, then retry."
-            )
-        return str(status.path)
-
     def _run(self, job_id: str) -> None:
         cancellation = self._cancellations[job_id]
-        source = self._jobs[job_id].source
-        destination = output_path(
-            source,
-            self.settings.directories.output,
-            self.settings.directories.input,
-        )
-        transcript = transcript_path(
-            source,
-            self.settings.directories.transcripts,
-            self.settings.directories.input,
-        )
-        output_existed = destination.exists()
-        processing_destination = destination
-        if self._jobs[job_id].overwrite_output and output_existed:
-            processing_destination = destination.with_name(
-                f".{destination.stem}.{uuid4().hex}.partial{destination.suffix}"
-            )
-        try:
-            if cancellation.is_set():
-                self._set_status(job_id, "cancelled", message="Job cancelled")
-                return
-            if (
-                self._jobs[job_id].mode == "censor"
-                and destination.exists()
-                and not self._jobs[job_id].overwrite_output
-            ):
-                raise JobSubmissionError(
-                    "existing_output",
-                    f"Output already exists: {destination}",
-                )
-            ffmpeg_bin = self._configured_runtime_path(
-                "FFmpeg", self.settings.runtime.ffmpeg_path
-            )
-            ffprobe_bin = self._configured_runtime_path(
-                "FFprobe", self.settings.runtime.ffprobe_path
-            )
-            destination.parent.mkdir(parents=True, exist_ok=True)
-
-            with self._lock:
-                self._set_status(job_id, "transcribing", percent=0.0)
-            censor = self._censor_factory(
-                str(source),
-                str(processing_destination),
-                self.settings.whisper.model,
-                str(transcript.parent),
-                whisper_library=self.settings.whisper.library,
-                whisper_device=self.settings.processing.device,
-                censor_method="karaoke"
-                if self.settings.censoring.stereo_method == "karaoke"
-                else "mute",
-                padding_before_ms=self.settings.censoring.padding_before_ms,
-                padding_after_ms=self.settings.censoring.padding_after_ms,
-                surround_output=self.settings.audio.surround_output,
-                video_mode=self.settings.video.mode,
-                progress_callback=lambda progress: self._on_progress(job_id, progress),
-                cancellation=cancellation,
-                ffmpeg_bin=ffmpeg_bin,
-                ffprobe_bin=ffprobe_bin,
-                whisper_cache_dir=self.settings.runtime.whisper_cache,
-            )
-            process_options = {
-                "report_only": self._jobs[job_id].mode == "report_only",
-            }
-            if self._jobs[job_id].force_transcribe:
-                process_options["force_transcribe"] = True
-            success = censor.process(**process_options)
-            if cancellation.is_set():
-                raise InterruptedError("Job cancelled")
-            if not success:
-                detail = getattr(censor, "last_error", None)
-                raise RuntimeError(detail or "Processing engine reported failure")
-            if not transcript.is_file():
-                raise RuntimeError(
-                    f"Processing completed without a verified transcript: {transcript}"
-                )
-
-            with self._lock:
-                if self._jobs[job_id].mode == "report_only":
-                    self._set_status(job_id, "transcribed", percent=100.0, message="Report completed")
-                    return
-                self._set_status(job_id, "verifying", percent=100.0)
-            if not processing_destination.is_file():
-                raise RuntimeError(f"Expected output was not created: {processing_destination}")
-            if processing_destination != destination:
-                processing_destination.replace(destination)
-            if self.settings.source.archive_after_success:
-                archive = archive_path(
-                    source,
-                    self.settings.directories.archive,
-                    self.settings.directories.input,
-                )
-                if archive.exists():
-                    raise RuntimeError(f"Archive destination already exists: {archive}")
-                archive.parent.mkdir(parents=True, exist_ok=True)
-                shutil.move(str(source), archive)
-            with self._lock:
-                self._set_status(job_id, "completed", percent=100.0, message="Processing completed")
-        except InterruptedError:
-            self._remove_incomplete_output(processing_destination, destination, output_existed)
-            with self._lock:
-                self._set_status(job_id, "cancelled", message="Job cancelled")
-        except Exception as exc:
-            self._remove_incomplete_output(processing_destination, destination, output_existed)
-            error = JobError(
-                "processing_failed",
-                "Media processing failed",
-                str(exc),
-                retryable=True,
-                diagnostic=traceback.format_exc(),
-            )
-            with self._lock:
-                self._set_status(job_id, "failed", error=error, message=error.message)
+        self._runtime.run(job_id, cancellation)
 
     @staticmethod
     def _remove_incomplete_output(
