@@ -2,7 +2,7 @@
   "name": "expletive-deleted-desktop",
   "productName": "Expletive Deleted",
   "private": true,
-  "version": "1.0.1",
+  "version": "1.0.7",
   "description": "Local desktop application for transcribing and censoring profanity in media.",
   "main": "./out/main/main.cjs",
   "type": "module",
