@@ -109,7 +109,7 @@ class BackendServiceTests(unittest.TestCase):
             original.write_bytes(b"original")
             try:
                 result = service.import_sources([original])
-                queued_job = next(job for job in service.jobs.list() if job.source == original)
+                queued_job = next(job for job in service.jobs.list() if job.source == original.resolve())
                 completed = service.jobs.wait(queued_job.id, timeout=2)
                 duplicate = service.import_sources([original])
             finally:
@@ -138,7 +138,7 @@ class BackendServiceTests(unittest.TestCase):
             original.write_bytes(b"new")
             try:
                 result = service.import_sources([original])
-                queued_job = next(job for job in service.jobs.list() if job.source == original)
+                queued_job = next(job for job in service.jobs.list() if job.source == original.resolve())
                 completed = service.jobs.wait(queued_job.id, timeout=2)
                 copied = (root / "Ready" / "new.mkv").read_bytes()
             finally:
@@ -157,7 +157,7 @@ class BackendServiceTests(unittest.TestCase):
             original.write_bytes(b"queued-copy")
             try:
                 result = service.import_sources([original])
-                queued_job = next(job for job in service.jobs.list() if job.source == original)
+                queued_job = next(job for job in service.jobs.list() if job.source == original.resolve())
                 completed = service.jobs.wait(queued_job.id, timeout=2)
                 copied = (root / "Ready" / "movie.mkv").read_bytes()
             finally:
