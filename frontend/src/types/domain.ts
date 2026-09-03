@@ -15,6 +15,7 @@ export type JobStatus =
 export type LibraryItem = {
   source: string
   status: LibraryStatus
+  date_added: string
   transcript: string | null
   output: string | null
 }

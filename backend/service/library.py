@@ -24,6 +24,7 @@ class LibraryScanError(RuntimeError):
 class LibraryItem:
     source: Path
     status: LibraryStatus
+    date_added: datetime
     transcript: Path | None = None
     output: Path | None = None
 
@@ -31,6 +32,7 @@ class LibraryItem:
         return {
             "source": str(self.source),
             "status": self.status,
+            "date_added": self.date_added.isoformat(),
             "transcript": str(self.transcript) if self.transcript else None,
             "output": str(self.output) if self.output else None,
         }
@@ -81,6 +83,7 @@ def scan_library(
 
     items: list[LibraryItem] = []
     for source in sources:
+        date_added = datetime.fromtimestamp(source.stat().st_ctime, tz=timezone.utc)
         transcript = transcript_path(source, paths.transcripts, paths.ready)
         output = output_path(source, paths.finished, paths.ready)
         if output.is_file():
@@ -88,6 +91,7 @@ def scan_library(
                 LibraryItem(
                     source=source,
                     status="finished",
+                    date_added=date_added,
                     transcript=transcript if transcript.is_file() else None,
                     output=output,
                 )
@@ -99,9 +103,9 @@ def scan_library(
             settings.whisper.library,
             settings.whisper.model,
         ):
-            items.append(LibraryItem(source, "transcribed", transcript=transcript))
+            items.append(LibraryItem(source, "transcribed", date_added, transcript=transcript))
         else:
-            items.append(LibraryItem(source, "ready"))
+            items.append(LibraryItem(source, "ready", date_added))
     return tuple(items)
 
 

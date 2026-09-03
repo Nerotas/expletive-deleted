@@ -405,6 +405,7 @@ describe('desktop application renderer', () => {
     vi.mocked(desktopClient.listLibrary).mockResolvedValue([{
       source,
       status: 'ready',
+      date_added: '2026-09-01T12:00:00Z',
       transcript: null,
       output: null,
     }])
@@ -424,6 +425,7 @@ describe('desktop application renderer', () => {
     vi.mocked(desktopClient.listLibrary).mockResolvedValue([{
       source,
       status: 'finished',
+      date_added: '2026-09-01T12:00:00Z',
       transcript: 'C:\\Media\\Transcripts\\movie-transcript.json',
       output: 'C:\\Media\\Finished\\movie-censored.mkv',
     }])
@@ -452,6 +454,7 @@ describe('desktop application renderer', () => {
     vi.mocked(desktopClient.listLibrary).mockResolvedValue([{
       source,
       status: 'finished',
+      date_added: '2026-09-01T12:00:00Z',
       transcript: 'C:\\Media\\Transcripts\\movie-transcript.json',
       output: 'C:\\Media\\Finished\\movie-censored.mkv',
     }])
@@ -479,8 +482,8 @@ describe('desktop application renderer', () => {
     const alpha = 'C:\\Media\\Ready\\alpha.mkv'
     const zulu = 'C:\\Media\\Ready\\zulu.mkv'
     vi.mocked(desktopClient.listLibrary).mockResolvedValue([
-      { source: zulu, status: 'ready', transcript: null, output: null },
-      { source: alpha, status: 'ready', transcript: null, output: null },
+      { source: zulu, status: 'ready', date_added: '2026-09-02T12:00:00Z', transcript: null, output: null },
+      { source: alpha, status: 'ready', date_added: '2026-09-01T12:00:00Z', transcript: null, output: null },
     ])
     vi.mocked(desktopClient.submitJobs).mockResolvedValueOnce([
       {
@@ -507,9 +510,9 @@ describe('desktop application renderer', () => {
     const first = 'C:\\Media\\Ready\\first.mkv'
     const second = 'C:\\Media\\Ready\\second.mkv'
     vi.mocked(desktopClient.listLibrary).mockResolvedValue([
-      { source: second, status: 'ready', transcript: null, output: null },
-      { source: active, status: 'ready', transcript: null, output: null },
-      { source: first, status: 'ready', transcript: null, output: null },
+      { source: second, status: 'ready', date_added: '2026-09-03T12:00:00Z', transcript: null, output: null },
+      { source: active, status: 'ready', date_added: '2026-09-02T12:00:00Z', transcript: null, output: null },
+      { source: first, status: 'ready', date_added: '2026-09-01T12:00:00Z', transcript: null, output: null },
     ])
     vi.mocked(desktopClient.listJobs).mockResolvedValue([
       { id: 'active-job', source: active, mode: 'censor', status: 'transcribing', progress_percent: 20, error: null },
@@ -535,13 +538,13 @@ describe('desktop application renderer', () => {
 
   it('sorts visible queue rows by file name', async () => {
     vi.mocked(desktopClient.listLibrary).mockResolvedValue([
-      { source: 'C:\\Media\\Ready\\zulu.mkv', status: 'ready', transcript: null, output: null },
-      { source: 'C:\\Media\\Ready\\alpha.mkv', status: 'ready', transcript: null, output: null },
+      { source: 'C:\\Media\\Ready\\zulu.mkv', status: 'ready', date_added: '2026-09-02T12:00:00Z', transcript: null, output: null },
+      { source: 'C:\\Media\\Ready\\alpha.mkv', status: 'ready', date_added: '2026-09-01T12:00:00Z', transcript: null, output: null },
     ])
     const user = userEvent.setup()
     renderApp('/')
 
-    await user.selectOptions(await screen.findByRole('combobox', { name: 'Sort' }), 'name')
+    await user.click(await screen.findByRole('button', { name: 'File' }))
     const fileRows = screen.getAllByRole('row').slice(1)
     expect(fileRows[0]).toHaveTextContent('alpha.mkv')
     expect(fileRows[1]).toHaveTextContent('zulu.mkv')

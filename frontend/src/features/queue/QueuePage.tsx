@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react'
 import {
   ArchiveIcon,
+  ArrowDown,
+  ArrowUp,
   CircleStop,
   FileText,
   FolderOpen,
@@ -39,7 +41,8 @@ type View = 'queue' | 'archive'
 type PurgeRequest = { source: string; label: string } | 'all' | null
 type QueueRowModel = { item: LibraryItem; job?: Job; pendingJob?: Job }
 type QueueFilter = 'all' | 'ready' | 'queued' | 'active' | 'transcribed' | 'finished'
-type QueueSort = 'queue' | 'name' | 'status'
+type QueueSort = 'queue' | 'name' | 'dateAdded' | 'status'
+type SortDirection = 'ascending' | 'descending'
 
 const TERMINAL_STATUSES = new Set<Job['status']>(['completed', 'failed', 'cancelled', 'transcribed'])
 const RUNNING_STATUSES = new Set<Job['status']>(['copying', 'transcribing', 'censoring', 'verifying'])
@@ -218,6 +221,7 @@ function QueueView({
 }) {
   const [filter, setFilter] = useState<QueueFilter>('all')
   const [sort, setSort] = useState<QueueSort>('queue')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('ascending')
   const selectedCount = selectedSources.size
   const processingUnavailable = !capabilities?.ready
   const batchDisabled = queue.busy || processingUnavailable || selectedCount === 0
@@ -241,15 +245,19 @@ function QueueView({
   const categoryOrder = ['active', 'queued', 'ready', 'transcribed', 'finished', 'other']
   const sortedRows = [...rows].sort((left, right) => {
     const nameComparison = fileName(left.item.source).localeCompare(fileName(right.item.source), undefined, { numeric: true, sensitivity: 'base' })
-    if (sort === 'name') return nameComparison
-    if (sort === 'status') {
-      return categoryOrder.indexOf(left.category) - categoryOrder.indexOf(right.category) || nameComparison
+    let comparison: number
+    if (sort === 'name') comparison = nameComparison
+    else if (sort === 'dateAdded') comparison = new Date(left.item.date_added).getTime() - new Date(right.item.date_added).getTime() || nameComparison
+    else if (sort === 'status') {
+      comparison = categoryOrder.indexOf(left.category) - categoryOrder.indexOf(right.category) || nameComparison
+    } else {
+      const leftRank = left.active ? 0 : left.queuePosition != null ? 1 : 2
+      const rightRank = right.active ? 0 : right.queuePosition != null ? 1 : 2
+      comparison = leftRank - rightRank
+        || (left.queuePosition ?? Number.MAX_SAFE_INTEGER) - (right.queuePosition ?? Number.MAX_SAFE_INTEGER)
+        || nameComparison
     }
-    const leftRank = left.active ? 0 : left.queuePosition != null ? 1 : 2
-    const rightRank = right.active ? 0 : right.queuePosition != null ? 1 : 2
-    return leftRank - rightRank
-      || (left.queuePosition ?? Number.MAX_SAFE_INTEGER) - (right.queuePosition ?? Number.MAX_SAFE_INTEGER)
-      || nameComparison
+    return sortDirection === 'ascending' ? comparison : -comparison
   })
   const visibleRows = sortedRows.filter((row) => filter === 'all' || row.category === filter)
   const visibleSelectable = visibleRows
@@ -266,6 +274,23 @@ function QueueView({
     transcribed: rows.filter((row) => row.category === 'transcribed').length,
     finished: rows.filter((row) => row.category === 'finished').length,
   }
+  const setSortColumn = (column: QueueSort) => {
+    if (column === sort) setSortDirection((direction) => direction === 'ascending' ? 'descending' : 'ascending')
+    else {
+      setSort(column)
+      setSortDirection('ascending')
+    }
+  }
+  const sortHeader = (column: QueueSort, label: string) => <th aria-sort={sort === column ? sortDirection : 'none'}>
+    <button
+      className={`sort-header ${sort === column ? 'active' : ''}`}
+      title={`Sort by ${label}${sort === column ? `, ${sortDirection}` : ''}`}
+      onClick={() => setSortColumn(column)}
+    >
+      {label}
+      {sort === column && (sortDirection === 'ascending' ? <ArrowUp size={13} /> : <ArrowDown size={13} />)}
+    </button>
+  </th>
 
   return <>
     <div className="queue-summary">
@@ -285,13 +310,6 @@ function QueueView({
           onClick={() => setFilter(value)}
         >{value === 'all' ? 'All' : value[0].toUpperCase() + value.slice(1)} <span>{counts[value]}</span></button>)}
       </div>
-      <label className="queue-sort">Sort
-        <select value={sort} onChange={(event) => setSort(event.target.value as QueueSort)}>
-          <option value="queue">Queue position</option>
-          <option value="name">File name</option>
-          <option value="status">Status</option>
-        </select>
-      </label>
     </div>
 
     <div className="batch-toolbar" aria-label="Selected file actions">
@@ -322,7 +340,7 @@ function QueueView({
 
     <div className="table-frame queue-table-frame">
       <table className="queue-table">
-        <thead><tr><th className="select-column"><span className="sr-only">Select</span></th><th>File</th><th>Status</th><th>Queue position</th><th>Progress</th><th>Actions</th></tr></thead>
+        <thead><tr><th className="select-column"><span className="sr-only">Select</span></th>{sortHeader('name', 'File')}{sortHeader('dateAdded', 'Date added')}{sortHeader('status', 'Status')}{sortHeader('queue', 'Queue position')}<th>Progress</th><th>Actions</th></tr></thead>
         <tbody>
           {visibleRows.map(({ item, job, pendingJob, active, queuePosition }) => <QueueRow
             key={item.source}
@@ -345,7 +363,7 @@ function QueueView({
             onCancelRunning={queue.cancelActive}
             onRemoveQueued={queue.removeQueued}
           />)}
-          {!queue.loading && !visibleRows.length && <tr><td colSpan={6}><div className="empty-state">
+          {!queue.loading && !visibleRows.length && <tr><td colSpan={7}><div className="empty-state">
             <Upload size={28} />
             <strong>{mergedRows.length ? `No ${filter} files` : 'Drop media here to add it'}</strong>
             <span>{mergedRows.length ? 'Choose another filter to see the rest of the queue.' : 'Files are copied to Ready; your originals stay where they are.'}</span>
@@ -491,6 +509,7 @@ function QueueRow({
       <span className="file-icon">{fileName(item.source).split('.').pop()?.toUpperCase()}</span>
       <div><strong>{fileName(item.source)}</strong><small>{item.source}</small></div>
     </div></td>
+    <td>{new Date(item.date_added).toLocaleString()}</td>
     <td><StatusBadge status={status} /></td>
     <td className="position-cell">{active ? <strong>Active</strong> : queuePosition != null ? <span>#{queuePosition}</span> : <span className="muted">—</span>}</td>
     <td>{percent != null ? <div className="progress-wrap"><div className={`progress-track progress-${status}`}><span style={{ width: `${percent}%` }} /></div><span>{Math.round(percent)}%</span></div> : <span className="muted">—</span>}</td>
