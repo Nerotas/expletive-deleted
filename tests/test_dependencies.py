@@ -146,6 +146,31 @@ class DependencyInventoryTests(unittest.TestCase):
         self.assertEqual(status.state, "invalid")
         self.assertIn("model.bin", status.detail)
 
+    def test_openai_model_verification_surfaces_python_dependency_failures(self):
+        numpy_invalid = DependencyStatus(
+            id="python:numpy",
+            name="numpy",
+            state="invalid",
+            required_version="2.4.4",
+            installed_version="2.5.2",
+            path=None,
+            detail="installed 2.5.2; required 2.4.4",
+            install_supported=True,
+        )
+        with patch(
+            "backend.runtime.dependencies.inspect_python_dependencies",
+            return_value=(numpy_invalid,),
+        ):
+            status = inspect_whisper_model(
+                Path("C:/models"),
+                library="openai-whisper",
+                model="large-v3",
+            )
+
+        self.assertEqual(status.state, "invalid")
+        self.assertIn("Python dependencies are not ready", status.detail)
+        self.assertIn("numpy", status.detail)
+
     def test_processing_requires_verified_model_without_downloading(self):
         missing = DependencyStatus(
             id="whisper:large-v3",
@@ -186,6 +211,33 @@ class DependencyPlanTests(unittest.TestCase):
     def test_non_windows_ffmpeg_plan_is_supported(self):
         plan = build_install_plan(["ffmpeg"], platform_name="Linux")
         self.assertEqual(len(plan.actions), 2)
+
+    def test_whisper_model_plan_auto_includes_python_when_dependencies_are_not_ready(self):
+        missing = DependencyStatus(
+            id="python:numpy",
+            name="numpy",
+            state="invalid",
+            required_version="2.4.4",
+            installed_version="2.5.2",
+            path=None,
+            detail="installed 2.5.2; required 2.4.4",
+            install_supported=True,
+        )
+        with patch(
+            "backend.runtime.dependencies.inspect_python_dependencies",
+            return_value=(missing,),
+        ):
+            plan = build_install_plan(
+                ["whisper_model"],
+                python_executable=Path("C:/Python/python.exe"),
+                cache_dir=Path("C:/models"),
+                whisper_library="openai-whisper",
+                whisper_model="large-v3",
+            )
+
+        self.assertEqual(plan.actions[0].id, "install-python-dependencies")
+        self.assertIn("numpy==2.4.4", plan.actions[0].command)
+        self.assertTrue(plan.actions[1].id.startswith("download-openai-whisper-"))
 
     def test_exact_plan_approval_is_required_before_execution(self):
         plan = build_install_plan(["python"], python_executable=Path("C:\\python.exe"))

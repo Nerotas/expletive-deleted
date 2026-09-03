@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import importlib.metadata
 import hashlib
 import json
@@ -219,6 +220,9 @@ def build_install_plan(
     runtime_root = (runtime_root or get_application_runtime_root()).resolve()
     platform_name = platform_name or platform.system()
     actions: list[InstallAction] = []
+    python_dependencies_ready = all(
+        status.ready for status in inspect_python_dependencies(whisper_library)
+    )
 
     if "ffmpeg" in requested:
         actions.append(
@@ -257,7 +261,9 @@ def build_install_plan(
             )
         )
 
-    if "python" in requested:
+    if "python" in requested or (
+        "whisper_model" in requested and not python_dependencies_ready
+    ):
         requirements = _python_requirements_for_library(whisper_library)
         dependency_ids = [
             f"python:{distribution}"
@@ -558,6 +564,26 @@ def inspect_whisper_model(
     dependency_id = _whisper_dependency_id(library, model)
     display_name = f"Whisper {model} model ({library})"
     if library == "openai-whisper":
+        python_failures = [
+            status
+            for status in inspect_python_dependencies("openai-whisper")
+            if not status.ready
+        ]
+        if python_failures:
+            issues = "; ".join(f"{status.name}: {status.detail}" for status in python_failures)
+            return DependencyStatus(
+                id=dependency_id,
+                name=display_name,
+                state="invalid",
+                required_version=None,
+                installed_version=None,
+                path=None,
+                detail=(
+                    "OpenAI Whisper Python dependencies are not ready. "
+                    f"{issues}. Install Python dependencies from setup, then retry model download."
+                ),
+                install_supported=True,
+            )
         try:
             whisper_module = importlib.import_module("whisper")
             model_url = whisper_module._MODELS[model]

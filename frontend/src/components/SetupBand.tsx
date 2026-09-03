@@ -48,7 +48,7 @@ export function SetupBand({ capabilities, reviewInstall, locateExisting, checkAg
           busy={busy}
           locate={() => locateExisting('whisper_model')}
           action={
-            !capabilities.whisper_model_ready && capabilities.whisper
+            !capabilities.whisper_model_ready
               ? () => reviewInstall(['whisper_model'])
               : undefined
           }
