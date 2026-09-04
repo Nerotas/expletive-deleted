@@ -1,4 +1,4 @@
-.queue-summary { display: grid; grid-template-columns: repeat(5, 1fr); border: 1px solid var(--line); background: var(--surface); margin-bottom: 12px; }
+.queue-summary { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); background: var(--surface); margin-bottom: 12px; }
 .metric { min-width: 0; padding: 14px 18px; border-right: 1px solid var(--line); display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .metric:last-child { border-right: 0; }
 .metric span { overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-size: 10px; font-weight: 800; }
@@ -104,10 +104,10 @@ tr:last-child td { border-bottom: 0; }
 .copy-results .already_exists, .copy-results .unsupported, .copy-results .unavailable, .copy-results .failed { color: var(--danger); }
 
 @media (max-width: 900px) {
-  .queue-summary { grid-template-columns: repeat(3, 1fr); }
+  .queue-summary { grid-template-columns: repeat(2, 1fr); }
   .metric { border-bottom: 1px solid var(--line); }
-  .metric:nth-child(3) { border-right: 0; }
-  .metric:nth-child(n+4) { border-bottom: 0; }
+  .metric:nth-child(even) { border-right: 0; }
+  .metric:nth-child(n+3) { border-bottom: 0; }
   .batch-toolbar { align-items: stretch; flex-direction: column; }
   .batch-actions .button { flex: 1 1 220px; justify-content: center; }
   .table-controls { align-items: stretch; flex-direction: column; }
@@ -118,11 +118,8 @@ tr:last-child td { border-bottom: 0; }
 }
 
 @media (max-width: 560px) {
-  .queue-summary { grid-template-columns: repeat(2, 1fr); }
   .metric:nth-child(odd) { border-right: 1px solid var(--line); }
   .metric:nth-child(even) { border-right: 0; }
-  .metric:nth-child(n+4) { border-bottom: 1px solid var(--line); }
-  .metric:last-child { border-bottom: 0; }
   .batch-actions { align-items: stretch; flex-direction: column; }
   .batch-actions .button { flex-basis: auto; width: 100%; }
   .selection-controls { justify-content: space-between; }
