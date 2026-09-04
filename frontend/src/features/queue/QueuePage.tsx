@@ -318,10 +318,13 @@ function QueueView({
     const stopResize = () => {
       window.removeEventListener('pointermove', resize)
       window.removeEventListener('pointerup', stopResize)
+      window.removeEventListener('pointercancel', stopResize)
+      window.removeEventListener('blur', stopResize)
     }
     window.addEventListener('pointermove', resize)
     window.addEventListener('pointerup', stopResize, { once: true })
-  }
+    window.addEventListener('pointercancel', stopResize, { once: true })
+    window.addEventListener('blur', stopResize, { once: true })
   const resizeHandle = (column: QueueColumn, label: string) => <span
     className="column-resizer"
     role="separator"
