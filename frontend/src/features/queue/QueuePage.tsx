@@ -40,9 +40,11 @@ type QueuePageProps = {
 type View = 'queue' | 'archive'
 type PurgeRequest = { source: string; label: string } | 'all' | null
 type QueueRowModel = { item: LibraryItem; job?: Job; pendingJob?: Job }
-type QueueFilter = 'all' | 'ready' | 'queued' | 'active' | 'transcribed' | 'finished'
+type QueueFilter = 'all' | 'ready' | 'queued' | 'transcribed' | 'finished'
+type QueueCategory = Exclude<QueueFilter, 'all'> | 'active' | 'other'
 type QueueSort = 'queue' | 'name' | 'dateAdded' | 'status'
 type SortDirection = 'ascending' | 'descending'
+type QueueColumn = 'file' | 'dateAdded' | 'status' | 'queue' | 'progress' | 'actions'
 
 const TERMINAL_STATUSES = new Set<Job['status']>(['completed', 'failed', 'cancelled', 'transcribed'])
 const RUNNING_STATUSES = new Set<Job['status']>(['copying', 'transcribing', 'censoring', 'verifying'])
@@ -65,6 +67,21 @@ export function QueuePage({ queue, settings, capabilities, onChangeFolder, onRev
       pendingJob: sourceJobs.find((candidate) => !TERMINAL_STATUSES.has(candidate.status)),
     }
   })
+  const copyRows = queue.jobs
+    .filter((job) => job.mode === 'copy' && !TERMINAL_STATUSES.has(job.status))
+    .filter((job) => !queue.library.some((item) => item.source === job.source))
+    .map((job): QueueRowModel => ({
+      item: {
+        source: job.source,
+        status: 'ready',
+        date_added: new Date().toISOString(),
+        transcript: null,
+        output: null,
+      },
+      job,
+      pendingJob: job,
+    }))
+  mergedRows.push(...copyRows)
   const selectableSources = mergedRows
     .filter(({ item, pendingJob }) => item.status === 'ready' && !pendingJob)
     .map(({ item }) => item.source)
@@ -222,6 +239,14 @@ function QueueView({
   const [filter, setFilter] = useState<QueueFilter>('all')
   const [sort, setSort] = useState<QueueSort>('queue')
   const [sortDirection, setSortDirection] = useState<SortDirection>('ascending')
+  const [columnWidths, setColumnWidths] = useState<Record<QueueColumn, number>>({
+    file: 290,
+    dateAdded: 180,
+    status: 140,
+    queue: 140,
+    progress: 160,
+    actions: 344,
+  })
   const selectedCount = selectedSources.size
   const processingUnavailable = !capabilities?.ready
   const batchDisabled = queue.busy || processingUnavailable || selectedCount === 0
@@ -229,7 +254,7 @@ function QueueView({
   const rows = mergedRows.map((row) => {
     const active = Boolean(row.pendingJob && RUNNING_STATUSES.has(row.pendingJob.status))
     const queuePosition = row.pendingJob ? queuedPositions.get(row.pendingJob.id) : undefined
-    const category: Exclude<QueueFilter, 'all'> | 'other' = active
+    const category: QueueCategory = active
       ? 'active'
       : queuePosition != null
         ? 'queued'
@@ -259,7 +284,8 @@ function QueueView({
     }
     return sortDirection === 'ascending' ? comparison : -comparison
   })
-  const visibleRows = sortedRows.filter((row) => filter === 'all' || row.category === filter)
+  const activeRows = rows.filter((row) => row.active)
+  const visibleRows = sortedRows.filter((row) => !row.active && (filter === 'all' || row.category === filter))
   const visibleSelectable = visibleRows
     .filter(({ item, pendingJob }) => item.status === 'ready' && !pendingJob)
     .map(({ item }) => item.source)
@@ -281,7 +307,36 @@ function QueueView({
       setSortDirection('ascending')
     }
   }
-  const sortHeader = (column: QueueSort, label: string) => <th aria-sort={sort === column ? sortDirection : 'none'}>
+  const startColumnResize = (column: QueueColumn, event: React.PointerEvent<HTMLSpanElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    const startX = event.clientX
+    const startWidth = columnWidths[column]
+    const resize = (moveEvent: PointerEvent) => {
+      setColumnWidths((current) => ({ ...current, [column]: Math.max(110, startWidth + moveEvent.clientX - startX) }))
+    }
+    const stopResize = () => {
+      window.removeEventListener('pointermove', resize)
+      window.removeEventListener('pointerup', stopResize)
+    }
+    window.addEventListener('pointermove', resize)
+    window.addEventListener('pointerup', stopResize, { once: true })
+  }
+  const resizeHandle = (column: QueueColumn, label: string) => <span
+    className="column-resizer"
+    role="separator"
+    aria-orientation="vertical"
+    aria-label={`Resize ${label} column`}
+    title={`Resize ${label} column`}
+    onPointerDown={(event) => startColumnResize(column, event)}
+  />
+  const sortableColumns: Record<QueueSort, QueueColumn> = {
+    name: 'file',
+    dateAdded: 'dateAdded',
+    status: 'status',
+    queue: 'queue',
+  }
+  const sortHeader = (column: QueueSort, label: string) => <th className="resizable-header" aria-sort={sort === column ? sortDirection : 'none'}>
     <button
       className={`sort-header ${sort === column ? 'active' : ''}`}
       title={`Sort by ${label}${sort === column ? `, ${sortDirection}` : ''}`}
@@ -290,7 +345,49 @@ function QueueView({
       {label}
       {sort === column && (sortDirection === 'ascending' ? <ArrowUp size={13} /> : <ArrowDown size={13} />)}
     </button>
+    {resizeHandle(sortableColumns[column], label)}
   </th>
+  const queueRow = ({ item, job, pendingJob, active, queuePosition }: typeof rows[number]) => <QueueRow
+    key={item.source}
+    item={item}
+    job={job}
+    pendingJob={pendingJob}
+    active={active}
+    queuePosition={queuePosition}
+    event={pendingJob ? queue.jobEvents[pendingJob.id] : job ? queue.jobEvents[job.id] : undefined}
+    queueIdle={queue.queueIdle}
+    processingReady={Boolean(capabilities?.ready)}
+    busy={queue.busy}
+    selected={selectedSources.has(item.source)}
+    onToggleSelection={onToggleSelection}
+    onReview={onReview}
+    onArchive={queue.archiveSource}
+    onOpenFile={queue.openFile}
+    onRetry={queue.retryJob}
+    onSubmit={queue.submitFile}
+    onCancelRunning={queue.cancelActive}
+    onRemoveQueued={queue.removeQueued}
+  />
+  const activeJobRow = ({ item, job, pendingJob }: typeof rows[number]) => {
+    const activeJob = pendingJob ?? job
+    if (!activeJob) return null
+    const event = queue.jobEvents[activeJob.id]
+    const detail = event?.fps
+      ? `${Math.round(event.fps)} FPS${event.eta_seconds != null ? ` · ${formatEta(event.eta_seconds)} left` : ''}`
+      : event?.eta_seconds != null
+        ? `${formatEta(event.eta_seconds)} left`
+        : 'Processing'
+    return <div className="active-job-row" key={item.source}>
+      <div className="file-cell">
+        <span className="file-icon">{fileName(item.source).split('.').pop()?.toUpperCase()}</span>
+        <div><strong>{fileName(item.source)}</strong><small>{item.source}</small></div>
+      </div>
+      <time dateTime={item.date_added}>{new Date(item.date_added).toLocaleString()}</time>
+      <div className="active-job-status"><StatusBadge status={activeJob.status} /><small>{detail}</small></div>
+      <div className="progress-wrap"><div className={`progress-track progress-${activeJob.status}`}><span style={{ width: `${activeJob.progress_percent ?? 0}%` }} /></div><span>{Math.round(activeJob.progress_percent ?? 0)}%</span></div>
+      <button className="active-cancel-action" disabled={queue.busy} title="Cancel this running job and keep the source file" onClick={() => void queue.cancelActive()}><CircleStop size={13} />Cancel job</button>
+    </div>
+  }
 
   return <>
     <div className="queue-summary">
@@ -301,9 +398,11 @@ function QueueView({
       <Metric label="Finished" value={counts.finished} tone="success" />
     </div>
 
+    {activeRows.map(activeJobRow)}
+
     <div className="table-controls">
       <div className="queue-filters" aria-label="Filter queue">
-        {(['all', 'ready', 'queued', 'active', 'transcribed', 'finished'] as QueueFilter[]).map((value) => <button
+        {(['all', 'ready', 'queued', 'transcribed', 'finished'] as QueueFilter[]).map((value) => <button
           key={value}
           className={filter === value ? 'selected' : ''}
           aria-pressed={filter === value}
@@ -340,29 +439,18 @@ function QueueView({
 
     <div className="table-frame queue-table-frame">
       <table className="queue-table">
-        <thead><tr><th className="select-column"><span className="sr-only">Select</span></th>{sortHeader('name', 'File')}{sortHeader('dateAdded', 'Date added')}{sortHeader('status', 'Status')}{sortHeader('queue', 'Queue position')}<th>Progress</th><th>Actions</th></tr></thead>
+        <colgroup>
+          <col className="select-column" />
+          <col style={{ width: `${columnWidths.file}px` }} />
+          <col style={{ width: `${columnWidths.dateAdded}px` }} />
+          <col style={{ width: `${columnWidths.status}px` }} />
+          <col style={{ width: `${columnWidths.queue}px` }} />
+          <col style={{ width: `${columnWidths.progress}px` }} />
+          <col style={{ width: `${columnWidths.actions}px` }} />
+        </colgroup>
+        <thead><tr><th className="select-column"><span className="sr-only">Select</span></th>{sortHeader('name', 'File')}{sortHeader('dateAdded', 'Date added')}{sortHeader('status', 'Status')}{sortHeader('queue', 'Queue position')}<th className="resizable-header">Progress{resizeHandle('progress', 'Progress')}</th><th className="resizable-header">Actions{resizeHandle('actions', 'Actions')}</th></tr></thead>
         <tbody>
-          {visibleRows.map(({ item, job, pendingJob, active, queuePosition }) => <QueueRow
-            key={item.source}
-            item={item}
-            job={job}
-            pendingJob={pendingJob}
-            active={active}
-            queuePosition={queuePosition}
-            event={pendingJob ? queue.jobEvents[pendingJob.id] : job ? queue.jobEvents[job.id] : undefined}
-            queueIdle={queue.queueIdle}
-            processingReady={Boolean(capabilities?.ready)}
-            busy={queue.busy}
-            selected={selectedSources.has(item.source)}
-            onToggleSelection={onToggleSelection}
-            onReview={onReview}
-            onArchive={queue.archiveSource}
-            onOpenFile={queue.openFile}
-            onRetry={queue.retryJob}
-            onSubmit={queue.submitFile}
-            onCancelRunning={queue.cancelActive}
-            onRemoveQueued={queue.removeQueued}
-          />)}
+          {visibleRows.map(queueRow)}
           {!queue.loading && !visibleRows.length && <tr><td colSpan={7}><div className="empty-state">
             <Upload size={28} />
             <strong>{mergedRows.length ? `No ${filter} files` : 'Drop media here to add it'}</strong>
@@ -465,6 +553,9 @@ function QueueRow({
 }) {
   const displayJob = pendingJob ?? job
   const status = displayJob?.status ?? item.status
+  const statusLabel = status === 'queued' && displayJob
+    ? ({ copy: 'Queued: copy', report_only: 'Queued: transcript', censor: 'Queued: transcode' } as const)[displayJob.mode]
+    : undefined
   const percent = displayJob?.progress_percent
   const outputFile = item.status === 'finished' ? item.output : null
   const selectable = item.status === 'ready' && !pendingJob
@@ -491,7 +582,7 @@ function QueueRow({
             : status === 'queued'
               ? 'Waiting for earlier jobs'
               : pendingJob
-                ? 'Processing locally'
+                ? 'Processing'
                 : 'Ready for an action')
 
   return <tr>
@@ -510,7 +601,7 @@ function QueueRow({
       <div><strong>{fileName(item.source)}</strong><small>{item.source}</small></div>
     </div></td>
     <td>{new Date(item.date_added).toLocaleString()}</td>
-    <td><StatusBadge status={status} /></td>
+    <td><StatusBadge status={status} label={statusLabel} /></td>
     <td className="position-cell">{active ? <strong>Active</strong> : queuePosition != null ? <span>#{queuePosition}</span> : <span className="muted">—</span>}</td>
     <td>{percent != null ? <div className="progress-wrap"><div className={`progress-track progress-${status}`}><span style={{ width: `${percent}%` }} /></div><span>{Math.round(percent)}%</span></div> : <span className="muted">—</span>}</td>
     <td className="actions-cell">
