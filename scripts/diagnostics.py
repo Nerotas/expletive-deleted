@@ -8,12 +8,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from backend.runtime import (
-    available_encoders,
     format_bytes,
     get_whisper_cache_dir,
     get_whisper_device_status,
     inspect_dependencies,
-    select_working_video_encoder,
 )
 from backend.settings import SettingsFileError, SettingsStore, inspect_directories, load_effective_settings
 
@@ -57,16 +55,8 @@ def collect_diagnostics(store: SettingsStore | None = None) -> list[DiagnosticRe
         settings = None
         results.append(DiagnosticResult("Settings", False, str(exc)))
 
-    ffmpeg = str(inventory.ffmpeg.path) if inventory.ffmpeg.path else None
     results.append(DiagnosticResult("FFmpeg", inventory.ffmpeg.ready, inventory.ffmpeg.detail))
     results.append(DiagnosticResult("FFprobe", inventory.ffprobe.ready, inventory.ffprobe.detail))
-
-    if ffmpeg:
-        try:
-            encoder = select_working_video_encoder(ffmpeg, available_encoders(ffmpeg))
-            results.append(DiagnosticResult("H.264 encoder", True, encoder))
-        except (RuntimeError, ValueError) as exc:
-            results.append(DiagnosticResult("H.264 encoder", False, str(exc)))
 
     try:
         requested_device = settings.processing.device if settings is not None else None

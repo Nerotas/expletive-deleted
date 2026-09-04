@@ -139,7 +139,7 @@ export function SettingsPage({ controller, capabilities, checkingSystem, onCheck
           </div>
         </SettingsSection>
 
-        <SettingsSection title="Output" description="Audio layout, video handling, and source safety">
+        <SettingsSection title="Output" description="Audio layout and source safety">
           <Field label="Surround audio">
             <SegmentedControl
               label="Surround audio"
@@ -148,14 +148,10 @@ export function SettingsPage({ controller, capabilities, checkingSystem, onCheck
               onChange={(surround_output) => setGroup('audio', { surround_output })}
             />
           </Field>
-          <Field label="Video">
-            <SegmentedControl
-              label="Video output"
-              value={settings.video.mode}
-              options={[["h264", 'H.264'], ['preserve_source', 'Preserve source']]}
-              onChange={(mode) => setGroup('video', { mode })}
-            />
-          </Field>
+          <div className="output-note">
+            <strong>Video is preserved</strong>
+            <span>The source video stream is copied unchanged into the MKV output.</span>
+          </div>
           <label className="toggle-row">
             <div>
               <strong>Scan subdirectories</strong>

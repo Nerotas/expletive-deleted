@@ -15,14 +15,12 @@ from typing import Callable, List, Dict
 
 from backend.policy import PolicyStore
 from backend.runtime import (
-    available_encoders,
     find_ffmpeg,
     find_ffprobe,
     get_calibrated_transcription_factor,
     get_whisper_cache_dir,
     get_whisper_device_status,
     record_transcription_timing,
-    select_working_video_encoder,
     require_whisper_model,
 )
 from backend.runtime.transcription import (
@@ -337,7 +335,6 @@ class ProfanityCensor:
                  whisper_device: str = "auto",
                  censor_method: str = "mute", padding_before_ms: int = 150,
                  padding_after_ms: int = 150, surround_output: str = "preserve_5_1",
-                 video_mode: str = "h264",
                  progress_callback: Callable[[dict[str, object]], None] | None = None,
                  cancellation: Event | None = None, ffmpeg_bin: str | None = None,
                  ffprobe_bin: str | None = None, whisper_cache_dir: Path | None = None,
@@ -356,12 +353,9 @@ class ProfanityCensor:
             raise ValueError("Censor padding must be an integer from 0 through 10000 milliseconds")
         if surround_output not in ("preserve_5_1", "downmix_stereo"):
             raise ValueError("Unsupported surround output mode")
-        if video_mode not in ("h264", "preserve_source"):
-            raise ValueError("Unsupported video output mode")
         self.padding_before_ms = padding_before_ms
         self.padding_after_ms = padding_after_ms
         self.surround_output = surround_output
-        self.video_mode = video_mode
         self.progress_callback = progress_callback
         self.cancellation = cancellation or Event()
         self.ffmpeg_bin = ffmpeg_bin or find_ffmpeg()
@@ -371,8 +365,6 @@ class ProfanityCensor:
                 "FFmpeg and FFprobe must be available on PATH or configured with "
                 "CENSOR_FFMPEG and CENSOR_FFPROBE."
             )
-        self.encoders: set[str] = set()
-        self.video_encoder: str | None = None
         self.policy_store = policy_store or PolicyStore()
         policy = self.policy_store.load()
         self.censor_words_file = policy.censor_defaults_path
@@ -478,16 +470,7 @@ class ProfanityCensor:
         )
 
         detect = max(5.0, duration * 0.03)
-        if self.is_audio_only():
-            censor = max(8.0, duration * 0.35)
-        else:
-            video_codec = self.get_video_codec()
-            if video_codec == 'h264':
-                censor = max(10.0, duration * 0.28)
-            elif self.video_encoder == 'libx264':
-                censor = max(12.0, duration * 1.2)
-            else:
-                censor = max(10.0, duration * 0.6)
+        censor = max(8.0, duration * 0.35)
 
         total = transcribe + detect + censor
         return {"total": total, "transcribe": transcribe, "detect": detect, "censor": censor, "source": source}
@@ -524,19 +507,6 @@ class ProfanityCensor:
             return result.stdout.strip() == ''
         except:
             return False
-
-    def get_video_codec(self) -> str:
-        """Return the video codec name, e.g. 'h264', 'hevc'."""
-        try:
-            result = subprocess.run(
-                [self.ffprobe_bin, '-v', 'error', '-select_streams', 'v:0',
-                 '-show_entries', 'stream=codec_name', '-of', 'csv=p=0',
-                 self.input_file],
-                capture_output=True, text=True, timeout=5
-            )
-            return result.stdout.strip().lower()
-        except:
-            return ''
 
     def get_audio_stream_info(self) -> tuple[int, str]:
         """Return the channel count and layout of the first audio stream."""
@@ -849,37 +819,17 @@ class ProfanityCensor:
         os.makedirs(os.path.dirname(os.path.abspath(self.output_file)), exist_ok=True)
         source_has_center_channel = self.has_discrete_center_audio()
         audio_only = self.is_audio_only()
-        video_mode = getattr(self, "video_mode", "h264")
         surround_output = getattr(self, "surround_output", "preserve_5_1")
-        source_video_codec = "" if audio_only else self.get_video_codec()
-        requires_video_encoder = (
-            not audio_only
-            and video_mode != "preserve_source"
-            and source_video_codec != "h264"
-        )
-        if requires_video_encoder and self.video_encoder is None:
-            try:
-                self.encoders = available_encoders(self.ffmpeg_bin)
-                self.video_encoder = select_working_video_encoder(
-                    self.ffmpeg_bin,
-                    self.encoders,
-                    os.environ.get("CENSOR_VIDEO_ENCODER"),
-                )
-            except (OSError, RuntimeError, ValueError) as exc:
-                self.last_error = f"FFmpeg encoder setup failed: {exc}"
-                print(f"[-] {self.last_error}")
-                return False
         can_copy_clean = (
             not audio_only
             and (not source_has_center_channel or surround_output == "preserve_5_1")
-            and (video_mode == "preserve_source" or source_video_codec == "h264")
         )
         if not profane_segments and can_copy_clean:
             print("[*] No profanity detected. Copying file...")
             try:
                 result = run_ffmpeg_with_progress(
                     [self.ffmpeg_bin, '-i', self.input_file,
-                     '-c', 'copy', '-y', self.output_file],
+                     '-map', '0', '-c', 'copy', '-c:v', 'copy', '-y', self.output_file],
                     self.get_media_duration_seconds(),
                     lambda progress: self._emit_progress("censoring", **progress),
                     getattr(self, "cancellation", None),
@@ -918,24 +868,25 @@ class ProfanityCensor:
             audio_filter = None
 
         try:
-            video_codec = source_video_codec
-
-            def _build_cmd(video_enc: str) -> list:
+            def _build_cmd() -> list[str]:
                 base = [self.ffmpeg_bin, '-i', self.input_file]
                 if use_filter_complex:
                     base += ['-filter_complex', filter_complex]
                     if not audio_only:
                         # preserve video, processed audio, and any subtitle streams
-                        base += ['-map', '0:v', '-map', '[outa]', '-map', '0:s?']
+                        base += ['-map', '0:v:0', '-map', '[outa]', '-map', '0:s?']
                     else:
                         base += ['-map', '[outa]']
                 else:
                     base += ['-af', audio_filter]
+                    if not audio_only:
+                        base += ['-map', '0:v:0', '-map', '0:a:0', '-map', '0:s?']
 
                 if audio_only:
                     base += ['-c:a', 'libmp3lame', '-q:a', '4']
                 else:
-                    base += ['-c:v', video_enc, '-c:a', 'aac']
+                    base += ['-c:v', 'copy', '-c:a', 'aac']
+                    base += ['-c:s', 'copy', '-map_metadata', '0', '-map_chapters', '0']
                 if (
                     source_has_center_channel
                     and getattr(self, "surround_output", "preserve_5_1") == "downmix_stereo"
@@ -947,17 +898,10 @@ class ProfanityCensor:
             if audio_only:
                 if use_filter_complex:
                     print("[*] Karaoke mode (audio-only)")
-                cmd = _build_cmd('')
+                cmd = _build_cmd()
             else:
-                if video_mode == 'preserve_source':
-                    print("[*] Preserving source video stream...")
-                    cmd = _build_cmd('copy')
-                elif video_codec == 'h264':
-                    print("[*] Video is already H.264, copying stream...")
-                    cmd = _build_cmd('copy')
-                else:
-                    print(f"[*] Video encoder: {self.video_encoder}")
-                    cmd = _build_cmd(self.video_encoder)
+                print("[*] Preserving source video stream...")
+                cmd = _build_cmd()
 
             label = "Center-channel" if source_has_center_channel and use_filter_complex else (
                 "Karaoke" if use_filter_complex else "Muting"
@@ -973,36 +917,17 @@ class ProfanityCensor:
                 getattr(self, "cancellation", None),
             )
 
-            # A detected hardware encoder may still fail at runtime (for example, no GPU device).
-            if (
-                result.returncode != 0
-                and not audio_only
-                and getattr(self, "video_mode", "h264") == 'h264'
-                and video_codec != 'h264'
-                and self.video_encoder != 'libx264'
-                and 'libx264' in self.encoders
-            ):
-                error_lines = [line for line in result.stderr.splitlines() if line.strip()]
-                error_detail = error_lines[-1] if error_lines else "unknown FFmpeg error"
-                print(
-                    f"[!] Encoder {self.video_encoder} failed ({error_detail}); "
-                    "using software fallback..."
-                )
-                cmd = _build_cmd('libx264')
-                result = run_ffmpeg_with_progress(
-                    cmd,
-                    duration,
-                    lambda progress: self._emit_progress("censoring", **progress),
-                    getattr(self, "cancellation", None),
-                )
-
             if result.returncode == 0:
                 print(f"[+] Video censored: {self.output_file}")
                 return True
             else:
                 error_lines = [line for line in result.stderr.splitlines() if line.strip()]
                 error_detail = error_lines[-1] if error_lines else result.stderr[:500]
-                self.last_error = f"FFmpeg failed: {error_detail}"
+                self.last_error = (
+                    f"FFmpeg could not copy the source video into the MKV output: {error_detail}"
+                    if not audio_only
+                    else f"FFmpeg failed: {error_detail}"
+                )
                 print(f"[-] FFmpeg failed: {result.stderr[:200]}")
                 return False
 
@@ -1137,11 +1062,6 @@ def main():
         choices=["preserve_5_1", "downmix_stereo"],
         default="preserve_5_1",
     )
-    parser.add_argument(
-        "--video-mode",
-        choices=["h264", "preserve_source"],
-        default="h264",
-    )
     args = parser.parse_args()
 
     input_file = args.input_file
@@ -1178,7 +1098,6 @@ def main():
         padding_before_ms=args.padding_before_ms,
         padding_after_ms=args.padding_after_ms,
         surround_output=args.surround_output,
-        video_mode=args.video_mode,
     )
     success = censor.process(
         report_only=args.report_only,

@@ -27,10 +27,16 @@ The current desktop and backend application supports:
 - Report-only transcription and detection
 - Stereo muting or karaoke cancellation
 - Discrete center-channel handling for recognized surround layouts
-- H.264 stream copy or detected encoder selection
+- Unchanged video stream copy into MKV with no video-encoding fallback
 - Reusable transcript caches
 - A mandatory persisted-transcript gate before any censor/transcode work
 - FFmpeg and Whisper progress reporting
+
+### Video output policy
+
+Issue 43 removed the selectable H.264 output mode, hardware/software video-encoder discovery, and `libx264` fallback. Video passthrough is now an invariant across the desktop, CLI, settings, and FFmpeg pipeline: video streams are copied unchanged, and an unsupported MKV remux fails without attempting video transcoding.
+
+This removal is intentional rather than a permanent declaration that the product can never offer transcoding. An opt-in video-transcoding profile may be added back after explicit product approval and a licensing review. Any future implementation must update the backend, typed desktop settings boundary, renderer copy, diagnostics, package audit, tests, and user documentation together; it must not reintroduce a silent fallback.
 
 ## Repository Layout
 
@@ -39,7 +45,7 @@ backend/
   censor/engine.py       Proven transcription, detection, and censor engine
   jobs/                  Serial job manager, records, events, and batch compatibility
   service/               Library, import, archive, settings, and capability boundary
-  runtime/environment.py Dependency, hardware, cache, and encoder discovery
+  runtime/environment.py Dependency, hardware, and cache discovery
   runtime/paths.py       Runtime folder ownership
   policy/                Versioned, atomic user dictionary
   settings/              Validated schema, atomic store, and path checks

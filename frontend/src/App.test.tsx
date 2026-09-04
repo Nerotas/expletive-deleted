@@ -187,6 +187,15 @@ describe('desktop application renderer', () => {
     vi.useRealTimers()
   })
 
+  it('explains fixed video passthrough without exposing a video encoder setting', async () => {
+    renderApp('/settings')
+
+    expect(await screen.findByText('Video is preserved')).toBeInTheDocument()
+    expect(screen.getByText(/source video stream is copied unchanged/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'H.264' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Preserve source' })).not.toBeInTheDocument()
+  })
+
   it('saves Karaoke and reloads it in a new renderer session', async () => {
     const user = userEvent.setup()
     const first = renderApp('/settings')

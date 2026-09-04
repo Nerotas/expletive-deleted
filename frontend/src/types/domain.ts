@@ -93,7 +93,6 @@ export type Capabilities = {
   whisper_model: WhisperModel
   whisper_model_ready: boolean
   whisper_device: string
-  video_encoders: string[]
   ffmpeg_version?: string | null
   ffmpeg_path?: string | null
   ffprobe_path?: string | null
@@ -167,7 +166,6 @@ export type Settings = {
     padding_after_ms: number
   }
   audio: { surround_output: 'preserve_5_1' | 'downmix_stereo' }
-  video: { mode: 'h264' | 'preserve_source' }
   whisper: { library: WhisperLibrary; model: WhisperModel }
   source: { archive_after_success: boolean; scan_subdirectories: boolean }
   onboarding: { completed: boolean }

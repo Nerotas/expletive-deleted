@@ -15,7 +15,6 @@ export const defaultSettings: Settings = {
     padding_after_ms: 100,
   },
   audio: { surround_output: 'preserve_5_1' },
-  video: { mode: 'h264' },
   whisper: { library: 'faster-whisper', model: 'large-v3' },
   source: { archive_after_success: false, scan_subdirectories: true },
   onboarding: { completed: true },
@@ -31,7 +30,6 @@ export const readyCapabilities: Capabilities = {
   whisper_model: 'large-v3',
   whisper_model_ready: true,
   whisper_device: 'cpu',
-  video_encoders: ['libx264'],
 }
 
 export const emptyDictionary: DictionaryMutationResult = {

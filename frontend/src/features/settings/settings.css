@@ -22,6 +22,9 @@
 .toggle-row strong { font-size: 12px; }
 .toggle-row span { font-size: 10px; color: var(--muted); margin-top: 3px; }
 .toggle-row input { width: 34px; height: 18px; accent-color: var(--signal); }
+.output-note { display: flex; flex-direction: column; gap: 3px; padding: 11px; border: 1px solid var(--line); background: var(--surface-raised); }
+.output-note strong { font-size: 11px; }
+.output-note span { color: var(--muted); font-size: 10px; line-height: 1.5; }
 .whisper-notice { display: flex; align-items: flex-start; gap: 9px; padding: 11px; border: 1px solid; }
 .whisper-notice > div { display: flex; flex-direction: column; gap: 3px; }
 .whisper-notice strong { font-size: 11px; }

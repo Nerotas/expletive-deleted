@@ -37,8 +37,6 @@ class DiagnosticsTests(unittest.TestCase):
 
             with (
                 patch("scripts.diagnostics.inspect_dependencies", return_value=inventory),
-                patch("scripts.diagnostics.available_encoders", return_value={"libx264"}),
-                patch("scripts.diagnostics.select_working_video_encoder", return_value="libx264"),
                 patch("scripts.diagnostics.get_whisper_device_status", return_value=MagicMock(selected="cpu", compute_type="int8", detail="ready")),
             ):
                 results = collect_diagnostics(store)

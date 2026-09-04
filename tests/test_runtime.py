@@ -20,7 +20,6 @@ from backend.censor.engine import (
 from better_profanity import profanity
 from backend.runtime.environment import (
     PROJECT_ROOT,
-    available_encoders,
     add_word_to_list,
     ensure_executable_directory_on_path,
     find_ffmpeg,
@@ -36,8 +35,6 @@ from backend.runtime.environment import (
     load_profanity_censor_words,
     load_profanity_exclusions,
     remove_word_from_list,
-    select_video_encoder,
-    select_working_video_encoder,
     require_whisper_model,
 )
 
@@ -85,17 +82,6 @@ class RuntimeTests(unittest.TestCase):
             )
 
         process.terminate.assert_called_once()
-
-    def test_encoder_inventory_excludes_ffmpeg_legend(self):
-        completed = MagicMock(
-            returncode=0,
-            stdout=" V..... = Video\n V....D libx264 H.264\n A....D aac AAC\n",
-            stderr="",
-        )
-        with patch("backend.runtime.environment.subprocess.run", return_value=completed):
-            encoders = available_encoders("ffmpeg")
-
-        self.assertEqual(encoders, {"libx264"})
 
     def test_legacy_censor_module_aliases_packaged_engine(self):
         self.assertIs(
@@ -169,7 +155,6 @@ class RuntimeTests(unittest.TestCase):
         censor.has_discrete_center_audio = MagicMock(return_value=False)
         censor.get_media_duration_seconds = MagicMock(return_value=90.0)
         censor.is_audio_only = MagicMock(return_value=False)
-        censor.get_video_codec = MagicMock(return_value="h264")
         completed = MagicMock(returncode=0, stderr="")
 
         with patch("backend.censor.engine.run_ffmpeg_with_progress", return_value=completed) as run:
@@ -179,19 +164,15 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(run.call_args.args[1], 90.0)
         self.assertIn("copy", run.call_args.args[0])
 
-    def test_clean_hevc_source_is_encoded_when_h264_is_requested(self):
+    def test_clean_video_is_stream_copied_without_codec_detection(self):
         censor = object.__new__(ProfanityCensor)
         censor.input_file = "input.mkv"
         censor.output_file = "output.mkv"
         censor.ffmpeg_bin = "ffmpeg"
         censor.censor_method = "mute"
-        censor.video_mode = "h264"
-        censor.video_encoder = "libx264"
-        censor.encoders = {"libx264"}
         censor.has_discrete_center_audio = MagicMock(return_value=False)
         censor.get_media_duration_seconds = MagicMock(return_value=90.0)
         censor.is_audio_only = MagicMock(return_value=False)
-        censor.get_video_codec = MagicMock(return_value="hevc")
         completed = MagicMock(returncode=0, stderr="")
 
         with patch("backend.censor.engine.run_ffmpeg_with_progress", return_value=completed) as run:
@@ -199,7 +180,8 @@ class RuntimeTests(unittest.TestCase):
 
         self.assertTrue(success)
         command = run.call_args.args[0]
-        self.assertEqual(command[command.index("-c:v") + 1], "libx264")
+        self.assertEqual(command[command.index("-c:v") + 1], "copy")
+        self.assertNotIn("libx264", command)
 
     def test_5_1_layout_detection_requires_six_channels(self):
         censor = object.__new__(ProfanityCensor)
@@ -328,12 +310,9 @@ class RuntimeTests(unittest.TestCase):
         censor.output_file = "output.mkv"
         censor.censor_method = "mute"
         censor.ffmpeg_bin = "ffmpeg"
-        censor.video_encoder = "libx264"
-        censor.encoders = {"libx264"}
         censor.has_discrete_center_audio = MagicMock(return_value=True)
         censor.get_audio_stream_info = MagicMock(return_value=(6, "5.1"))
         censor.is_audio_only = MagicMock(return_value=False)
-        censor.get_video_codec = MagicMock(return_value="h264")
         censor.get_media_duration_seconds = MagicMock(return_value=60.0)
         return censor
 
@@ -362,11 +341,9 @@ class RuntimeTests(unittest.TestCase):
         self.assertTrue(success)
         self.assertNotIn("-ac", run.call_args.args[0])
 
-    def test_preserve_source_video_uses_stream_copy(self):
+    def test_filtered_non_h264_video_uses_stream_copy(self):
         censor = self.create_surround_censor()
         censor.has_discrete_center_audio.return_value = False
-        censor.get_video_codec.return_value = "hevc"
-        censor.video_mode = "preserve_source"
 
         completed = MagicMock(returncode=0, stderr="")
         with patch("backend.censor.engine.run_ffmpeg_with_progress", return_value=completed) as run:
@@ -375,6 +352,18 @@ class RuntimeTests(unittest.TestCase):
         self.assertTrue(success)
         command = run.call_args.args[0]
         self.assertEqual(command[command.index("-c:v") + 1], "copy")
+        self.assertNotIn("libx264", command)
+
+    def test_video_stream_copy_failure_has_no_encoder_fallback(self):
+        censor = self.create_surround_censor()
+        completed = MagicMock(returncode=1, stderr="Could not write header")
+
+        with patch("backend.censor.engine.run_ffmpeg_with_progress", return_value=completed) as run:
+            success = censor.censor_video([{"start": 1.0, "end": 2.0}])
+
+        self.assertFalse(success)
+        run.assert_called_once()
+        self.assertIn("could not copy the source video", censor.last_error)
 
     def test_5_1_cache_requires_center_channel_transcript(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -553,38 +542,6 @@ class RuntimeTests(unittest.TestCase):
         self.assertTrue(success)
         censor.transcribe_with_timestamps.assert_called_once_with(force=True)
         censor.censor_video.assert_not_called()
-
-    def test_encoder_preference(self):
-        self.assertEqual(select_video_encoder({"libx264", "h264_nvenc"}), "h264_nvenc")
-        self.assertEqual(select_video_encoder({"libx264", "h264_qsv"}), "h264_qsv")
-        self.assertEqual(select_video_encoder({"libx264"}), "libx264")
-
-    def test_encoder_override_is_validated(self):
-        self.assertEqual(select_video_encoder({"libx264"}, "libx264"), "libx264")
-        with self.assertRaises(ValueError):
-            select_video_encoder({"libx264"}, "h264_nvenc")
-
-    def test_working_encoder_preserves_preference(self):
-        with patch(
-            "backend.runtime.environment.video_encoder_runtime_available",
-            side_effect=lambda *arguments: arguments[1] in {"h264_qsv", "libx264"},
-        ):
-            encoder = select_working_video_encoder(
-                "ffmpeg",
-                {"h264_nvenc", "h264_qsv", "libx264"},
-            )
-        self.assertEqual(encoder, "h264_qsv")
-
-    def test_working_encoder_skips_unusable_hardware(self):
-        with patch(
-            "backend.runtime.environment.video_encoder_runtime_available",
-            side_effect=lambda *arguments: arguments[1] == "libx264",
-        ):
-            encoder = select_working_video_encoder(
-                "ffmpeg",
-                {"h264_nvenc", "h264_qsv", "libx264"},
-            )
-        self.assertEqual(encoder, "libx264")
 
     def test_paths_are_project_relative_and_creatable(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

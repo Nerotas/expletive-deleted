@@ -103,12 +103,12 @@ _INI_SECTIONS = (
     "processing",
     "censoring",
     "audio",
-    "video",
     "whisper",
     "source",
     "runtime",
     "onboarding",
 )
+_LEGACY_INI_SECTIONS = ("video",)
 _INI_BOOLEAN_FIELDS = {
     ("source", "archive_after_success"),
     ("source", "scan_subdirectories"),
@@ -118,7 +118,7 @@ _INI_INTEGER_FIELDS = {("censoring", "padding_before_ms"), ("censoring", "paddin
 
 
 def _settings_from_ini(parser: configparser.ConfigParser) -> dict[str, object]:
-    allowed_sections = {"settings", *_INI_SECTIONS}
+    allowed_sections = {"settings", *_INI_SECTIONS, *_LEGACY_INI_SECTIONS}
     unknown_sections = sorted(set(parser.sections()) - allowed_sections)
     if unknown_sections:
         raise ValueError(f"unknown section(s): {', '.join(unknown_sections)}")
@@ -135,7 +135,7 @@ def _settings_from_ini(parser: configparser.ConfigParser) -> dict[str, object]:
     except ValueError as exc:
         raise ValueError("settings.schema_version must be an integer") from exc
 
-    for section in _INI_SECTIONS:
+    for section in (*_INI_SECTIONS, *_LEGACY_INI_SECTIONS):
         values: dict[str, object] = {}
         if parser.has_section(section):
             for key, value in parser.items(section):

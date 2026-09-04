@@ -129,7 +129,6 @@ class JobRuntime:
                 padding_before_ms=self.settings.censoring.padding_before_ms,
                 padding_after_ms=self.settings.censoring.padding_after_ms,
                 surround_output=self.settings.audio.surround_output,
-                video_mode=self.settings.video.mode,
                 progress_callback=lambda progress: self._on_progress(job_id, progress),
                 cancellation=cancellation,
                 ffmpeg_bin=ffmpeg_bin,

@@ -20,8 +20,6 @@ from .models import (
     SourceSettings,
     StereoCensorMethod,
     SurroundOutput,
-    VideoMode,
-    VideoSettings,
     WhisperModel,
     WhisperSettings,
 )
@@ -114,7 +112,8 @@ def settings_from_dict(data: object, defaults: AppSettings | None = None) -> App
         {"stereo_method", "padding_before_ms", "padding_after_ms"},
     )
     audio = _group(mapping, "audio", {"surround_output"})
-    video = _group(mapping, "video", {"mode"})
+    # Accept the retired group so existing settings files migrate on their next save.
+    _group(mapping, "video", {"mode"})
     whisper = _group(mapping, "whisper", {"library", "model"})
     source = _group(mapping, "source", {"archive_after_success", "scan_subdirectories"})
     runtime = _group(mapping, "runtime", {"ffmpeg_path", "ffprobe_path", "whisper_cache"})
@@ -176,12 +175,6 @@ def settings_from_dict(data: object, defaults: AppSettings | None = None) -> App
                     base.audio.surround_output,
                     "audio.surround_output",
                 ),
-            )
-        ),
-        video=VideoSettings(
-            mode=cast(
-                VideoMode,
-                _string(video, "mode", base.video.mode, "video.mode"),
             )
         ),
         whisper=WhisperSettings(
@@ -260,7 +253,6 @@ def settings_to_dict(settings: AppSettings) -> dict[str, object]:
             "padding_after_ms": settings.censoring.padding_after_ms,
         },
         "audio": {"surround_output": settings.audio.surround_output},
-        "video": {"mode": settings.video.mode},
         "whisper": {"library": settings.whisper.library, "model": settings.whisper.model},
         "source": {
             "archive_after_success": settings.source.archive_after_success,

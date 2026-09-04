@@ -28,10 +28,8 @@ from .dependencies import (
     require_whisper_model_path,
 )
 from .environment import (
-    ENCODER_PREFERENCE,
     REQUIRED_WHISPER_MODEL,
     WhisperDeviceStatus,
-    available_encoders,
     add_word_to_list,
     ensure_executable_directory_on_path,
     find_ffmpeg,
@@ -60,9 +58,6 @@ from .environment import (
     record_transcription_timing,
     require_whisper_model,
     remove_word_from_list,
-    select_video_encoder,
-    select_working_video_encoder,
-    video_encoder_runtime_available,
 )
 from .paths import PROJECT_ROOT, RuntimePaths, get_project_root, get_runtime_paths
 
@@ -73,7 +68,6 @@ __all__ = [
     "DependencyNotReadyError",
     "DependencyPlanError",
     "DependencyStatus",
-    "ENCODER_PREFERENCE",
     "FFMPEG_VERSION",
     "PROJECT_ROOT",
     "PYTHON_DEPENDENCIES",
@@ -89,7 +83,6 @@ __all__ = [
     "InstallPlan",
     "InstallProgress",
     "InstallResult",
-    "available_encoders",
     "add_word_to_list",
     "build_install_plan",
     "ensure_executable_directory_on_path",
@@ -128,7 +121,4 @@ __all__ = [
     "record_transcription_timing",
     "require_whisper_model",
     "remove_word_from_list",
-    "select_video_encoder",
-    "select_working_video_encoder",
-    "video_encoder_runtime_available",
 ]

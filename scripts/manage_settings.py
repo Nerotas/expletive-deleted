@@ -55,7 +55,6 @@ def _updated_options(settings: AppSettings, args: argparse.Namespace) -> AppSett
         "padding_before_ms": args.padding_before_ms,
         "padding_after_ms": args.padding_after_ms,
         "surround_output": args.surround_output,
-        "video_mode": args.video_mode,
         "archive_after_success": args.archive_after_success,
     }
     if all(value is None for value in supplied.values()):
@@ -83,10 +82,6 @@ def _updated_options(settings: AppSettings, args: argparse.Namespace) -> AppSett
         audio=replace(
             settings.audio,
             **({"surround_output": args.surround_output} if args.surround_output else {}),
-        ),
-        video=replace(
-            settings.video,
-            **({"mode": args.video_mode} if args.video_mode else {}),
         ),
         source=replace(
             settings.source,
@@ -131,7 +126,6 @@ def build_parser() -> argparse.ArgumentParser:
     set_options.add_argument("--padding-before-ms", type=int)
     set_options.add_argument("--padding-after-ms", type=int)
     set_options.add_argument("--surround-output", choices=["preserve_5_1", "downmix_stereo"])
-    set_options.add_argument("--video-mode", choices=["h264", "preserve_source"])
     archive = set_options.add_mutually_exclusive_group()
     archive.add_argument(
         "--archive-after-success",

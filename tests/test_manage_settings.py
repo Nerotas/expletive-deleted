@@ -28,8 +28,6 @@ class ManageSettingsTests(unittest.TestCase):
                     "75",
                     "--surround-output",
                     "downmix_stereo",
-                    "--video-mode",
-                    "preserve_source",
                     "--archive-after-success",
                 ],
                 store,
@@ -42,7 +40,6 @@ class ManageSettingsTests(unittest.TestCase):
         self.assertEqual(settings.censoring.padding_before_ms, 200)
         self.assertEqual(settings.censoring.padding_after_ms, 75)
         self.assertEqual(settings.audio.surround_output, "downmix_stereo")
-        self.assertEqual(settings.video.mode, "preserve_source")
         self.assertTrue(settings.source.archive_after_success)
 
     def create_store(self, root: Path) -> SettingsStore:

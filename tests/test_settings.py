@@ -112,6 +112,16 @@ class SettingsModelTests(unittest.TestCase):
 
         self.assertEqual(payload["schema_version"], SETTINGS_SCHEMA_VERSION)
         self.assertEqual(restored, settings)
+        self.assertNotIn("video", payload)
+
+    def test_legacy_video_mode_is_accepted_but_not_persisted(self):
+        payload = settings_to_dict(AppSettings.defaults())
+        payload["video"] = {"mode": "h264"}
+
+        restored = settings_from_dict(payload)
+
+        self.assertEqual(restored, AppSettings.defaults())
+        self.assertNotIn("video", settings_to_dict(restored))
 
     def test_onboarding_defaults_incomplete_and_round_trips(self):
         settings = AppSettings.defaults()
@@ -143,6 +153,21 @@ class SettingsModelTests(unittest.TestCase):
 
 
 class SettingsStoreTests(unittest.TestCase):
+    def test_legacy_video_section_is_removed_on_save(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "settings.ini"
+            store = SettingsStore(path, AppSettings.defaults(Path(temporary_directory) / "home"))
+            store.save(store.defaults)
+            path.write_text(
+                path.read_text(encoding="utf-8") + "\n[video]\nmode = h264\n",
+                encoding="utf-8",
+            )
+
+            loaded = store.load()
+            store.save(loaded)
+
+            self.assertNotIn("[video]", path.read_text(encoding="utf-8"))
+
     def test_windows_app_data_default(self):
         root = default_app_data_root({"LOCALAPPDATA": "C:\\Users\\User\\AppData\\Local"})
         self.assertEqual(root, Path("C:\\Users\\User\\AppData\\Local\\ExpletiveDeleted"))

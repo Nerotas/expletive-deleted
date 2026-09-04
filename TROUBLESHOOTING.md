@@ -8,7 +8,7 @@ Run the tracked readiness check from the repository root:
 .\.venv\Scripts\python.exe diagnostics.py
 ```
 
-It checks Python dependencies, runtime folders, FFmpeg, FFprobe, an executable H.264 encoder, the selected Whisper device, cache availability, and free disk space.
+It checks Python dependencies, runtime folders, FFmpeg, FFprobe, the selected Whisper device, cache availability, and free disk space.
 
 Run the backend regression suite separately:
 
@@ -119,15 +119,9 @@ Check the source streams:
 ffprobe -v error -show_streams -show_format input.mkv
 ```
 
-Then rerun without hiding the CLI output. The backend prints the final FFmpeg error and retries a failed hardware video encoder with `libx264` when available.
+Then rerun without hiding the CLI output. The backend prints the final FFmpeg error. Video is always copied unchanged; if the source video cannot be remuxed into MKV, the job stops and does not fall back to video transcoding.
 
-To request software encoding explicitly:
-
-```powershell
-$env:CENSOR_VIDEO_ENCODER = 'libx264'
-```
-
-An override must be reported by the installed FFmpeg build and must successfully encode a test frame.
+The former H.264 setting cannot be used as a compatibility workaround because it was intentionally removed. Reintroducing an opt-in transcoding profile requires a separately approved product and licensing change.
 
 ## Source Safety
 

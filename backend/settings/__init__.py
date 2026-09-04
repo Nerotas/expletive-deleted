@@ -11,7 +11,6 @@ from .models import (
     RuntimeSettings,
     SettingsValidationError,
     SourceSettings,
-    VideoSettings,
     WhisperSettings,
     default_user_data_root,
 )
@@ -34,7 +33,6 @@ __all__ = [
     "SettingsFileError",
     "SettingsStore",
     "SourceSettings",
-    "VideoSettings",
     "WhisperSettings",
     "default_user_data_root",
     "default_app_data_root",

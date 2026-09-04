@@ -92,7 +92,9 @@ Recognized surround sources are handled separately: the front-center dialogue ch
 
 ## Supported media
 
-Supported inputs include `.avi`, `.flv`, `.m4a`, `.mkv`, `.mov`, `.mp3`, `.mp4`, `.wav`, `.webm`, and `.wmv`. Audio-only jobs produce `.mp3`; video jobs produce `.mkv`.
+Supported inputs include `.avi`, `.flv`, `.m4a`, `.mkv`, `.mov`, `.mp3`, `.mp4`, `.wav`, `.webm`, and `.wmv`. Audio-only jobs produce `.mp3`; video jobs produce `.mkv`. Video streams are copied unchanged rather than re-encoded. If a source video cannot be remuxed into MKV, processing stops instead of transcoding it.
+
+The previous H.264 output setting and encoder fallback were intentionally removed as part of issue 43. There is currently no video-codec setting. A video-transcoding profile may be added back only after an explicit future product decision and licensing review; until then, every supported video workflow must preserve the source video stream.
 
 ## Develop from source
 

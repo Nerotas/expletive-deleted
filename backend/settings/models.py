@@ -15,7 +15,6 @@ ProcessingMode = Literal["report_only", "censor"]
 ProcessingDevice = Literal["auto", "cpu", "cuda"]
 StereoCensorMethod = Literal["drop_audio", "karaoke"]
 SurroundOutput = Literal["preserve_5_1", "downmix_stereo"]
-VideoMode = Literal["h264", "preserve_source"]
 WhisperLibrary = Literal["faster-whisper"]
 WhisperModel = Literal["tiny", "base", "small", "medium", "large-v3"]
 
@@ -108,11 +107,6 @@ class AudioSettings:
 
 
 @dataclass(frozen=True)
-class VideoSettings:
-    mode: VideoMode = "h264"
-
-
-@dataclass(frozen=True)
 class WhisperSettings:
     library: WhisperLibrary = "faster-whisper"
     model: WhisperModel = "large-v3"
@@ -142,7 +136,6 @@ class AppSettings:
     processing: ProcessingSettings = field(default_factory=ProcessingSettings)
     censoring: CensoringSettings = field(default_factory=CensoringSettings)
     audio: AudioSettings = field(default_factory=AudioSettings)
-    video: VideoSettings = field(default_factory=VideoSettings)
     whisper: WhisperSettings = field(default_factory=WhisperSettings)
     source: SourceSettings = field(default_factory=SourceSettings)
     runtime: RuntimeSettings = field(default_factory=RuntimeSettings)
@@ -166,7 +159,6 @@ class AppSettings:
             ("processing", self.processing, ProcessingSettings),
             ("censoring", self.censoring, CensoringSettings),
             ("audio", self.audio, AudioSettings),
-            ("video", self.video, VideoSettings),
             ("whisper", self.whisper, WhisperSettings),
             ("source", self.source, SourceSettings),
             ("runtime", self.runtime, RuntimeSettings),
@@ -182,7 +174,6 @@ class AppSettings:
             ("processing.device", self.processing.device, {"auto", "cpu", "cuda"}),
             ("censoring.stereo_method", self.censoring.stereo_method, {"drop_audio", "karaoke"}),
             ("audio.surround_output", self.audio.surround_output, {"preserve_5_1", "downmix_stereo"}),
-            ("video.mode", self.video.mode, {"h264", "preserve_source"}),
             ("whisper.library", self.whisper.library, {"faster-whisper"}),
             ("whisper.model", self.whisper.model, {"tiny", "base", "small", "medium", "large-v3"}),
         )
