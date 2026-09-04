@@ -239,13 +239,13 @@ function QueueView({
   const [filter, setFilter] = useState<QueueFilter>('all')
   const [sort, setSort] = useState<QueueSort>('queue')
   const [sortDirection, setSortDirection] = useState<SortDirection>('ascending')
-  const [columnWidths, setColumnWidths] = useState<Record<QueueColumn, number>>({
-    file: 290,
-    dateAdded: 180,
-    status: 140,
-    queue: 140,
-    progress: 160,
-    actions: 344,
+  const [columnWidths, setColumnWidths] = useState<Record<QueueColumn, string>>({
+    file: '18vw',
+    dateAdded: '11vw',
+    status: '8vw',
+    queue: '9vw',
+    progress: '10vw',
+    actions: '18vw',
   })
   const selectedCount = selectedSources.size
   const processingUnavailable = !capabilities?.ready
@@ -311,9 +311,9 @@ function QueueView({
     event.preventDefault()
     event.stopPropagation()
     const startX = event.clientX
-    const startWidth = columnWidths[column]
+    const startWidth = event.currentTarget.parentElement?.getBoundingClientRect().width ?? 110
     const resize = (moveEvent: PointerEvent) => {
-      setColumnWidths((current) => ({ ...current, [column]: Math.max(110, startWidth + moveEvent.clientX - startX) }))
+      setColumnWidths((current) => ({ ...current, [column]: `${Math.max(110, startWidth + moveEvent.clientX - startX)}px` }))
     }
     const stopResize = () => {
       window.removeEventListener('pointermove', resize)
@@ -441,12 +441,12 @@ function QueueView({
       <table className="queue-table">
         <colgroup>
           <col className="select-column" />
-          <col style={{ width: `${columnWidths.file}px` }} />
-          <col style={{ width: `${columnWidths.dateAdded}px` }} />
-          <col style={{ width: `${columnWidths.status}px` }} />
-          <col style={{ width: `${columnWidths.queue}px` }} />
-          <col style={{ width: `${columnWidths.progress}px` }} />
-          <col style={{ width: `${columnWidths.actions}px` }} />
+          <col style={{ width: columnWidths.file }} />
+          <col style={{ width: columnWidths.dateAdded }} />
+          <col style={{ width: columnWidths.status }} />
+          <col style={{ width: columnWidths.queue }} />
+          <col style={{ width: columnWidths.progress }} />
+          <col style={{ width: columnWidths.actions }} />
         </colgroup>
         <thead><tr><th className="select-column"><span className="sr-only">Select</span></th>{sortHeader('name', 'File')}{sortHeader('dateAdded', 'Date added')}{sortHeader('status', 'Status')}{sortHeader('queue', 'Queue position')}<th className="resizable-header">Progress{resizeHandle('progress', 'Progress')}</th><th className="resizable-header">Actions{resizeHandle('actions', 'Actions')}</th></tr></thead>
         <tbody>

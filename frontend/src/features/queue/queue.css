@@ -37,7 +37,7 @@ th { text-align: left; height: 38px; padding: 0 16px; background: var(--surface-
 td { height: 76px; padding: 9px 16px; border-bottom: 1px solid var(--line); font-size: 12px; vertical-align: middle; }
 tr:last-child td { border-bottom: 0; }
 
-.queue-table { min-width: 1300px; }
+.queue-table { min-width: 1100px; }
 .queue-table .select-column { width: 46px; padding-right: 4px; text-align: center; }
 .select-column input { width: 16px; height: 16px; margin: 0; accent-color: var(--signal); }
 .select-column input:disabled { cursor: not-allowed; opacity: .45; }
