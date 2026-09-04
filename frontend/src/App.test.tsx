@@ -524,16 +524,34 @@ describe('desktop application renderer', () => {
 
     expect(await screen.findByText('#1')).toBeInTheDocument()
     expect(screen.getByText('#2')).toBeInTheDocument()
+    expect(screen.getByText('Queued: transcript')).toBeInTheDocument()
+    expect(screen.getByText('Queued: transcode')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Cancel active job' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Cancel job' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /Queued 2/ }))
-    expect(screen.queryByText('active.mkv')).not.toBeInTheDocument()
+    expect(screen.getByText('active.mkv')).toBeInTheDocument()
     expect(screen.getByText('first.mkv')).toBeInTheDocument()
     expect(screen.getByText('second.mkv')).toBeInTheDocument()
 
     await user.click(screen.getAllByRole('button', { name: 'Remove from queue' })[0])
     await waitFor(() => expect(desktopClient.cancelJob).toHaveBeenCalledWith('first-job'))
     expect(desktopClient.cancelJob).not.toHaveBeenCalledWith('active-job')
+  })
+
+  it('shows a copying job before its file is available in Ready', async () => {
+    const source = 'C:\\Outside\\movie.mkv'
+    vi.mocked(desktopClient.listLibrary).mockResolvedValue([])
+    vi.mocked(desktopClient.listJobs).mockResolvedValue([{
+      id: 'copy-job', source, mode: 'copy', status: 'copying', progress_percent: 25, error: null,
+    }])
+    renderApp('/')
+
+    expect(await screen.findByText('movie.mkv')).toBeInTheDocument()
+    expect(screen.getByText('Copying')).toBeInTheDocument()
+    expect(screen.getByText('25%')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Cancel job' })).toBeInTheDocument()
+    expect(screen.queryByRole('checkbox', { name: 'Select movie.mkv' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Transcribe only' })).not.toBeInTheDocument()
   })
 
   it('sorts visible queue rows by file name', async () => {
@@ -545,6 +563,7 @@ describe('desktop application renderer', () => {
     renderApp('/')
 
     await user.click(await screen.findByRole('button', { name: 'File' }))
+    expect(screen.getByRole('separator', { name: 'Resize File column' })).toBeInTheDocument()
     const fileRows = screen.getAllByRole('row').slice(1)
     expect(fileRows[0]).toHaveTextContent('alpha.mkv')
     expect(fileRows[1]).toHaveTextContent('zulu.mkv')

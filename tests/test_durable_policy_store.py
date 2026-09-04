@@ -123,6 +123,17 @@ class DurablePolicyStoreTests(unittest.TestCase):
             reloaded.update("exclude", "candidate", "add")
             self.assertEqual(reloaded.load_discovered(), ("another",))
 
+    def test_discovered_words_do_not_return_after_they_are_classified(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            store = self.create_store(Path(temporary_directory))
+            store.add_discovered({"candidate"})
+            store.update("exclude", "candidate", "add")
+
+            store.add_discovered({"candidate"})
+
+            self.assertEqual(store.load_discovered(), ())
+            self.assertIn("candidate", store.load().exclusions)
+
     def test_existing_dictionary_does_not_reread_changed_or_missing_defaults(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             store = self.create_store(Path(temporary_directory))

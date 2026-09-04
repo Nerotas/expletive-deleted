@@ -161,7 +161,16 @@ class PolicyStore:
         return tuple(words)
 
     def add_discovered(self, values: set[str]) -> tuple[str, ...]:
-        return self.replace_discovered(set(self.load_discovered()) | values)
+        policy = self.load()
+        classified = set(policy.censor_words) | set(policy.exclusions)
+        words = {
+            normalize_policy_word(value)
+            for value in self.load_discovered()
+        } | {
+            normalize_policy_word(value)
+            for value in values
+        }
+        return self.replace_discovered(words - classified)
 
     def update(
         self,
