@@ -137,7 +137,7 @@ export function QueuePage({ queue, settings, capabilities, onChangeFolder, onRev
         <button className="icon-button" title="Refresh queue" aria-label="Refresh queue" onClick={() => void queue.refresh()}>
           <RefreshCw size={18} />
         </button>
-        <button className="icon-button" title="Open transcode folder" aria-label="Open transcode folder" disabled={!settings?.directories.output} onClick={() => settings?.directories.output && void queue.openFolder(settings.directories.output)}>
+        <button className="icon-button" title="Open transcode folder" aria-label="Open transcode folder" onClick={() => void queue.openTranscodeFolder()}>
           <FolderOpen size={18} />
         </button>
         {queue.runningJob && <button className="button danger" onClick={() => void queue.cancelActive()}>
