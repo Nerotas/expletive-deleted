@@ -409,7 +409,6 @@ function QueueView({
     <div className="queue-summary">
       <Metric label="Ready" value={counts.ready} tone="neutral" />
       <Metric label="Queued" value={counts.queued} tone="queued" />
-      <Metric label="Active" value={counts.active} tone="active" />
       <Metric label="Transcribed" value={counts.transcribed} tone="warning" />
       <Metric label="Finished" value={counts.finished} tone="success" />
     </div>
