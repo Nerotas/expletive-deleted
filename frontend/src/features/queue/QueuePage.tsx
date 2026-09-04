@@ -328,10 +328,21 @@ function QueueView({
   const resizeHandle = (column: QueueColumn, label: string) => <span
     className="column-resizer"
     role="separator"
+    tabIndex={0}
     aria-orientation="vertical"
     aria-label={`Resize ${label} column`}
     title={`Resize ${label} column`}
     onPointerDown={(event) => startColumnResize(column, event)}
+    onKeyDown={(event) => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+      event.preventDefault()
+      const delta = event.key === 'ArrowLeft' ? -12 : 12
+      const baseWidth = event.currentTarget.parentElement?.getBoundingClientRect().width ?? 110
+      setColumnWidths((current) => ({
+        ...current,
+        [column]: `${Math.max(110, baseWidth + delta)}px`,
+      }))
+    }}
   />
   const sortableColumns: Record<QueueSort, QueueColumn> = {
     name: 'file',
