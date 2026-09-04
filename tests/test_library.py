@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -53,6 +54,9 @@ class LibraryScannerTests(unittest.TestCase):
         self.assertEqual(items[1].transcript, transcript)
         self.assertEqual(items[2].output, output)
         self.assertEqual(items[2].to_dict()["status"], "finished")
+        self.assertIsInstance(items[0].date_added, datetime)
+        self.assertEqual(items[0].date_added.tzinfo, timezone.utc)
+        self.assertEqual(items[0].to_dict()["date_added"], items[0].date_added.isoformat())
 
     def test_missing_input_directory_is_reported(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell, type IpcMainInvokeEvent } from 'electron'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { backendEnvironment, findBackendRoot, findPythonRuntime } from './backend-runtime.js'
 
@@ -93,6 +93,20 @@ function invoke(method: string, params?: Record<string, unknown>): Promise<unkno
   })
 }
 
+function outputDirectory(settings: unknown): string {
+  if (!settings || typeof settings !== 'object') throw new Error('Could not read the configured transcode folder.')
+  const directories = (settings as { directories?: unknown }).directories
+  if (!directories || typeof directories !== 'object') throw new Error('Could not read the configured transcode folder.')
+  const output = (directories as { output?: unknown }).output
+  if (typeof output !== 'string' || !output.trim()) throw new Error('The configured transcode folder is unavailable.')
+  try {
+    if (!statSync(output).isDirectory()) throw new Error('not a directory')
+  } catch {
+    throw new Error('The configured transcode folder is unavailable.')
+  }
+  return output
+}
+
 function createWindow(): void {
   const icon = resolveApplicationIcon()
   const browserWindow = new BrowserWindow({
@@ -145,6 +159,15 @@ app.whenReady().then(() => {
     const url = new URL(value)
     if (url.protocol !== 'https:') throw new Error('Only secure project links can be opened')
     await shell.openExternal(url.toString())
+  })
+  ipcMain.handle('expletive-deleted:open-transcode-folder', async () => {
+    const folderPath = outputDirectory(await invoke('settings.get'))
+    const error = await shell.openPath(folderPath)
+    if (error) throw new Error(`Could not open the transcode folder: ${error}`)
+  })
+  ipcMain.handle('expletive-deleted:open-file', async (_event: IpcMainInvokeEvent, filePath: string) => {
+    const error = await shell.openPath(filePath)
+    if (error) throw new Error(`Could not open the censored file: ${error}`)
   })
   createWindow()
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })
