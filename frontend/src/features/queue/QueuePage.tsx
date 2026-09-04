@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ArchiveIcon,
   ArrowDown,
@@ -57,6 +57,7 @@ export function QueuePage({ queue, settings, capabilities, onChangeFolder, onRev
   const [copyResults, setCopyResults] = useState<ImportResult[] | null>(null)
   const [purgeRequest, setPurgeRequest] = useState<PurgeRequest>(null)
   const dragDepth = useRef(0)
+  const copyJobDates = useRef(new Map<string, string>())
   const [dragActive, setDragActive] = useState(false)
 
   const mergedRows: QueueRowModel[] = queue.library.map((item) => {
@@ -74,13 +75,23 @@ export function QueuePage({ queue, settings, capabilities, onChangeFolder, onRev
       item: {
         source: job.source,
         status: 'ready',
-        date_added: new Date().toISOString(),
+        date_added: copyJobDates.current.get(job.id) ?? (() => {
+          const dateAdded = new Date().toISOString()
+          copyJobDates.current.set(job.id, dateAdded)
+          return dateAdded
+        })(),
         transcript: null,
         output: null,
       },
       job,
       pendingJob: job,
     }))
+  useEffect(() => {
+    const activeCopyJobIds = new Set(copyRows.map(({ job }) => job?.id))
+    for (const jobId of copyJobDates.current.keys()) {
+      if (!activeCopyJobIds.has(jobId)) copyJobDates.current.delete(jobId)
+    }
+  }, [copyRows])
   mergedRows.push(...copyRows)
   const selectableSources = mergedRows
     .filter(({ item, pendingJob }) => item.status === 'ready' && !pendingJob)
@@ -325,6 +336,7 @@ function QueueView({
     window.addEventListener('pointerup', stopResize, { once: true })
     window.addEventListener('pointercancel', stopResize, { once: true })
     window.addEventListener('blur', stopResize, { once: true })
+  }
   const resizeHandle = (column: QueueColumn, label: string) => <span
     className="column-resizer"
     role="separator"
