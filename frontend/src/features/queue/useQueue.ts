@@ -6,6 +6,7 @@ import { errorMessage, fileName } from '../../utils/format'
 
 const TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled', 'transcribed'])
 const RUNNING_STATUSES = new Set(['copying', 'transcribing', 'censoring', 'verifying'])
+const copyJobDates = new Map<string, string>()
 
 type QueueOptions = {
   client?: DesktopClient
@@ -23,7 +24,18 @@ async function loadQueue(client: DesktopClient) {
       events.length ? [[events.at(-1)!.job_id, events.at(-1)!]] : [],
     ),
   )
-  return { library, archive, jobs, jobEvents }
+  const activeCopyJobIds = new Set(
+    jobs
+      .filter((job) => job.mode === 'copy' && !TERMINAL_STATUSES.has(job.status))
+      .map((job) => job.id),
+  )
+  for (const jobId of copyJobDates.keys()) {
+    if (!activeCopyJobIds.has(jobId)) copyJobDates.delete(jobId)
+  }
+  for (const jobId of activeCopyJobIds) {
+    copyJobDates.set(jobId, copyJobDates.get(jobId) ?? new Date().toISOString())
+  }
+  return { library, archive, jobs, jobEvents, copyJobDates: Object.fromEntries(copyJobDates) }
 }
 
 export function useQueue({
@@ -63,6 +75,7 @@ export function useQueue({
     library,
     jobs,
     jobEvents: query.data?.jobEvents ?? {},
+    copyJobDates: query.data?.copyJobDates ?? {},
     runningJob,
     queuedJobs,
     queueIdle: nonTerminalJobs.length === 0,
