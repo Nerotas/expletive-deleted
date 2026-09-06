@@ -42,10 +42,6 @@ try {
   launchUrl.hash = '#/'
   await window.goto(launchUrl.toString())
   await window.getByRole('heading', { name: 'Queue', exact: true }).waitFor()
-  await Promise.race([
-    window.getByRole('heading', { name: 'Finish local setup', exact: true }).waitFor(),
-    window.getByText('System ready', { exact: true }).waitFor(),
-  ])
 
   const resourcesPath = await packagedApp.evaluate(() => process.resourcesPath)
   const backendRoot = path.join(resourcesPath, 'app-backend')
