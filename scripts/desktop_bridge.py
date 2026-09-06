@@ -28,6 +28,7 @@ from backend.runtime import (
     inspect_whisper_model,
 )
 from backend.runtime.dependencies import inspect_ytdlp
+from backend.runtime.environment import get_managed_ytdlp_path
 from backend.censor import find_review_candidates
 from backend.jobs.media import transcript_path
 from backend.service import BackendService
@@ -115,6 +116,11 @@ class DesktopBridge:
                 runtime["ffprobe_path"] = ffprobe_path
             if any(dependency_id.startswith("whisper:") for dependency_id in installed_ids):
                 runtime["whisper_cache"] = str(cache_dir)
+            if "ytdlp" in installed_ids:
+                ytdlp_path = get_managed_ytdlp_path(runtime_root)
+                if not ytdlp_path.is_file():
+                    raise RuntimeError("Managed yt-dlp completed but its verified path is unavailable")
+                runtime["ytdlp_path"] = str(ytdlp_path)
             if runtime != settings["runtime"]:
                 settings["runtime"] = runtime
                 self.service.update_settings(settings)

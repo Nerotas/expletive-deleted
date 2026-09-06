@@ -6,6 +6,7 @@ import {
   CircleStop,
   FileText,
   FolderOpen,
+  LoaderCircle,
   Play,
   RefreshCw,
   RotateCcw,
@@ -74,7 +75,7 @@ export function QueuePage({ queue, settings, capabilities, onChangeFolder, onRev
     }
   })
   const copyJobs = queue.jobs
-    .filter((job) => job.mode === 'copy' && !TERMINAL_STATUSES.has(job.status))
+    .filter((job) => job.source_type !== 'youtube' && job.mode === 'copy' && !TERMINAL_STATUSES.has(job.status))
     .filter((job) => !queue.library.some((item) => item.source === job.source))
   const copyRows = copyJobs
     .map((job): QueueRowModel => ({
@@ -89,7 +90,7 @@ export function QueuePage({ queue, settings, capabilities, onChangeFolder, onRev
       pendingJob: job,
     }))
   mergedRows.push(...copyRows)
-  mergedRows.push(...queue.jobs.filter((job) => job.source_type === 'youtube').map((job): QueueRowModel => ({
+  mergedRows.push(...queue.jobs.filter((job) => job.source_type === 'youtube' && job.status !== 'completed').map((job): QueueRowModel => ({
     item: { source: job.source, status: 'ready', date_added: '', transcript: null, output: null },
     job,
     pendingJob: TERMINAL_STATUSES.has(job.status) ? undefined : job,
@@ -233,7 +234,7 @@ function YoutubeDialog({ available, busy, onCancel, onConfirm }: { available: bo
   return <div className="modal-backdrop" role="presentation"><section className="modal" role="dialog" aria-modal="true" aria-labelledby="youtube-dialog-title">
     <p className="eyebrow">YouTube import</p><h2 id="youtube-dialog-title">Download from YouTube</h2>
     {available ? <><label htmlFor="youtube-url">YouTube URL</label><input id="youtube-url" type="url" value={url} placeholder="https://www.youtube.com/watch?v=..." onChange={(event) => setUrl(event.target.value)} autoFocus />
-      <p>Only download media you are authorized to download and process.</p><div className="modal-actions"><button className="button secondary" disabled={busy} onClick={onCancel}>Cancel</button><button className="button primary" disabled={busy || !valid} onClick={() => void onConfirm(url)}>Add to Queue</button></div></>
+      <p>Only download media you are authorized to download and process.</p><div className="modal-actions"><button className="button secondary" disabled={busy} onClick={onCancel}>Cancel</button><button className="button primary" disabled={busy || !valid} onClick={() => void onConfirm(url)}>{busy ? <><LoaderCircle className="spin" size={16} />Adding to Queue…</> : 'Add to Queue'}</button></div></>
       : <><p>yt-dlp is required for YouTube downloads. Get it from System Requirements, then return here to add an individual video.</p><div className="modal-actions"><button className="button primary" onClick={onCancel}>Done</button></div></>}
   </section></div>
 }
@@ -422,20 +423,21 @@ function QueueView({
   const activeJobRow = ({ item, job, pendingJob }: typeof rows[number]) => {
     const activeJob = pendingJob ?? job
     if (!activeJob) return null
+    const remote = activeJob.source_type === 'youtube'
     const event = queue.jobEvents[activeJob.id]
     const detail = event?.fps
       ? `${Math.round(event.fps)} FPS${event.eta_seconds != null ? ` · ${formatEta(event.eta_seconds)} left` : ''}`
       : event?.eta_seconds != null
         ? `${formatEta(event.eta_seconds)} left`
-        : 'Processing'
+        : event?.message ?? 'Processing'
     return <div className="active-job-row" key={item.source}>
       <div className="file-cell">
-        <span className="file-icon">{fileName(item.source).split('.').pop()?.toUpperCase()}</span>
+        <span className="file-icon">{remote ? 'YT' : fileName(item.source).split('.').pop()?.toUpperCase()}</span>
         <div><strong>{activeJob.title ?? fileName(item.source)}</strong><small>{item.source}</small></div>
       </div>
-      <time dateTime={item.date_added}>{new Date(item.date_added).toLocaleString()}</time>
+      {item.date_added ? <time dateTime={item.date_added}>{new Date(item.date_added).toLocaleString()}</time> : <span className="muted">—</span>}
       <div className="active-job-status"><StatusBadge status={activeJob.status} /><small>{detail}</small></div>
-      <div className="progress-wrap"><div className={`progress-track progress-${activeJob.status}`}><span style={{ width: `${activeJob.progress_percent ?? 0}%` }} /></div><span>{Math.round(activeJob.progress_percent ?? 0)}%</span></div>
+      {activeJob.progress_percent != null ? <div className="progress-wrap"><div className={`progress-track progress-${activeJob.status}`}><span style={{ width: `${activeJob.progress_percent}%` }} /></div><span>{Math.round(activeJob.progress_percent)}%</span></div> : <span className="muted">—</span>}
       <button className="active-cancel-action" disabled={queue.busy} title="Cancel this running job and keep the source file" onClick={() => void queue.cancelJob(activeJob)}><CircleStop size={13} />Cancel job</button>
     </div>
   }
@@ -657,6 +659,18 @@ function QueueRow({
         {outputFile && <button className="play-action" title="Open the verified censored file in your default media player" onClick={() => void onOpenFile(outputFile)}><Play size={13} />Play</button>}
         {active && displayJob && <button disabled={busy} title="Cancel this running job and keep the source file" onClick={() => void onCancelRunning(displayJob)}><CircleStop size={13} />Cancel job</button>}
         {pendingJob?.status === 'queued' && <button disabled={busy} title="Remove this waiting job without cancelling the active job" onClick={() => void onRemoveQueued(pendingJob)}><X size={13} />Remove from queue</button>}
+        {!remote && item.status === 'transcribed' && <button
+          className="censor-action"
+          disabled={processingDisabled}
+          title={processingReason ?? 'Create censored media from this verified transcript'}
+          onClick={() => void onSubmit(item.source, 'censor')}
+        ><Play size={13} />Censor</button>}
+        {!remote && item.status === 'finished' && <button
+          className="censor-action"
+          disabled={processingDisabled}
+          title={processingReason ?? 'Create a replacement censored copy from this verified transcript'}
+          onClick={() => void onSubmit(item.source, 'censor', { overwrite_output: true })}
+        ><Play size={13} />Recensor</button>}
         {!remote && <button
           className="transcribe-action"
           aria-label={item.status === 'ready' ? 'Transcribe only' : 'Retranscribe'}

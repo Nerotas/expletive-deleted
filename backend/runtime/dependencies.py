@@ -45,7 +45,7 @@ WHISPER_MODEL_FILES = (
 )
 WHISPER_MODELS = ("tiny", "base", "small", "medium", "large-v3")
 WHISPER_LIBRARIES = ("faster-whisper",)
-YTDLP_VERSION = "2025.02.19"
+YTDLP_VERSION = "2026.08.19"
 YTDLP_RELEASE_URL = f"https://github.com/yt-dlp/yt-dlp/releases/download/{YTDLP_VERSION}/yt-dlp.exe"
 PYTHON_DEPENDENCIES = (
     ("faster-whisper", "1.2.1"),
@@ -410,10 +410,13 @@ def _run_action(
 
 
 def _status_by_id(inventory: DependencyInventory) -> dict[str, DependencyStatus]:
-    return {
+    statuses = {
         status.id: status
         for status in (inventory.ffmpeg, inventory.ffprobe, *inventory.python, inventory.whisper_model)
     }
+    if inventory.ytdlp is not None:
+        statuses[inventory.ytdlp.id] = inventory.ytdlp
+    return statuses
 
 
 def execute_install_plan(
@@ -515,7 +518,18 @@ def inspect_ytdlp(executable: str | None) -> DependencyStatus:
     if not executable:
         return DependencyStatus("ytdlp", "yt-dlp", "missing", YTDLP_VERSION, None, None, "yt-dlp was not found", True)
     try:
-        result = subprocess.run([executable, "--version"], capture_output=True, text=True, timeout=10, check=False)
+        result = subprocess.run([executable, "--version"], capture_output=True, text=True, timeout=5, check=False)
+    except subprocess.TimeoutExpired:
+        return DependencyStatus(
+            "ytdlp",
+            "yt-dlp",
+            "invalid",
+            YTDLP_VERSION,
+            None,
+            Path(executable),
+            "yt-dlp did not respond to its version check. Reinstall it from System Requirements.",
+            True,
+        )
     except OSError as exc:
         return DependencyStatus("ytdlp", "yt-dlp", "invalid", YTDLP_VERSION, None, Path(executable), str(exc), True)
     version = result.stdout.strip().splitlines()[0] if result.returncode == 0 and result.stdout.strip() else None

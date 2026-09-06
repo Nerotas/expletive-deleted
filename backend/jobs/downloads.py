@@ -74,6 +74,10 @@ class DownloadManager:
 
     def submit(self, url: str, retry_id: str | None = None) -> DownloadRecord:
         url, video_id = validate_youtube_url(url)
+        ytdlp = self.settings.runtime.ytdlp_path or get_managed_ytdlp_path()
+        if not ytdlp.is_file():
+            raise RuntimeError("yt-dlp is not installed. Get it from System Requirements before importing YouTube videos.")
+        title = self._resolve_title(ytdlp, url)
         with self._lock:
             prior = self._records.get(retry_id) if retry_id else None
             if retry_id and (prior is None or prior.url != url):
@@ -81,7 +85,7 @@ class DownloadManager:
             if not retry_id and any(job.url == url and job.status in {"queued", "downloading", "preparing"} for job in self._records.values()):
                 raise ValueError("This YouTube video is already downloading")
             job_id = retry_id or uuid4().hex
-            record = DownloadRecord(job_id, url, video_id) if prior is None else replace(prior, status="queued", title=None, progress_percent=None, error=None)
+            record = DownloadRecord(job_id, url, video_id, title=title) if prior is None else replace(prior, status="queued", title=title, progress_percent=None, error=None)
             self._records[job_id], self._events[job_id], self._cancellations[job_id] = record, [], Event()
             self._emit(job_id, "stage", stage="queued", message="Download queued")
             self._executor.submit(self._run, job_id)
@@ -117,13 +121,12 @@ class DownloadManager:
             ytdlp = self.settings.runtime.ytdlp_path or get_managed_ytdlp_path()
             if not ytdlp.is_file(): raise RuntimeError("yt-dlp is not installed. Get it from System Requirements before importing YouTube videos.")
             record = self._records[job_id]
-            self._set(job_id, "downloading", 0, message="Resolving video")
-            self._set(job_id, "downloading", 0, title=self._resolve_title(ytdlp, record.url), message="Resolving video")
+            self._set(job_id, "downloading", 0, message="Starting download")
             ffmpeg, ffprobe = self._runtime_media_tools()
             if not ffmpeg or not ffprobe: raise RuntimeError("FFmpeg and FFprobe must be ready before importing YouTube videos")
             staging.mkdir(parents=True, exist_ok=True)
             record, cancellation = self._records[job_id], self._cancellations[job_id]
-            command = [str(ytdlp), "--ffmpeg-location", str(ffmpeg.parent), "--no-playlist", "--newline", "--progress-template", "ED:%(progress._percent_str)s|%(progress.eta)s", "--merge-output-format", "mp4", "-f", "bv*[vcodec^=avc1]+ba[acodec^=mp4a]/b[ext=mp4]/b", "--paths", str(staging), "--output", "source.%(ext)s", record.url]
+            command = [str(ytdlp), "--ignore-config", "--ffmpeg-location", str(ffmpeg.parent), "--no-playlist", "--newline", "--progress-template", "ED:%(progress._percent_str)s|%(progress.eta)s", "--merge-output-format", "mp4", "-f", "bv*[vcodec^=avc1]+ba[acodec^=mp4a]/b[ext=mp4]/b", "--paths", str(staging), "--output", "source.%(ext)s", record.url]
             process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
             with self._lock: self._processes[job_id] = process
             for line in process.stdout or ():
@@ -139,7 +142,7 @@ class DownloadManager:
             source = next((item for item in staging.glob("source.*") if item.suffix != ".part"), None)
             if source is None: raise RuntimeError("yt-dlp completed without creating media")
             final = staging / "final.mp4"
-            self._set(job_id, "preparing", 100, message="Preparing H.264/AAC MP4")
+            self._set(job_id, "preparing", message="Preparing H.264/AAC MP4")
             self._prepare(job_id, source, final, str(ffmpeg), str(ffprobe), cancellation)
             title = self._records[job_id].title or record.video_id
             destination = self._destination(title, record.video_id)
@@ -154,27 +157,52 @@ class DownloadManager:
             shutil.rmtree(staging, ignore_errors=True)
 
     def _prepare(self, job_id: str, source: Path, final: Path, ffmpeg: str, ffprobe: str, cancellation: Event) -> None:
-        copy = self._run_ffmpeg(job_id, [ffmpeg, "-y", "-i", str(source), "-map", "0:v:0", "-map", "0:a:0", "-c", "copy", str(final)], cancellation)
+        duration_seconds = self._duration(source, ffprobe)
+        copy = self._run_ffmpeg(job_id, [ffmpeg, "-y", "-i", str(source), "-map", "0:v:0", "-map", "0:a:0", "-c", "copy", str(final)], cancellation, duration_seconds)
         if copy.returncode == 0:
             try: self._verify(final, ffprobe); return
             except RuntimeError: final.unlink(missing_ok=True)
         encoder = select_working_video_encoder(ffmpeg, available_encoders(ffmpeg))
-        convert = self._run_ffmpeg(job_id, [ffmpeg, "-y", "-i", str(source), "-map", "0:v:0", "-map", "0:a:0", "-c:v", encoder, "-c:a", "aac", str(final)], cancellation)
+        convert = self._run_ffmpeg(job_id, [ffmpeg, "-y", "-i", str(source), "-map", "0:v:0", "-map", "0:a:0", "-c:v", encoder, "-c:a", "aac", str(final)], cancellation, duration_seconds)
         if cancellation.is_set(): raise InterruptedError
-        if convert.returncode: raise RuntimeError((convert.stderr or "FFmpeg conversion failed").strip().splitlines()[-1])
+        if convert.returncode: raise RuntimeError((convert.stderr or convert.stdout or "FFmpeg conversion failed").strip().splitlines()[-1])
         self._verify(final, ffprobe)
 
-    def _run_ffmpeg(self, job_id: str, command: list[str], cancellation: Event) -> subprocess.CompletedProcess[str]:
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    def _run_ffmpeg(self, job_id: str, command: list[str], cancellation: Event, duration_seconds: float | None) -> subprocess.CompletedProcess[str]:
+        progress_command = [command[0], "-progress", "pipe:2", "-nostats", *command[1:]]
+        process = subprocess.Popen(progress_command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         with self._lock:
             self._processes[job_id] = process
-        while process.poll() is None:
+        encoded_seconds = 0.0
+        output: list[str] = []
+        for line in process.stdout or ():
+            output.append(line)
+            key, separator, value = line.strip().partition("=")
+            if separator and key in {"out_time_us", "out_time_ms"}:
+                try: encoded_seconds = max(encoded_seconds, int(value) / 1_000_000)
+                except ValueError: pass
+            elif key == "progress" and duration_seconds and encoded_seconds:
+                percent = min(100.0, encoded_seconds / duration_seconds * 100)
+                self._set(job_id, "preparing", percent, message="Preparing H.264/AAC MP4")
+                self._emit(job_id, "progress", stage="preparing", percent=percent, message="Preparing H.264/AAC MP4")
             if cancellation.is_set():
                 process.terminate()
                 raise InterruptedError
-            time.sleep(0.1)
-        stdout, stderr = process.communicate()
-        return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
+        process.wait()
+        return subprocess.CompletedProcess(progress_command, process.returncode, "".join(output), "")
+
+    @staticmethod
+    def _duration(path: Path, ffprobe: str) -> float | None:
+        result = subprocess.run(
+            [ffprobe, "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", str(path)],
+            capture_output=True,
+            text=True,
+        )
+        try:
+            duration = float(result.stdout.strip())
+        except ValueError:
+            return None
+        return duration if result.returncode == 0 and duration > 0 else None
 
     @staticmethod
     def _verify(path: Path, ffprobe: str) -> None:
@@ -191,7 +219,7 @@ class DownloadManager:
     def _resolve_title(ytdlp: Path, url: str) -> str:
         """Read structured metadata without downloading media or parsing console output."""
         result = subprocess.run(
-            [str(ytdlp), "--no-playlist", "--skip-download", "--dump-single-json", url],
+            [str(ytdlp), "--ignore-config", "--no-playlist", "--skip-download", "--dump-single-json", url],
             capture_output=True,
             text=True,
             encoding="utf-8",

@@ -443,7 +443,27 @@ describe('desktop application renderer', () => {
     expect(screen.queryByRole('button', { name: 'Transcribe + Transcode' })).not.toBeInTheDocument()
   })
 
-  it('offers finished files a fresh transcript without a direct transcode request', async () => {
+  it('shows a loader while adding a YouTube URL to the queue', async () => {
+    let resolveDownload: () => void = () => undefined
+    vi.mocked(desktopClient.getCapabilities).mockResolvedValue({ ...readyCapabilities, ytdlp: true })
+    vi.mocked(desktopClient.submitYoutubeDownload).mockImplementationOnce(
+      () => new Promise((resolve) => { resolveDownload = () => resolve({
+        id: 'youtube-job', source: 'https://youtu.be/dQw4w9WgXcQ', source_type: 'youtube',
+        url: 'https://youtu.be/dQw4w9WgXcQ', video_id: 'dQw4w9WgXcQ', mode: 'copy', status: 'queued', progress_percent: null, error: null,
+      }) }),
+    )
+    const user = userEvent.setup()
+    renderApp('/')
+
+    await user.click(await screen.findByRole('button', { name: 'Download from YouTube' }))
+    await user.type(screen.getByLabelText('YouTube URL'), 'https://youtu.be/dQw4w9WgXcQ')
+    await user.click(screen.getByRole('button', { name: 'Add to Queue' }))
+
+    expect(screen.getByRole('button', { name: 'Adding to Queue…' })).toBeDisabled()
+    await act(async () => resolveDownload())
+  })
+
+  it('offers finished files a fresh transcript and recensor action', async () => {
     const source = 'C:\\Media\\Ready\\movie.mkv'
     vi.mocked(desktopClient.listLibrary).mockResolvedValue([{
       source,
@@ -454,6 +474,13 @@ describe('desktop application renderer', () => {
     }])
     const user = userEvent.setup()
     renderApp('/')
+
+    await user.click(await screen.findByRole('button', { name: 'Recensor' }))
+    await waitFor(() => expect(desktopClient.submitJob).toHaveBeenCalledWith(
+      source,
+      'censor',
+      { overwrite_output: true },
+    ))
 
     await user.click(await screen.findByRole('button', { name: 'Retranscribe' }))
     await waitFor(() => expect(desktopClient.submitJob).toHaveBeenCalledWith(
@@ -545,6 +572,26 @@ describe('desktop application renderer', () => {
     await waitFor(() => expect(desktopClient.submitJobs).toHaveBeenCalledWith([source], 'censor'))
   })
 
+  it('censors an individual verified transcript from its row', async () => {
+    const source = 'C:\\Media\\Ready\\movie.mkv'
+    vi.mocked(desktopClient.listLibrary).mockResolvedValue([{
+      source,
+      status: 'transcribed',
+      date_added: '2026-09-01T12:00:00Z',
+      transcript: 'C:\\Media\\Transcripts\\movie-transcript.json',
+      output: null,
+    }])
+    vi.mocked(desktopClient.submitJob).mockResolvedValue({
+      id: 'censor-job', source, mode: 'censor', status: 'queued', progress_percent: 0, error: null,
+    })
+    const user = userEvent.setup()
+    renderApp('/')
+
+    await user.click(await screen.findByRole('button', { name: 'Censor' }))
+
+    await waitFor(() => expect(desktopClient.submitJob).toHaveBeenCalledWith(source, 'censor'))
+  })
+
   it('shows queue positions, filters active and waiting work, and removes only a waiting job', async () => {
     const active = 'C:\\Media\\Ready\\active.mkv'
     const first = 'C:\\Media\\Ready\\first.mkv'
@@ -592,6 +639,56 @@ describe('desktop application renderer', () => {
     expect(screen.getByRole('button', { name: 'Cancel job' })).toBeInTheDocument()
     expect(screen.queryByRole('checkbox', { name: 'Select movie.mkv' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Transcribe only' })).not.toBeInTheDocument()
+  })
+
+  it('renders an active YouTube download as remote media', async () => {
+    const source = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
+    vi.mocked(desktopClient.listDownloads).mockResolvedValue([{
+      id: 'youtube-job', source, source_type: 'youtube', url: source, video_id: 'dQw4w9WgXcQ',
+      title: 'Example YouTube Video', mode: 'copy', status: 'downloading', progress_percent: 25, error: null,
+    }])
+    vi.mocked(desktopClient.listDownloadEvents).mockResolvedValue([{
+      event: 'stage', job_id: 'youtube-job', sequence: 1, stage: 'downloading', percent: 25,
+      eta_seconds: null, fps: null, message: 'Downloading video',
+    }])
+    renderApp('/')
+
+    expect(await screen.findAllByText('Example YouTube Video')).toHaveLength(1)
+    expect(screen.getByText('YT')).toBeInTheDocument()
+    expect(screen.queryByText('Invalid Date')).not.toBeInTheDocument()
+  })
+
+  it('shows completed YouTube media through its local Ready row', async () => {
+    const source = 'C:\\Media\\Ready\\Example YouTube Video [dQw4w9WgXcQ].mp4'
+    vi.mocked(desktopClient.listLibrary).mockResolvedValue([{
+      source, status: 'ready', date_added: '2026-09-01T12:00:00Z', transcript: null, output: null,
+    }])
+    vi.mocked(desktopClient.listDownloads).mockResolvedValue([{
+      id: 'youtube-job', source: 'https://youtu.be/dQw4w9WgXcQ', source_type: 'youtube',
+      url: 'https://youtu.be/dQw4w9WgXcQ', video_id: 'dQw4w9WgXcQ', title: 'Example YouTube Video',
+      mode: 'copy', status: 'completed', progress_percent: 100, error: null,
+    }])
+    renderApp('/')
+
+    expect(await screen.findByText('Example YouTube Video [dQw4w9WgXcQ].mp4')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Transcribe only' })).toBeInTheDocument()
+    expect(screen.queryByText('Example YouTube Video', { exact: true })).not.toBeInTheDocument()
+  })
+
+  it('shows preparation as an indeterminate compatibility step', async () => {
+    const source = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
+    vi.mocked(desktopClient.listDownloads).mockResolvedValue([{
+      id: 'youtube-job', source, source_type: 'youtube', url: source, video_id: 'dQw4w9WgXcQ',
+      title: 'Example YouTube Video', mode: 'copy', status: 'preparing', progress_percent: null, error: null,
+    }])
+    vi.mocked(desktopClient.listDownloadEvents).mockResolvedValue([{
+      event: 'stage', job_id: 'youtube-job', sequence: 1, stage: 'preparing', percent: null,
+      eta_seconds: null, fps: null, message: 'Preparing H.264/AAC MP4',
+    }])
+    renderApp('/')
+
+    expect(await screen.findByText('Preparing H.264/AAC MP4')).toBeInTheDocument()
+    expect(screen.queryByText('100%')).not.toBeInTheDocument()
   })
 
   it('sorts visible queue rows by file name', async () => {
