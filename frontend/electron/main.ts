@@ -4,7 +4,7 @@ import { existsSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { backendEnvironment, findBackendRoot, findPythonRuntime } from './backend-runtime.js'
 
-type BridgeResponse = { id: number; ok: true; result: unknown } | { id: number; ok: false; error: { message?: string } }
+type BridgeResponse = { id: number; ok: true; result: unknown } | { id: number; ok: false; error: { message?: string; code?: string } }
 
 let window: BrowserWindow | undefined
 let bridge: ChildProcessWithoutNullStreams | undefined
@@ -13,6 +13,11 @@ let bridgeFailure: string | undefined
 const pending = new Map<number, { resolve: (value: unknown) => void; reject: (reason: Error) => void }>()
 const APPLICATION_ID = 'com.expletive-deleted.desktop'
 const APPLICATION_ICON = 'expletive-deleted-icon.ico'
+const developmentLogging = Boolean(process.env.ELECTRON_RENDERER_URL)
+
+function logDevelopmentError(context: string, error: unknown): void {
+  if (developmentLogging) console.error(`[Expletive Deleted] ${context}`, error)
+}
 
 function resolveApplicationIcon(): string | undefined {
   const candidates = [
@@ -52,7 +57,11 @@ function startBridge(): void {
     windowsHide: true,
   })
   let stderr = ''
-  bridge.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString() })
+  bridge.stderr.on('data', (chunk: Buffer) => {
+    const message = chunk.toString()
+    stderr += message
+    logDevelopmentError('Python bridge stderr:', message.trim())
+  })
   let buffer = ''
   bridge.stdout.on('data', (chunk: Buffer) => {
     buffer += chunk.toString()
@@ -65,17 +74,25 @@ function startBridge(): void {
         if (!request) continue
         pending.delete(response.id)
         if (response.ok) request.resolve(response.result)
-        else request.reject(new Error(response.error.message ?? 'The local processing service rejected the request.'))
+        else {
+          const message = response.error.message ?? 'The local processing service rejected the request.'
+          logDevelopmentError('Python bridge request failed:', message)
+          const error = new Error(message) as Error & { code?: string }
+          if (typeof response.error.code === 'string') error.code = response.error.code
+          request.reject(error)
+        }
       } catch { /* ignore malformed private protocol output */ }
     }
   })
   bridge.on('error', (error) => {
     bridgeFailure = `Could not start the local processing service: ${error.message}`
+    logDevelopmentError('Python bridge failed to start:', error)
     rejectPending(bridgeFailure)
   })
   bridge.on('exit', (code) => {
     bridge = undefined
     bridgeFailure = stderr.trim() || `The local processing service stopped unexpectedly${code === null ? '' : ` (exit code ${code})`}.`
+    logDevelopmentError('Python bridge exited:', bridgeFailure)
     rejectPending(bridgeFailure)
   })
 }
@@ -88,6 +105,7 @@ function invoke(method: string, params?: Record<string, unknown>): Promise<unkno
     bridge!.stdin.write(`${JSON.stringify({ id, method, ...(params ? { params } : {}) })}\n`, (error) => {
       if (!error) return
       pending.delete(id)
+      logDevelopmentError(`Could not send ${method} to the Python bridge:`, error)
       reject(new Error(`Could not contact the local processing service: ${error.message}`))
     })
   })

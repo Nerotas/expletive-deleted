@@ -110,12 +110,16 @@ class JobRuntime:
                 and not job.overwrite_output
             ):
                 raise RuntimeError(f"Output already exists: {destination}")
+            if job.mode == "censor" and not transcript.is_file():
+                raise RuntimeError(
+                    f"A verified transcript is required before censoring: {transcript}. "
+                    "Queue a transcript-only job first."
+                )
 
             ffmpeg_bin = self._configured_runtime_path("FFmpeg", self.settings.runtime.ffmpeg_path)
             ffprobe_bin = self._configured_runtime_path("FFprobe", self.settings.runtime.ffprobe_path)
             destination.parent.mkdir(parents=True, exist_ok=True)
 
-            self._on_status(job_id=job_id, status="transcribing", percent=0.0, error=None, message=None)
             censor = self._censor_factory(
                 str(source),
                 str(processing_destination),
@@ -136,16 +140,21 @@ class JobRuntime:
                 ffprobe_bin=ffprobe_bin,
                 whisper_cache_dir=self.settings.runtime.whisper_cache,
             )
-            process_options = {"report_only": job.mode == "report_only"}
-            if job.force_transcribe:
-                process_options["force_transcribe"] = True
-            success = censor.process(**process_options)
+            if job.mode == "report_only":
+                self._on_status(job_id=job_id, status="transcribing", percent=0.0, error=None, message=None)
+                process_options = {"report_only": True}
+                if job.force_transcribe:
+                    process_options["force_transcribe"] = True
+                success = censor.process(**process_options)
+            else:
+                self._on_status(job_id=job_id, status="censoring", percent=0.0, error=None, message="Using verified transcript")
+                success = censor.process_verified_transcript()
             if cancellation.is_set():
                 raise InterruptedError("Job cancelled")
             if not success:
                 detail = getattr(censor, "last_error", None)
                 raise RuntimeError(detail or "Processing engine reported failure")
-            if not transcript.is_file():
+            if job.mode == "report_only" and not transcript.is_file():
                 raise RuntimeError(f"Processing completed without a verified transcript: {transcript}")
 
             if job.mode == "report_only":

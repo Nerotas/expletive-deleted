@@ -82,10 +82,14 @@ export function useCapabilities({
   })
 
   const locateMutation = useMutation({
-    mutationFn: async (component: 'ffmpeg' | 'whisper_model') => {
+    mutationFn: async (component: 'ffmpeg' | 'whisper_model' | 'ytdlp') => {
       if (component === 'ffmpeg') {
         const selected = await client.selectFile(query.data?.ffmpeg_path ?? undefined)
         return selected ? client.locateExistingFfmpeg(selected) : null
+      }
+      if (component === 'ytdlp') {
+        const selected = await client.selectFile(query.data?.ytdlp_path ?? undefined)
+        return selected ? client.locateExistingYtdlp(selected) : null
       }
       const selected = await client.selectDirectory()
       return selected ? client.locateExistingModel(selected) : null
@@ -122,7 +126,7 @@ export function useCapabilities({
       await installMutation.mutateAsync(pendingPlan.plan_id).catch(() => undefined)
     },
     dismissProgress: () => setInstallState(null),
-    locateExisting: async (component: 'ffmpeg' | 'whisper_model') => {
+    locateExisting: async (component: 'ffmpeg' | 'whisper_model' | 'ytdlp') => {
       await locateMutation.mutateAsync(component).catch(() => undefined)
     },
   }

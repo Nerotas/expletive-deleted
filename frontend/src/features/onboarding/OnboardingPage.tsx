@@ -41,7 +41,7 @@ type OnboardingPageProps = {
   capabilityBusy: boolean
   dictionary: DictionaryController
   onReviewInstall: (components: string[]) => void
-  onLocateExisting: (component: 'ffmpeg' | 'whisper_model') => void
+  onLocateExisting: (component: 'ffmpeg' | 'whisper_model' | 'ytdlp') => void
   onCheckAgain: () => void
   onFinished: () => void
   onError: (message: string) => void
@@ -206,6 +206,7 @@ export function OnboardingPage({
                 onLocate={() => onLocateExisting('whisper_model')}
                 onGet={capabilities?.whisper ? () => onReviewInstall(['whisper_model']) : undefined}
               />
+              <ComponentRow title="yt-dlp YouTube downloader (optional)" detail="Required only for an individual YouTube import; it does not affect local-media processing." ready={Boolean(capabilities?.ytdlp)} checking={checking} busy={capabilityBusy} onLocate={() => onLocateExisting('ytdlp')} onGet={() => onReviewInstall(['ytdlp'])} />
             </div>
             <button className="button secondary check-components" disabled={capabilityBusy} onClick={onCheckAgain}>
               <RefreshCw className={checking ? 'spin' : undefined} size={16} />Check again
@@ -302,14 +303,14 @@ export function OnboardingPage({
       case 6:
         return (
           <>
-            <StepHeading title="Transcribe, review, then censor" subtitle="Jobs run one at a time in queue order." />
+            <StepHeading title="Transcribe, review, then transcode" subtitle="Transcription and transcoding use separate queues." />
             <ol className="workflow-steps">
               <li><strong>Transcribe only</strong><span>Create and verify a transcript without media output.</span></li>
               <li><strong>Review Dictionary</strong><span>Classify discovered words as Censor or Ignore.</span></li>
-              <li><strong>Transcribe + Transcode</strong><span>Create a censored copy, reusing a compatible verified transcript when available.</span></li>
+              <li><strong>Automatic transcode</strong><span>Enable it in Settings to place newly verified transcripts in the transcode queue.</span></li>
               <li><strong>Review the result</strong><span>Check the finished media before sharing it.</span></li>
             </ol>
-            <p className="onboarding-caution">Retranscribe replaces a transcript while retaining finished media. Retranscode replaces finished output only after the new output succeeds. Failed and cancelled jobs retain originals.</p>
+            <p className="onboarding-caution">Retranscribe replaces a transcript while retaining finished media. Failed and cancelled jobs retain originals.</p>
           </>
         )
       default:

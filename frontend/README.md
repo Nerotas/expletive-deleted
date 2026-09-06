@@ -40,10 +40,11 @@ Both package commands audit `win-unpacked` and fail if it contains `ffmpeg.exe`,
 
 ## Queue behavior
 
-- Each file exposes **Transcribe only**, **Transcribe + Transcode**, and guarded **Archive** actions.
-- Ready-file checkboxes submit an exact ordered selection through the typed `jobs.submit_many` bridge operation.
+- Each local file exposes **Transcribe** or **Retranscribe** and guarded **Archive** actions. Censor submission is available in bulk from the Transcribed filter.
+- Ready-file checkboxes submit transcript jobs; Transcribed-file checkboxes submit an exact ordered censor selection through the typed `jobs.submit_many` bridge operation.
 - The table can filter Ready, Queued, Active, Transcribed, and Finished rows and sort by queue position, file name, or status.
 - Waiting jobs show their position and can be removed independently; the running job can be cancelled from its row or the top-level cancel action.
+- The optional persisted setting `processing.auto_censor_after_transcription` promotes each newly verified transcript to the censor queue.
 - The renderer never decides that a transcript is safe for transcoding. That mandatory persisted-artifact gate belongs to the Python backend.
 
 ## Dictionary behavior

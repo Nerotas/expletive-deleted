@@ -101,6 +101,34 @@ export function SettingsPage({ controller, capabilities, checkingSystem, onCheck
               <option value="cuda">CUDA</option>
             </select>
           </Field>
+          <label className="toggle-row">
+            <div>
+              <strong>Automatically transcode verified transcripts</strong>
+              <span>Place each newly transcribed video in the separate transcode queue.</span>
+            </div>
+            <input
+              type="checkbox"
+              checked={settings.processing.auto_censor_after_transcription}
+              onChange={(event) => setGroup('processing', {
+                ...settings.processing,
+                auto_censor_after_transcription: event.target.checked,
+              })}
+            />
+          </label>
+          <label className="toggle-row">
+            <div>
+              <strong>Automatically transcode completed YouTube downloads</strong>
+              <span>After a YouTube video reaches Ready, create its verified transcript, then queue its transcoded copy.</span>
+            </div>
+            <input
+              type="checkbox"
+              checked={settings.processing.auto_transcode_youtube_downloads}
+              onChange={(event) => setGroup('processing', {
+                ...settings.processing,
+                auto_transcode_youtube_downloads: event.target.checked,
+              })}
+            />
+          </label>
         </SettingsSection>
 
         <SettingsSection title="Censoring" description="Audio treatment and interval timing">

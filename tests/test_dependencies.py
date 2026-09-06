@@ -1,4 +1,5 @@
 import json
+import subprocess
 import tempfile
 import time
 import unittest
@@ -17,10 +18,12 @@ from backend.runtime.dependencies import (
     PYTHON_REQUIREMENTS,
     WHISPER_MODEL_FILES,
     WHISPER_MODEL_REVISION,
+    YTDLP_VERSION,
     _run_action,
     build_install_plan,
     execute_install_plan,
     inspect_executable,
+    inspect_ytdlp,
     inspect_python_dependencies,
     inspect_whisper_model,
     require_whisper_model_path,
@@ -30,6 +33,23 @@ from backend.runtime.environment import get_managed_ffmpeg_manifest_path, get_ma
 
 
 class DependencyInventoryTests(unittest.TestCase):
+    def test_ytdlp_version_is_verified_without_affecting_core_readiness(self):
+        completed = MagicMock(returncode=0, stdout=f"{YTDLP_VERSION}\n", stderr="")
+        with patch("backend.runtime.dependencies.subprocess.run", return_value=completed):
+            status = inspect_ytdlp("C:\\Tools\\yt-dlp.exe")
+        self.assertTrue(status.ready)
+        self.assertEqual(status.installed_version, YTDLP_VERSION)
+
+    def test_ytdlp_version_timeout_is_an_invalid_optional_component(self):
+        with patch(
+            "backend.runtime.dependencies.subprocess.run",
+            side_effect=subprocess.TimeoutExpired(["yt-dlp.exe", "--version"], 5),
+        ):
+            status = inspect_ytdlp("C:\\Tools\\yt-dlp.exe")
+
+        self.assertEqual(status.state, "invalid")
+        self.assertIn("did not respond", status.detail)
+
     def test_managed_ffmpeg_manifest_paths_are_canonicalized(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
@@ -160,6 +180,12 @@ class DependencyInventoryTests(unittest.TestCase):
 
 
 class DependencyPlanTests(unittest.TestCase):
+    def test_ytdlp_plan_is_explicit_and_windows_only(self):
+        plan = build_install_plan(["ytdlp"], python_executable=Path("C:\\Python\\python.exe"), platform_name="Windows")
+        self.assertEqual(plan.actions[0].dependency_ids, ("ytdlp",))
+        self.assertIn("scripts.download_ytdlp", plan.actions[0].command)
+        with self.assertRaisesRegex(DependencyPlanError, "Windows only"):
+            build_install_plan(["ytdlp"], platform_name="Linux")
     def test_plan_is_stable_inspectable_and_version_pinned(self):
         kwargs = {
             "python_executable": Path("C:\\Python\\python.exe"),
@@ -238,6 +264,48 @@ class DependencyPlanTests(unittest.TestCase):
 
         self.assertEqual(results[0].detail, "installed")
         self.assertEqual([event.phase for event in events], ["starting", "verifying", "completed"])
+
+    def test_ytdlp_install_verifies_optional_component(self):
+        plan = build_install_plan(
+            ["ytdlp"],
+            python_executable=Path("C:\\python.exe"),
+            platform_name="Windows",
+        )
+        missing = DependencyStatus(
+            id="ffmpeg",
+            name="unused",
+            state="missing",
+            required_version=None,
+            installed_version=None,
+            path=None,
+            detail="unused",
+            install_supported=True,
+        )
+        ytdlp = DependencyStatus(
+            id="ytdlp",
+            name="yt-dlp",
+            state="ready",
+            required_version=YTDLP_VERSION,
+            installed_version=YTDLP_VERSION,
+            path=Path("C:\\Tools\\yt-dlp.exe"),
+            detail=f"installed {YTDLP_VERSION}",
+            install_supported=True,
+        )
+        inventory = DependencyInventory(
+            ffmpeg=missing,
+            ffprobe=DependencyStatus(**{**missing.__dict__, "id": "ffprobe"}),
+            python=(),
+            whisper_model=DependencyStatus(**{**missing.__dict__, "id": "whisper:large-v3"}),
+            ytdlp=ytdlp,
+        )
+
+        with (
+            patch("backend.runtime.dependencies._run_action", return_value="installed"),
+            patch("backend.runtime.dependencies.inspect_dependencies", return_value=inventory),
+        ):
+            results = execute_install_plan(plan, approved_plan_id=plan.id)
+
+        self.assertEqual(results[0].dependency_ids, ("ytdlp",))
 
     def test_failed_post_install_verification_is_reported(self):
         plan = build_install_plan(["python"], python_executable=Path("C:\\python.exe"))

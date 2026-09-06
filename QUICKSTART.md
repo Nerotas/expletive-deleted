@@ -56,19 +56,18 @@ Whisper `large-v3` is required for reliable word-level censor timing. Smaller mo
 
 ### Process media
 
-1. In **Settings**, confirm the working folders and processing preferences. The default input folder is `%USERPROFILE%\Documents\Expletive Deleted\Ready`.
-2. Add supported audio or video files to the configured Ready/Input folder.
+1. In **Settings**, confirm the working folders and processing preferences. Enable **Automatically transcode verified transcripts** only when you want each completed transcription added to the censor queue. Enable **Automatically transcode completed YouTube downloads** when a completed YouTube import should be transcribed, verified, and then added to the censor queue automatically. The default input folder is `%USERPROFILE%\Documents\Expletive Deleted\Ready`.
+2. Add supported audio or video files to the configured Ready/Input folder, drag them into Queue, or use **Download from YouTube** for an individual video you are authorized to download. YouTube import requires the optional `yt-dlp` component.
+   If YouTube requires sign-in or verification, the app shows a browser-session dialog. Choose the visible browser session only when you are ready to retry. **Open YouTube** is optional, opens no browser until you press it, and does not retry the download. Your password is never requested or handled by Expletive Deleted; yt-dlp reads the selected browser's local cookies.
 3. Return to **Queue** and choose an action for one file:
    - **Transcribe only** creates and verifies a transcript without creating media output.
-   - **Transcribe + Transcode** creates or validates the transcript first, then creates the censored output.
    - **Retranscribe** replaces an existing transcript with a newly generated, verified transcript while retaining any finished output.
-   - **Retranscode** reuses a compatible transcript when one exists and safely replaces the finished censored output only after the new output succeeds.
    - **Archive** moves an original with a verified transcript or output to Processed while the queue is idle.
-4. To process selected files serially, check the eligible Ready rows and choose **Queue transcript only** or **Queue transcribe + transcode**. Valid files remain queued if another selected file is rejected.
+4. To process selected files, check Ready rows and choose **Queue transcript only**. In the **Transcribed** view, check verified transcript rows and choose **Queue censor**. Valid files remain queued if another selected file is rejected.
 5. Use the status filters and sort control to inspect Ready, Queued, Active, Transcribed, or Finished files. The active row can be cancelled from its Actions group; waiting rows show their queue position and can be removed independently.
 6. Review discovered potential profanity and update the local censor or ignore policy in the app when appropriate.
 
-Jobs run one at a time in the displayed submission order. You can add files to Ready while another job is active; imported files are not queued automatically. Completed output is written to Finished/Output. Transcripts are reusable, and originals remain in Ready/Input unless explicitly archived.
+Downloads, copies, transcription, and censoring use separate queue states. Transcription and censoring share the media-processing resources, so only one of those heavy jobs runs at a time; the other remains Queued until resources are available. You can add files to Ready while another job is active; imported files are not queued automatically. Completed output is written to Finished/Output. Transcripts are reusable, and originals remain in Ready/Input unless explicitly archived.
 
 Transcoding never begins from an in-memory transcription alone. The app must validate and persist the transcript, then re-open and verify the saved artifact. A valid transcript containing no words is accepted for media with no speech. If transcription or transcript persistence fails, no censored output is created and the source remains intact.
 
@@ -92,6 +91,7 @@ This creates `.venv`, installs the Python requirements, persists validated setti
 .\.venv\Scripts\python.exe manage_dependencies.py status
 .\.venv\Scripts\python.exe manage_dependencies.py plan --component ffmpeg
 .\.venv\Scripts\python.exe manage_dependencies.py plan --component whisper_model
+.\.venv\Scripts\python.exe manage_dependencies.py plan --component ytdlp
 ```
 
 Review the exact plan first. To perform an approved installation, replace `PLAN_ID` with the ID returned by `plan`:

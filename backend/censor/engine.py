@@ -5,6 +5,7 @@ import os
 import sys
 import json
 import math
+import shutil
 import subprocess
 import tempfile
 import time
@@ -842,6 +843,8 @@ class ProfanityCensor:
 
     def censor_video(self, profane_segments: List[Dict]) -> bool:
         """Apply audio muting to video using ffmpeg."""
+        if not profane_segments and Path(self.input_file).suffix.lower() == Path(self.output_file).suffix.lower():
+            return self._copy_clean_media()
         if not self.ffmpeg_bin:
             self.last_error = "FFmpeg must be available before a censored output can be created."
             print(f"[-] {self.last_error}")
@@ -1011,6 +1014,36 @@ class ProfanityCensor:
             print(f"[-] Error during censoring: {e}")
             return False
 
+    def _copy_clean_media(self) -> bool:
+        """Copy media with no matching policy terms while preserving its verified container."""
+        print("[*] No profanity detected. Copying source media without transcoding...")
+        source = Path(self.input_file)
+        destination = Path(self.output_file)
+        try:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            source_size = source.stat().st_size
+            copied_bytes = 0
+            last_percent = -1.0
+            with source.open("rb") as input_file, destination.open("wb") as output_file:
+                while True:
+                    self._check_cancelled()
+                    chunk = input_file.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    output_file.write(chunk)
+                    copied_bytes += len(chunk)
+                    percent = 100.0 if source_size == 0 else min(100.0, copied_bytes / source_size * 100.0)
+                    if percent >= last_percent + 5.0 or percent == 100.0:
+                        self._emit_progress("censoring", percent, message="Copying source media")
+                        last_percent = percent
+            shutil.copystat(source, destination, follow_symlinks=False)
+            print(f"[+] Source copied: {self.output_file}")
+            return True
+        except Exception as exc:
+            self.last_error = f"Could not copy source media: {exc}"
+            print(f"[-] {self.last_error}")
+            return False
+
     def process(
         self,
         report_only: bool = False,
@@ -1107,6 +1140,42 @@ class ProfanityCensor:
             self.last_error = str(e)
             print(f"[-] Processing failed: {e}")
             print(f"[*] Total elapsed before failure: {self._format_seconds(time.perf_counter() - started)}")
+            return False
+
+    def process_verified_transcript(self, include_undiscovered: bool = False) -> bool:
+        """Create censored output from an already verified transcript without Whisper work."""
+        started = time.perf_counter()
+        transcript_path = self.get_transcript_path()
+        try:
+            self._check_cancelled()
+            if not transcript_path:
+                raise TranscriptValidationError(
+                    "A persisted transcript is required before a censored output can be created"
+                )
+            with Path(transcript_path).open(encoding="utf-8") as transcript_file:
+                words_data = validate_transcript_data(
+                    json.load(transcript_file),
+                    whisper_library=self.whisper_library,
+                    whisper_model=self.model_name,
+                    require_front_center=self.has_discrete_center_audio(),
+                )
+            self.review_candidates = self.find_review_candidates(words_data)
+            policy_store = getattr(self, "policy_store", None)
+            if policy_store is not None:
+                policy_store.add_discovered({
+                    candidate["word"] for candidate in self.review_candidates
+                })
+            if include_undiscovered:
+                self.report_potential_profanity(words_data)
+            profane_segments = self.detect_profanity(words_data, include_undiscovered)
+            self._check_cancelled()
+            self._emit_progress("censoring", 0.0, message="Censoring started")
+            success = self.censor_video(profane_segments)
+            print(f"[*] Total elapsed: {self._format_seconds(time.perf_counter() - started)}")
+            return success
+        except Exception as exc:
+            self.last_error = str(exc)
+            print(f"[-] Censoring failed: {exc}")
             return False
 
 

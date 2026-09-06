@@ -23,21 +23,32 @@ Expletive Deleted is free to use. [Ko-fi support](https://ko-fi.com/nicholaserot
 - Processes supported audio and video locally on your computer.
 - Lets you maintain your own censored-word and exclusion dictionaries.
 - Offers a review-first **Transcribe only** workflow before media is changed.
+- Imports an individual YouTube video into Ready and prepares it as a compatible local MP4.
 - Creates censored copies with predictable full-audio muting or optional stereo dialogue cancellation.
-- Runs queued jobs one at a time with visible status, progress, and error details.
+- Keeps downloading, copying, transcription, and censoring visible as separate queue states.
 - Keeps source files by default and never silently overwrites output.
 
 Automated transcription and censorship are not perfect. Always review the transcript and finished media before sharing it.
 
 ## How it works
 
-1. Add media by placing it in the configured **Ready** folder or dragging it into the Queue.
+1. Add media by placing it in the configured **Ready** folder, dragging it into the Queue, or importing an individual YouTube video you are authorized to download.
 2. Choose **Transcribe only** to create and review a local transcript.
 3. Classify discovered words as **Censor** or **Ignore** in the Dictionary when needed.
-4. Choose **Transcribe + Transcode** to create a censored copy in **Finished**.
+4. In the **Transcribed** Queue view, select verified transcripts and choose **Queue censor** to create censored copies in **Finished**. Alternatively, enable **Automatically transcode verified transcripts** in Settings to queue this step after each successful transcription.
 5. Review the finished file. The original remains in Ready unless you deliberately archive it after success.
 
-Compatible transcripts can be reused. **Retranscribe** replaces an existing transcript while retaining finished media; **Retranscode** creates and verifies replacement output before removing the previous result.
+Transcoding uses only a persisted, verified transcript. It never begins a second Whisper transcription. **Retranscribe** replaces an existing transcript while retaining finished media.
+
+## From YouTube to family-ready
+
+Found a video you are allowed to download and want to share with fewer surprises? It takes just a few steps:
+
+1. In **Queue**, choose **Download from YouTube**, paste an individual video URL, and add it to the queue.
+2. Watch its download and compatibility preparation progress. The finished H.264/AAC MP4 appears in **Ready** automatically.
+3. Choose **Transcribe**, review any detected words, then choose **Censor** to create the family-friendly copy in **Finished**.
+
+YouTube import is local and optional. The app uses the separately approved `yt-dlp` component, gives the imported video its real title, and keeps the original downloaded file in Ready. If YouTube asks for sign-in or verification, Expletive Deleted pauses and asks before doing anything with a browser. Choose a visible browser session to retry, or explicitly choose **Open YouTube** to sign in; the app never opens a browser or uses browser cookies automatically, and never sees your password.
 
 ## Install on Windows
 
@@ -58,6 +69,8 @@ When a component is missing, the app shows its status and offers an inspectable 
 - `faster-whisper` and its Python dependencies
 - Whisper `large-v3`, the supported accuracy baseline
 - Disk space for the model, source media, transcripts, and finished copies
+
+YouTube importing is optional and requires a separately obtained, verified `yt-dlp` installation. The app supports individual YouTube videos only and prepares them locally as H.264/AAC MP4 files in the Ready folder.
 
 The first-run walkthrough verifies readiness. A network connection is needed only when you choose to retrieve a missing third-party component.
 

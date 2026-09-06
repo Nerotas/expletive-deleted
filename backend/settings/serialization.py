@@ -107,7 +107,7 @@ def settings_from_dict(data: object, defaults: AppSettings | None = None) -> App
 
     base = defaults or AppSettings.defaults()
     directories = _group(mapping, "directories", {"input", "output", "archive", "transcripts"})
-    processing = _group(mapping, "processing", {"mode", "device"})
+    processing = _group(mapping, "processing", {"mode", "device", "auto_censor_after_transcription", "auto_transcode_youtube_downloads"})
     censoring = _group(
         mapping,
         "censoring",
@@ -117,7 +117,7 @@ def settings_from_dict(data: object, defaults: AppSettings | None = None) -> App
     video = _group(mapping, "video", {"mode"})
     whisper = _group(mapping, "whisper", {"library", "model"})
     source = _group(mapping, "source", {"archive_after_success", "scan_subdirectories"})
-    runtime = _group(mapping, "runtime", {"ffmpeg_path", "ffprobe_path", "whisper_cache"})
+    runtime = _group(mapping, "runtime", {"ffmpeg_path", "ffprobe_path", "whisper_cache", "ytdlp_path"})
     onboarding = _group(mapping, "onboarding", {"completed"})
 
     parsed = AppSettings(
@@ -142,6 +142,18 @@ def settings_from_dict(data: object, defaults: AppSettings | None = None) -> App
             device=cast(
                 ProcessingDevice,
                 _string(processing, "device", base.processing.device, "processing.device"),
+            ),
+            auto_censor_after_transcription=_boolean(
+                processing,
+                "auto_censor_after_transcription",
+                base.processing.auto_censor_after_transcription,
+                "processing.auto_censor_after_transcription",
+            ),
+            auto_transcode_youtube_downloads=_boolean(
+                processing,
+                "auto_transcode_youtube_downloads",
+                base.processing.auto_transcode_youtube_downloads,
+                "processing.auto_transcode_youtube_downloads",
             ),
         ),
         censoring=CensoringSettings(
@@ -225,6 +237,7 @@ def settings_from_dict(data: object, defaults: AppSettings | None = None) -> App
                 base.runtime.whisper_cache,
                 "runtime.whisper_cache",
             ),
+            ytdlp_path=_optional_path(runtime, "ytdlp_path", base.runtime.ytdlp_path, "runtime.ytdlp_path"),
         ),
         onboarding=OnboardingSettings(
             completed=_boolean(
@@ -253,6 +266,8 @@ def settings_to_dict(settings: AppSettings) -> dict[str, object]:
         "processing": {
             "mode": settings.processing.mode,
             "device": settings.processing.device,
+            "auto_censor_after_transcription": settings.processing.auto_censor_after_transcription,
+                "auto_transcode_youtube_downloads": settings.processing.auto_transcode_youtube_downloads,
         },
         "censoring": {
             "stereo_method": settings.censoring.stereo_method,
@@ -270,6 +285,7 @@ def settings_to_dict(settings: AppSettings) -> dict[str, object]:
             "ffmpeg_path": str(settings.runtime.ffmpeg_path) if settings.runtime.ffmpeg_path else None,
             "ffprobe_path": str(settings.runtime.ffprobe_path) if settings.runtime.ffprobe_path else None,
             "whisper_cache": str(settings.runtime.whisper_cache) if settings.runtime.whisper_cache else None,
+            "ytdlp_path": str(settings.runtime.ytdlp_path) if settings.runtime.ytdlp_path else None,
         },
         "onboarding": {"completed": settings.onboarding.completed},
     }

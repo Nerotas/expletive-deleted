@@ -93,6 +93,8 @@ class DirectorySettings:
 class ProcessingSettings:
     mode: ProcessingMode = "censor"
     device: ProcessingDevice = "auto"
+    auto_censor_after_transcription: bool = False
+    auto_transcode_youtube_downloads: bool = False
 
 
 @dataclass(frozen=True)
@@ -129,6 +131,7 @@ class RuntimeSettings:
     ffmpeg_path: Path | None = None
     ffprobe_path: Path | None = None
     whisper_cache: Path | None = None
+    ytdlp_path: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -201,6 +204,10 @@ class AppSettings:
             issues.append("source.archive_after_success must be a boolean")
         if not isinstance(self.source.scan_subdirectories, bool):
             issues.append("source.scan_subdirectories must be a boolean")
+        if not isinstance(self.processing.auto_censor_after_transcription, bool):
+            issues.append("processing.auto_censor_after_transcription must be a boolean")
+        if not isinstance(self.processing.auto_transcode_youtube_downloads, bool):
+            issues.append("processing.auto_transcode_youtube_downloads must be a boolean")
         if not isinstance(self.onboarding.completed, bool):
             issues.append("onboarding.completed must be a boolean")
 
@@ -208,6 +215,7 @@ class AppSettings:
             ("runtime.ffmpeg_path", self.runtime.ffmpeg_path),
             ("runtime.ffprobe_path", self.runtime.ffprobe_path),
             ("runtime.whisper_cache", self.runtime.whisper_cache),
+            ("runtime.ytdlp_path", self.runtime.ytdlp_path),
         ):
             if value is not None and not isinstance(value, Path):
                 issues.append(f"{name} must be a path or null")

@@ -84,6 +84,14 @@ approves it, install or download the following items into the user's Python
 environment or local application-data directories. A user can instead select
 a compatible installation already present on the system.
 
+### yt-dlp YouTube downloader
+
+`yt-dlp` is not bundled with the installer. YouTube importing is optional; after
+the user approves the displayed setup plan, the application may retrieve its
+pinned executable from the [official yt-dlp releases](https://github.com/yt-dlp/yt-dlp/releases)
+into the local application-data dependency directory. The project and license
+information are available from [yt-dlp](https://github.com/yt-dlp/yt-dlp).
+
 ### Python and Python packages
 
 Python 3.9 or later is supplied separately by the user and is not distributed

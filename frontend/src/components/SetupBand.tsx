@@ -4,7 +4,7 @@ import type { Capabilities } from '../types/domain'
 type SetupBandProps = {
   capabilities: Capabilities
   reviewInstall: (components: string[]) => void
-  locateExisting: (component: 'ffmpeg' | 'whisper_model') => void
+  locateExisting: (component: 'ffmpeg' | 'whisper_model' | 'ytdlp') => void
   checkAgain: () => void
   busy: boolean
 }
@@ -13,8 +13,8 @@ export function SetupBand({ capabilities, reviewInstall, locateExisting, checkAg
   return (
     <section className="setup-band">
       <div>
-        <span className="eyebrow">Required component</span>
-        <h2>Finish local setup</h2>
+        <span className="eyebrow">System requirements</span>
+        <h2>Local components</h2>
         <p>
           Processing stays on this computer. Install missing components here, then the app
           verifies them automatically.
@@ -49,6 +49,7 @@ export function SetupBand({ capabilities, reviewInstall, locateExisting, checkAg
               : undefined
           }
         />
+        <SetupItem label="yt-dlp (YouTube downloads, optional)" ready={Boolean(capabilities.ytdlp)} busy={busy} locate={() => locateExisting('ytdlp')} action={!capabilities.ytdlp ? () => reviewInstall(['ytdlp']) : undefined} />
       </div>
       <button className="setup-check" disabled={busy} onClick={checkAgain}>
         <RefreshCw className={busy ? 'spin' : undefined} size={15} /> Check again

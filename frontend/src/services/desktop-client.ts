@@ -80,6 +80,8 @@ export const desktopClient = {
     invoke<Capabilities>('dependencies.locate_ffmpeg', { path }),
   locateExistingModel: (path: string) =>
     invoke<Capabilities>('dependencies.locate_model', { path }),
+  locateExistingYtdlp: (path: string) =>
+    invoke<Capabilities>('dependencies.locate_ytdlp', { path }),
   listLibrary: () => invoke<LibraryItem[]>('library.list'),
   archiveSource: (source: string) => invoke<unknown>('library.archive', { source }),
   importSources: (sources: string[]) => invoke<ImportResult[]>('library.import', { sources }),
@@ -88,6 +90,10 @@ export const desktopClient = {
   purgeArchiveSource: (source: string) => invoke<unknown>('archive.purge', { source }),
   purgeArchive: () => invoke<unknown>('archive.purge'),
   listJobs: () => invoke<Job[]>('jobs.list'),
+    listDownloads: () => invoke<Job[]>('downloads.list'),
+    submitYoutubeDownload: (url: string, retryId?: string, cookieBrowser?: string) => invoke<Job>('downloads.submit', { url, ...(retryId ? { retry_id: retryId } : {}), ...(cookieBrowser ? { cookie_browser: cookieBrowser } : {}) }),
+    listDownloadEvents: (jobId: string) => invoke<JobEvent[]>('downloads.events', { job_id: jobId }),
+    cancelDownload: (jobId: string) => invoke<Job>('downloads.cancel', { job_id: jobId }),
   submitJob: (source: string, mode: Job['mode'], options?: JobSubmissionOptions) =>
     invoke<Job>('jobs.submit', { source, mode, ...options }),
   submitJobs: (sources: string[], mode: Job['mode']) =>

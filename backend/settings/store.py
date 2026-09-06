@@ -110,6 +110,8 @@ _INI_SECTIONS = (
     "onboarding",
 )
 _INI_BOOLEAN_FIELDS = {
+    ("processing", "auto_censor_after_transcription"),
+    ("processing", "auto_transcode_youtube_downloads"),
     ("source", "archive_after_success"),
     ("source", "scan_subdirectories"),
     ("onboarding", "completed"),
@@ -149,7 +151,7 @@ def _settings_from_ini(parser: configparser.ConfigParser) -> dict[str, object]:
                         values[key] = int(value)
                     except ValueError as exc:
                         raise ValueError(f"{section}.{key} must be an integer") from exc
-                elif section == "runtime" and key in {"ffmpeg_path", "ffprobe_path", "whisper_cache"} and not value.strip():
+                elif section == "runtime" and key in {"ffmpeg_path", "ffprobe_path", "whisper_cache", "ytdlp_path"} and not value.strip():
                     values[key] = None
                 else:
                     values[key] = value
