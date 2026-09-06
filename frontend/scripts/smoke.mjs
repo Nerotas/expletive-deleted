@@ -69,7 +69,7 @@ try {
   if (applicationMenuVisible) throw new Error('Production Electron menu should be hidden')
 
   await Promise.race([
-    window.getByRole('heading', { name: 'Finish local setup', exact: true }).waitFor(),
+    window.getByRole('heading', { name: 'Local components', exact: true }).waitFor(),
     window.getByText('System ready', { exact: true }).waitFor(),
   ])
 

@@ -5,7 +5,7 @@ from threading import Event
 from unittest.mock import MagicMock, patch
 
 from backend.jobs.downloads import DownloadManager, DownloadRecord, YtdlpAuthenticationRequired, validate_youtube_url
-from backend.settings import AppSettings, DirectorySettings
+from backend.settings import AppSettings, DirectorySettings, RuntimeSettings
 
 
 class YoutubeUrlTests(unittest.TestCase):
@@ -49,7 +49,12 @@ class DownloadManagerTests(unittest.TestCase):
     def test_remote_job_keeps_url_out_of_filesystem_source_model(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
-            settings = AppSettings(directories=DirectorySettings(root / "Ready", root / "Finished", root / "Processed", root / "Transcripts"))
+            ytdlp = root / "yt-dlp.exe"
+            ytdlp.touch()
+            settings = AppSettings(
+                directories=DirectorySettings(root / "Ready", root / "Finished", root / "Processed", root / "Transcripts"),
+                runtime=RuntimeSettings(ytdlp_path=ytdlp),
+            )
             manager = DownloadManager(settings)
             manager._executor.submit = MagicMock()
             with patch.object(manager, "_resolve_title", return_value="Example Movie"):
@@ -63,7 +68,12 @@ class DownloadManagerTests(unittest.TestCase):
     def test_retry_reuses_the_original_queue_record(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
-            settings = AppSettings(directories=DirectorySettings(root / "Ready", root / "Finished", root / "Processed", root / "Transcripts"))
+            ytdlp = root / "yt-dlp.exe"
+            ytdlp.touch()
+            settings = AppSettings(
+                directories=DirectorySettings(root / "Ready", root / "Finished", root / "Processed", root / "Transcripts"),
+                runtime=RuntimeSettings(ytdlp_path=ytdlp),
+            )
             manager = DownloadManager(settings)
             manager._executor.submit = MagicMock()
             with patch.object(manager, "_resolve_title", return_value="Example Movie"):
