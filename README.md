@@ -24,20 +24,20 @@ Expletive Deleted is free to use. [Ko-fi support](https://ko-fi.com/nicholaserot
 - Lets you maintain your own censored-word and exclusion dictionaries.
 - Offers a review-first **Transcribe only** workflow before media is changed.
 - Creates censored copies with predictable full-audio muting or optional stereo dialogue cancellation.
-- Runs queued jobs one at a time with visible status, progress, and error details.
+- Keeps downloading, copying, transcription, and censoring visible as separate queue states.
 - Keeps source files by default and never silently overwrites output.
 
 Automated transcription and censorship are not perfect. Always review the transcript and finished media before sharing it.
 
 ## How it works
 
-1. Add media by placing it in the configured **Ready** folder or dragging it into the Queue.
+1. Add media by placing it in the configured **Ready** folder, dragging it into the Queue, or importing an individual YouTube video you are authorized to download.
 2. Choose **Transcribe only** to create and review a local transcript.
 3. Classify discovered words as **Censor** or **Ignore** in the Dictionary when needed.
-4. Choose **Transcribe + Transcode** to create a censored copy in **Finished**.
+4. In the **Transcribed** Queue view, select verified transcripts and choose **Queue censor** to create censored copies in **Finished**. Alternatively, enable **Automatically transcode verified transcripts** in Settings to queue this step after each successful transcription.
 5. Review the finished file. The original remains in Ready unless you deliberately archive it after success.
 
-Compatible transcripts can be reused. **Retranscribe** replaces an existing transcript while retaining finished media; **Retranscode** creates and verifies replacement output before removing the previous result.
+Transcoding uses only a persisted, verified transcript. It never begins a second Whisper transcription. **Retranscribe** replaces an existing transcript while retaining finished media.
 
 ## Install on Windows
 
@@ -58,6 +58,8 @@ When a component is missing, the app shows its status and offers an inspectable 
 - `faster-whisper` and its Python dependencies
 - Whisper `large-v3`, the supported accuracy baseline
 - Disk space for the model, source media, transcripts, and finished copies
+
+YouTube importing is optional and requires a separately obtained, verified `yt-dlp` installation. The app supports individual YouTube videos only and prepares them locally for the Ready folder.
 
 The first-run walkthrough verifies readiness. A network connection is needed only when you choose to retrieve a missing third-party component.
 

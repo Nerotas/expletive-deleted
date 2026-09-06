@@ -72,7 +72,7 @@ function App() {
       <main>
         {error && <AlertBanner tone="error" message={error} onDismiss={() => setError(null)} />}
         {notice && <AlertBanner tone="success" message={notice} onDismiss={() => setNotice(null)} />}
-        {location.pathname !== '/onboarding' && !capabilities.loading && capabilities.capabilities && !capabilities.capabilities.ready && (
+        {location.pathname !== '/onboarding' && !capabilities.loading && capabilities.capabilities && (!capabilities.capabilities.ready || !capabilities.capabilities.ytdlp) && (
           <SetupBand
             capabilities={capabilities.capabilities}
             reviewInstall={(components) => void capabilities.reviewInstall(components)}

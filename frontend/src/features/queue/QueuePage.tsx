@@ -11,6 +11,7 @@ import {
   RotateCcw,
   Trash2,
   Upload,
+    Download,
   X,
 } from 'lucide-react'
 import { LoadingRow } from '../../components/ui/LoadingRow'
@@ -47,7 +48,11 @@ type SortDirection = 'ascending' | 'descending'
 type QueueColumn = 'file' | 'dateAdded' | 'status' | 'queue' | 'progress' | 'actions'
 
 const TERMINAL_STATUSES = new Set<Job['status']>(['completed', 'failed', 'cancelled', 'transcribed'])
-const RUNNING_STATUSES = new Set<Job['status']>(['copying', 'transcribing', 'censoring', 'verifying'])
+const RUNNING_STATUSES = new Set<Job['status']>(['copying', 'transcribing', 'censoring', 'verifying', 'downloading', 'preparing'])
+
+function isBulkSelectable(item: LibraryItem, job?: Job, pendingJob?: Job) {
+  return job?.source_type !== 'youtube' && !pendingJob && (item.status === 'ready' || item.status === 'transcribed')
+}
 
 export function QueuePage({ queue, settings, capabilities, onChangeFolder, onReview }: QueuePageProps) {
   const [view, setView] = useState<View>('queue')
@@ -56,6 +61,7 @@ export function QueuePage({ queue, settings, capabilities, onChangeFolder, onRev
   const [copying, setCopying] = useState(false)
   const [copyResults, setCopyResults] = useState<ImportResult[] | null>(null)
   const [purgeRequest, setPurgeRequest] = useState<PurgeRequest>(null)
+  const [youtubeDialogOpen, setYoutubeDialogOpen] = useState(false)
   const dragDepth = useRef(0)
   const [dragActive, setDragActive] = useState(false)
 
@@ -83,8 +89,13 @@ export function QueuePage({ queue, settings, capabilities, onChangeFolder, onRev
       pendingJob: job,
     }))
   mergedRows.push(...copyRows)
+  mergedRows.push(...queue.jobs.filter((job) => job.source_type === 'youtube').map((job): QueueRowModel => ({
+    item: { source: job.source, status: 'ready', date_added: '', transcript: null, output: null },
+    job,
+    pendingJob: TERMINAL_STATUSES.has(job.status) ? undefined : job,
+  })))
   const selectableSources = mergedRows
-    .filter(({ item, pendingJob }) => item.status === 'ready' && !pendingJob)
+    .filter(({ item, job, pendingJob }) => isBulkSelectable(item, job, pendingJob))
     .map(({ item }) => item.source)
   const selectableSet = new Set(selectableSources)
   const eligibleSelections = new Set(
@@ -158,6 +169,9 @@ export function QueuePage({ queue, settings, capabilities, onChangeFolder, onRev
         <button className="icon-button" title="Open transcode folder" aria-label="Open transcode folder" onClick={() => void queue.openTranscodeFolder()}>
           <FolderOpen size={18} />
         </button>
+        <button className="button secondary" title={capabilities?.ytdlp ? 'Download an individual YouTube video to Ready' : 'yt-dlp is required for YouTube downloads'} onClick={() => setYoutubeDialogOpen(true)}>
+          <Download size={16} />Download from YouTube
+        </button>
         {queue.runningJob && <button className="button danger" onClick={() => void queue.cancelActive()}>
           <CircleStop size={17} />Cancel active job
         </button>}
@@ -209,7 +223,19 @@ export function QueuePage({ queue, settings, capabilities, onChangeFolder, onRev
       onCancel={() => setPurgeRequest(null)}
       onConfirm={() => void confirmPurge()}
     />}
+    {youtubeDialogOpen && <YoutubeDialog available={Boolean(capabilities?.ytdlp)} busy={queue.busy} onCancel={() => setYoutubeDialogOpen(false)} onConfirm={async (url) => { await queue.submitYoutubeDownload(url); setYoutubeDialogOpen(false) }} />}
   </section>
+}
+
+function YoutubeDialog({ available, busy, onCancel, onConfirm }: { available: boolean; busy: boolean; onCancel: () => void; onConfirm: (url: string) => Promise<void> }) {
+  const [url, setUrl] = useState('')
+  const valid = /^https?:\/\/(www\.|m\.)?(youtube\.com\/watch\?[^\s]*\bv=|youtu\.be\/)[^\s]+/i.test(url)
+  return <div className="modal-backdrop" role="presentation"><section className="modal" role="dialog" aria-modal="true" aria-labelledby="youtube-dialog-title">
+    <p className="eyebrow">YouTube import</p><h2 id="youtube-dialog-title">Download from YouTube</h2>
+    {available ? <><label htmlFor="youtube-url">YouTube URL</label><input id="youtube-url" type="url" value={url} placeholder="https://www.youtube.com/watch?v=..." onChange={(event) => setUrl(event.target.value)} autoFocus />
+      <p>Only download media you are authorized to download and process.</p><div className="modal-actions"><button className="button secondary" disabled={busy} onClick={onCancel}>Cancel</button><button className="button primary" disabled={busy || !valid} onClick={() => void onConfirm(url)}>Add to Queue</button></div></>
+      : <><p>yt-dlp is required for YouTube downloads. Get it from System Requirements, then return here to add an individual video.</p><div className="modal-actions"><button className="button primary" onClick={onCancel}>Done</button></div></>}
+  </section></div>
 }
 
 function QueueView({
@@ -251,6 +277,15 @@ function QueueView({
   const selectedCount = selectedSources.size
   const processingUnavailable = !capabilities?.ready
   const batchDisabled = queue.busy || processingUnavailable || selectedCount === 0
+  const bulkMode: Job['mode'] = filter === 'transcribed' ? 'censor' : 'report_only'
+  const bulkActionLabel = bulkMode === 'censor' ? 'Queue censor' : 'Queue transcript'
+  const bulkActionTitle = processingUnavailable
+    ? 'Complete setup before processing files'
+    : selectedCount
+      ? bulkMode === 'censor'
+        ? 'Create censored copies from the verified transcripts for selected files'
+        : 'Create and verify transcripts for selected files'
+      : 'Select one or more files'
   const queuedPositions = new Map(queue.queuedJobs.map((job, index) => [job.id, index + 1]))
   const rows = mergedRows.map((row) => {
     const active = Boolean(row.pendingJob && RUNNING_STATUSES.has(row.pendingJob.status))
@@ -288,7 +323,7 @@ function QueueView({
   const activeRows = rows.filter((row) => row.active)
   const visibleRows = sortedRows.filter((row) => !row.active && (filter === 'all' || row.category === filter))
   const visibleSelectable = visibleRows
-    .filter(({ item, pendingJob }) => item.status === 'ready' && !pendingJob)
+    .filter(({ item, job, pendingJob }) => isBulkSelectable(item, job, pendingJob))
     .map(({ item }) => item.source)
   const orderedSelection = sortedRows
     .map(({ item }) => item.source)
@@ -381,7 +416,7 @@ function QueueView({
     onOpenFile={queue.openFile}
     onRetry={queue.retryJob}
     onSubmit={queue.submitFile}
-    onCancelRunning={queue.cancelActive}
+    onCancelRunning={queue.cancelJob}
     onRemoveQueued={queue.removeQueued}
   />
   const activeJobRow = ({ item, job, pendingJob }: typeof rows[number]) => {
@@ -396,12 +431,12 @@ function QueueView({
     return <div className="active-job-row" key={item.source}>
       <div className="file-cell">
         <span className="file-icon">{fileName(item.source).split('.').pop()?.toUpperCase()}</span>
-        <div><strong>{fileName(item.source)}</strong><small>{item.source}</small></div>
+        <div><strong>{activeJob.title ?? fileName(item.source)}</strong><small>{item.source}</small></div>
       </div>
       <time dateTime={item.date_added}>{new Date(item.date_added).toLocaleString()}</time>
       <div className="active-job-status"><StatusBadge status={activeJob.status} /><small>{detail}</small></div>
       <div className="progress-wrap"><div className={`progress-track progress-${activeJob.status}`}><span style={{ width: `${activeJob.progress_percent ?? 0}%` }} /></div><span>{Math.round(activeJob.progress_percent ?? 0)}%</span></div>
-      <button className="active-cancel-action" disabled={queue.busy} title="Cancel this running job and keep the source file" onClick={() => void queue.cancelActive()}><CircleStop size={13} />Cancel job</button>
+      <button className="active-cancel-action" disabled={queue.busy} title="Cancel this running job and keep the source file" onClick={() => void queue.cancelJob(activeJob)}><CircleStop size={13} />Cancel job</button>
     </div>
   }
 
@@ -434,20 +469,12 @@ function QueueView({
       </div>
       <div className="batch-actions">
         <button
-          className="button secondary"
+          className={`button ${bulkMode === 'censor' ? 'primary' : 'secondary'}`}
           disabled={batchDisabled}
-          title={processingUnavailable ? 'Complete setup before processing files' : selectedCount ? 'Create and verify transcripts for selected files' : 'Select one or more Ready files'}
-          onClick={() => void onSubmitSelection('report_only', orderedSelection)}
+          title={bulkActionTitle}
+          onClick={() => void onSubmitSelection(bulkMode, orderedSelection)}
         >
-          <FileText size={16} />Queue transcript only
-        </button>
-        <button
-          className="button primary"
-          disabled={batchDisabled}
-          title={processingUnavailable ? 'Complete setup before processing files' : selectedCount ? 'Transcribe, then create censored copies for selected files' : 'Select one or more Ready files'}
-          onClick={() => void onSubmitSelection('censor', orderedSelection)}
-        >
-          <Play size={16} />Queue transcribe + transcode
+          {bulkMode === 'censor' ? <Play size={16} /> : <FileText size={16} />}{bulkActionLabel}
         </button>
       </div>
     </div>
@@ -563,7 +590,7 @@ function QueueRow({
   onOpenFile: (filePath: string) => Promise<void>
   onRetry: (job: Job) => Promise<unknown>
   onSubmit: (source: string, mode: Job['mode'], options?: JobSubmissionOptions) => Promise<void>
-  onCancelRunning: () => Promise<unknown>
+  onCancelRunning: (job: Job) => Promise<unknown>
   onRemoveQueued: (job: Job) => Promise<void>
 }) {
   const displayJob = pendingJob ?? job
@@ -573,10 +600,10 @@ function QueueRow({
     : undefined
   const percent = displayJob?.progress_percent
   const outputFile = item.status === 'finished' ? item.output : null
-  const selectable = item.status === 'ready' && !pendingJob
+  const remote = displayJob?.source_type === 'youtube'
+  const selectable = isBulkSelectable(item, job, pendingJob)
   const processingDisabled = busy || !processingReady || Boolean(pendingJob)
   const transcribeDisabled = processingDisabled
-  const combinedDisabled = processingDisabled
   const archiveDisabled = busy || !queueIdle || !['transcribed', 'finished'].includes(item.status)
   const processingReason = !processingReady
     ? 'Complete setup before processing this file'
@@ -612,10 +639,10 @@ function QueueRow({
       />
     </td>
     <td><div className="file-cell">
-      <span className="file-icon">{fileName(item.source).split('.').pop()?.toUpperCase()}</span>
-      <div><strong>{fileName(item.source)}</strong><small>{item.source}</small></div>
+      <span className="file-icon">{remote ? 'YT' : fileName(item.source).split('.').pop()?.toUpperCase()}</span>
+      <div><strong>{displayJob?.title ?? fileName(item.source)}</strong><small>{item.source}</small></div>
     </div></td>
-    <td>{new Date(item.date_added).toLocaleString()}</td>
+    <td>{item.date_added ? new Date(item.date_added).toLocaleString() : <span className="muted">—</span>}</td>
     <td><StatusBadge status={status} label={statusLabel} /></td>
     <td className="position-cell">{active ? <strong>Active</strong> : queuePosition != null ? <span>#{queuePosition}</span> : <span className="muted">—</span>}</td>
     <td>{percent != null ? <div className="progress-wrap"><div className={`progress-track progress-${status}`}><span style={{ width: `${percent}%` }} /></div><span>{Math.round(percent)}%</span></div> : <span className="muted">—</span>}</td>
@@ -628,9 +655,9 @@ function QueueRow({
       <div className="row-actions" aria-label={`Actions for ${fileName(item.source)}`}>
         {item.transcript && <button className="review-action" onClick={() => onReview(item.source)}>Review words</button>}
         {outputFile && <button className="play-action" title="Open the verified censored file in your default media player" onClick={() => void onOpenFile(outputFile)}><Play size={13} />Play</button>}
-        {active && <button disabled={busy} title="Cancel this running job and keep the source file" onClick={() => void onCancelRunning()}><CircleStop size={13} />Cancel job</button>}
+        {active && displayJob && <button disabled={busy} title="Cancel this running job and keep the source file" onClick={() => void onCancelRunning(displayJob)}><CircleStop size={13} />Cancel job</button>}
         {pendingJob?.status === 'queued' && <button disabled={busy} title="Remove this waiting job without cancelling the active job" onClick={() => void onRemoveQueued(pendingJob)}><X size={13} />Remove from queue</button>}
-        <button
+        {!remote && <button
           className="transcribe-action"
           aria-label={item.status === 'ready' ? 'Transcribe only' : 'Retranscribe'}
           disabled={transcribeDisabled}
@@ -642,26 +669,13 @@ function QueueRow({
             'report_only',
             item.status === 'ready' ? undefined : { force_transcribe: true },
           )}
-        ><FileText size={13} />{item.status === 'ready' ? 'Transcribe' : 'Retranscribe'}</button>
-        <button
-          className="censor-action"
-          aria-label={item.status === 'finished' ? 'Retranscode' : 'Transcribe + Transcode'}
-          disabled={combinedDisabled}
-          title={processingReason ?? (item.status === 'finished'
-            ? 'Replace the censored output; reuse the verified transcript when available'
-            : 'Reuse a verified transcript when available, otherwise transcribe before censoring')}
-          onClick={() => void onSubmit(
-            item.source,
-            'censor',
-            item.status === 'finished' ? { overwrite_output: true } : undefined,
-          )}
-        ><Play size={13} />{item.status === 'finished' ? 'Retranscode' : 'Censor'}</button>
-        <button
+        ><FileText size={13} />{item.status === 'ready' ? 'Transcribe' : 'Retranscribe'}</button>}
+        {!remote && <button
           className="archive-action"
           disabled={archiveDisabled}
           title={!['transcribed', 'finished'].includes(item.status) ? 'Archive is available after a verified transcript or output exists' : !queueIdle ? 'Wait until the processing queue is idle before archiving' : 'Move the verified source to Processed'}
           onClick={() => void onArchive(item.source)}
-        ><ArchiveIcon size={13} />Archive</button>
+        ><ArchiveIcon size={13} />Archive</button>}
         {job?.status === 'failed' && job.error?.retryable && !pendingJob && <button disabled={busy} onClick={() => void onRetry(job)}>Retry</button>}
       </div>
     </td>

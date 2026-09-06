@@ -21,6 +21,7 @@ from backend.runtime.dependencies import (
     build_install_plan,
     execute_install_plan,
     inspect_executable,
+    inspect_ytdlp,
     inspect_python_dependencies,
     inspect_whisper_model,
     require_whisper_model_path,
@@ -30,6 +31,13 @@ from backend.runtime.environment import get_managed_ffmpeg_manifest_path, get_ma
 
 
 class DependencyInventoryTests(unittest.TestCase):
+    def test_ytdlp_version_is_verified_without_affecting_core_readiness(self):
+        completed = MagicMock(returncode=0, stdout="2025.02.19\n", stderr="")
+        with patch("backend.runtime.dependencies.subprocess.run", return_value=completed):
+            status = inspect_ytdlp("C:\\Tools\\yt-dlp.exe")
+        self.assertTrue(status.ready)
+        self.assertEqual(status.installed_version, "2025.02.19")
+
     def test_managed_ffmpeg_manifest_paths_are_canonicalized(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
@@ -160,6 +168,12 @@ class DependencyInventoryTests(unittest.TestCase):
 
 
 class DependencyPlanTests(unittest.TestCase):
+    def test_ytdlp_plan_is_explicit_and_windows_only(self):
+        plan = build_install_plan(["ytdlp"], python_executable=Path("C:\\Python\\python.exe"), platform_name="Windows")
+        self.assertEqual(plan.actions[0].dependency_ids, ("ytdlp",))
+        self.assertIn("scripts.download_ytdlp", plan.actions[0].command)
+        with self.assertRaisesRegex(DependencyPlanError, "Windows only"):
+            build_install_plan(["ytdlp"], platform_name="Linux")
     def test_plan_is_stable_inspectable_and_version_pinned(self):
         kwargs = {
             "python_executable": Path("C:\\Python\\python.exe"),

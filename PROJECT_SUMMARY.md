@@ -13,15 +13,18 @@ Media file
     -> faster-whisper large-v3 transcription
     -> atomic transcript persistence and post-write validation
     -> word-level timestamps
-    -> profanity detection
-    -> FFmpeg censor filters
-    -> censored output
+  -> verified transcript queue entry
+  -> profanity detection and FFmpeg censor filters
+  -> censored output
 ```
 
 The current desktop and backend application supports:
 
-- Explicit single-file transcription, combined processing, and archival actions
-- Checkbox-based selective submission to a one-worker serial queue
+- Explicit single-file transcription, transcript-first censoring, and archival actions
+- Checkbox-based selective transcription from Ready and selective censoring from Transcribed
+- An opt-in automatic handoff from a verified transcript to the censor queue
+- Separate download, copy, transcription, and censor queue states
+- A shared resource slot for transcription and censoring to prevent CPU, GPU, and storage contention
 - Ready, Queued, Active, Transcribed, and Finished filtering with queue positions
 - Partial batch acceptance with structured per-file rejection codes
 - Report-only transcription and detection
@@ -96,7 +99,7 @@ Package entry points are also available for backend development:
 ## Current Architecture Guarantees
 
 1. Jobs, statuses, structured events, and cancellation are owned by the backend.
-2. Queue execution is session-only, ordered, and limited to one worker.
+2. Queue execution is session-only. Copy and download work use separate lanes; transcription and censor work are independently queued but share one heavy-processing resource slot.
 3. Electron exposes a narrow validated bridge; the renderer uses the typed desktop client.
 4. Transcoding cannot begin until a compatible transcript has been persisted and verified from disk.
 5. Source media is retained on failed or cancelled work, and incomplete output is removed when safe.

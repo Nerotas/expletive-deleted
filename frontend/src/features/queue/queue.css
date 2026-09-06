@@ -57,6 +57,8 @@ tr:last-child td { border-bottom: 0; }
 .status-badge { display: inline-flex; align-items: center; gap: 6px; font-weight: 800; font-size: 11px; }
 .status-queued { color: var(--muted); }
 .status-copying { color: var(--action-purple); }
+.status-downloading { color: var(--action-blue); }
+.status-preparing { color: var(--success); }
 .status-transcribing { color: var(--signal); }
 .status-censoring, .status-verifying { color: var(--success); }
 .status-transcribed { color: var(--warning); }
@@ -67,6 +69,8 @@ tr:last-child td { border-bottom: 0; }
 .progress-track { height: 5px; flex: 1; background: var(--soft); min-width: 70px; }
 .progress-track span { display: block; height: 100%; background: var(--signal); }
 .progress-copying span { background: var(--action-purple); }
+.progress-downloading span { background: var(--action-blue); }
+.progress-preparing span { background: var(--success); }
 .progress-censoring span, .progress-verifying span { background: var(--success); }
 .progress-wrap > span { width: 31px; text-align: right; font-size: 11px; }
 .muted, .details-cell, .row-detail { color: var(--muted); }

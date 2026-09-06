@@ -99,6 +99,12 @@ The CLI skips an existing file in the configured output directory by default. Re
 
 The desktop application's final output-conflict policy remains an open product decision.
 
+## A Job Is Waiting in Queue
+
+Downloads, copies, transcription, and censoring have distinct queue states. Transcription and censoring share CPU, GPU, and media-storage resources, so only one heavy processing job runs at a time. A queued transcript or censor job starts after the current heavy job completes or is cancelled.
+
+To censor a file, first create its transcript. Censor jobs use the persisted, verified transcript and fail without one; they do not transcribe the media again.
+
 ## Profanity Was Not Detected
 
 Run report-only mode first:

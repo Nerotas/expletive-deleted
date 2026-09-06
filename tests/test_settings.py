@@ -113,6 +113,17 @@ class SettingsModelTests(unittest.TestCase):
         self.assertEqual(payload["schema_version"], SETTINGS_SCHEMA_VERSION)
         self.assertEqual(restored, settings)
 
+    def test_transcript_auto_transcode_preference_round_trips(self):
+        settings = AppSettings.defaults()
+        configured = replace(
+            settings,
+            processing=replace(settings.processing, auto_censor_after_transcription=True),
+        )
+
+        restored = settings_from_dict(settings_to_dict(configured))
+
+        self.assertTrue(restored.processing.auto_censor_after_transcription)
+
     def test_onboarding_defaults_incomplete_and_round_trips(self):
         settings = AppSettings.defaults()
         completed = replace(settings, onboarding=replace(settings.onboarding, completed=True))

@@ -47,6 +47,14 @@ describe('desktop application renderer', () => {
     vi.spyOn(desktopClient, 'listArchive').mockResolvedValue([])
     vi.spyOn(desktopClient, 'listJobs').mockResolvedValue([])
     vi.spyOn(desktopClient, 'listJobEvents').mockResolvedValue([])
+    vi.spyOn(desktopClient, 'listDownloads').mockResolvedValue([])
+    vi.spyOn(desktopClient, 'listDownloadEvents').mockResolvedValue([])
+    vi.spyOn(desktopClient, 'submitYoutubeDownload').mockImplementation(async (url) => ({
+      id: 'youtube-job', source: url, source_type: 'youtube', url, video_id: 'dQw4w9WgXcQ', mode: 'copy', status: 'queued', progress_percent: null, error: null,
+    }))
+    vi.spyOn(desktopClient, 'cancelDownload').mockImplementation(async (jobId) => ({
+      id: jobId, source: '', source_type: 'youtube', mode: 'copy', status: 'cancelled', progress_percent: null, error: null,
+    }))
     vi.spyOn(desktopClient, 'submitJob').mockImplementation(async (source, mode) => ({
       id: 'submitted-job', source, mode, status: 'queued', progress_percent: 0, error: null,
     }))
@@ -157,7 +165,7 @@ describe('desktop application renderer', () => {
     expect(await screen.findByText('Drag and drop')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /Continue/ }))
     expect(await screen.findByText('Transcribe only')).toBeInTheDocument()
-    expect(screen.getByText('Transcribe + Transcode')).toBeInTheDocument()
+    expect(screen.getByText('Automatic transcode')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /Continue/ }))
     await user.click(await screen.findByRole('button', { name: 'Finish setup' }))
 
@@ -203,6 +211,22 @@ describe('desktop application renderer', () => {
       'aria-pressed',
       'true',
     )
+  })
+
+  it('saves automatic promotion from the transcript queue to the transcode queue', async () => {
+    const user = userEvent.setup()
+    renderApp('/settings')
+
+    const automation = await screen.findByRole('checkbox', { name: /Automatically transcode verified transcripts/ })
+    expect(automation).not.toBeChecked()
+    await user.click(automation)
+    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    await waitFor(() => expect(desktopClient.updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        processing: expect.objectContaining({ auto_censor_after_transcription: true }),
+      }),
+    ))
   })
 
   it('discards a draft locally and disables actions when the form is clean', async () => {
@@ -285,7 +309,8 @@ describe('desktop application renderer', () => {
     const user = userEvent.setup()
     renderApp('/')
 
-    await user.click(await screen.findByRole('button', { name: 'Get' }))
+    const whisperModel = await screen.findByText('Whisper large-v3')
+    await user.click(within(whisperModel.closest('.setup-item')!).getByRole('button', { name: 'Get' }))
     await user.click(screen.getByRole('button', { name: 'Continue' }))
     await screen.findByText('Installation complete and verified')
     await user.click(screen.getByRole('link', { name: 'Settings' }))
@@ -400,7 +425,7 @@ describe('desktop application renderer', () => {
     expect(screen.getByText(/censor dictionary did not respond/i)).toBeInTheDocument()
   })
 
-  it('submits each explicit row action with its required mode', async () => {
+  it('submits row actions to the transcript lane only', async () => {
     const source = 'C:\\Media\\Ready\\movie.mkv'
     vi.mocked(desktopClient.listLibrary).mockResolvedValue([{
       source,
@@ -415,12 +440,10 @@ describe('desktop application renderer', () => {
     await screen.findByText('movie.mkv')
     await user.click(await screen.findByRole('button', { name: 'Transcribe only' }))
     await waitFor(() => expect(desktopClient.submitJob).toHaveBeenCalledWith(source, 'report_only'))
-    await user.click(screen.getByRole('button', { name: 'Transcribe + Transcode' }))
-
-    await waitFor(() => expect(desktopClient.submitJob).toHaveBeenCalledWith(source, 'censor'))
+    expect(screen.queryByRole('button', { name: 'Transcribe + Transcode' })).not.toBeInTheDocument()
   })
 
-  it('offers finished files a fresh transcript or an atomic retranscode request', async () => {
+  it('offers finished files a fresh transcript without a direct transcode request', async () => {
     const source = 'C:\\Media\\Ready\\movie.mkv'
     vi.mocked(desktopClient.listLibrary).mockResolvedValue([{
       source,
@@ -439,14 +462,7 @@ describe('desktop application renderer', () => {
       { force_transcribe: true },
     ))
 
-    const retranscode = screen.getByRole('button', { name: 'Retranscode' })
-    await waitFor(() => expect(retranscode).toBeEnabled())
-    await user.click(retranscode)
-    await waitFor(() => expect(desktopClient.submitJob).toHaveBeenCalledWith(
-      source,
-      'censor',
-      { overwrite_output: true },
-    ))
+    expect(screen.queryByRole('button', { name: 'Retranscode' })).not.toBeInTheDocument()
   })
 
   it('defaults reviews to discovered words and shows timestamped censored words on request', async () => {
@@ -489,7 +505,7 @@ describe('desktop application renderer', () => {
       {
         source: alpha,
         status: 'queued',
-        job: { id: 'alpha-job', source: alpha, mode: 'censor', status: 'queued', progress_percent: 0, error: null },
+        job: { id: 'alpha-job', source: alpha, mode: 'report_only', status: 'queued', progress_percent: 0, error: null },
       },
       { source: zulu, status: 'rejected', code: 'already_queued', detail: 'Already queued' },
     ])
@@ -497,12 +513,36 @@ describe('desktop application renderer', () => {
     renderApp('/')
 
     await user.click(await screen.findByRole('button', { name: 'Select all shown' }))
-    await user.click(screen.getByRole('button', { name: 'Queue transcribe + transcode' }))
+    await user.click(screen.getByRole('button', { name: 'Queue transcript' }))
 
-    await waitFor(() => expect(desktopClient.submitJobs).toHaveBeenCalledWith([alpha, zulu], 'censor'))
+    await waitFor(() => expect(desktopClient.submitJobs).toHaveBeenCalledWith([alpha, zulu], 'report_only'))
     expect(screen.getByRole('checkbox', { name: 'Select alpha.mkv' })).not.toBeChecked()
     expect(screen.getByRole('checkbox', { name: 'Select zulu.mkv' })).toBeChecked()
     expect(await screen.findByRole('alert')).toHaveTextContent('1 queued; 1 could not be queued')
+  })
+
+  it('queues selected verified transcripts in the censor lane', async () => {
+    const source = 'C:\\Media\\Ready\\movie.mkv'
+    vi.mocked(desktopClient.listLibrary).mockResolvedValue([{
+      source,
+      status: 'transcribed',
+      date_added: '2026-09-01T12:00:00Z',
+      transcript: 'C:\\Media\\Transcripts\\movie-transcript.json',
+      output: null,
+    }])
+    vi.mocked(desktopClient.submitJobs).mockResolvedValueOnce([{
+      source,
+      status: 'queued',
+      job: { id: 'censor-job', source, mode: 'censor', status: 'queued', progress_percent: 0, error: null },
+    }])
+    const user = userEvent.setup()
+    renderApp('/')
+
+    await user.click(await screen.findByRole('button', { name: /Transcribed 1/ }))
+    await user.click(screen.getByRole('button', { name: 'Select all shown' }))
+    await user.click(screen.getByRole('button', { name: 'Queue censor' }))
+
+    await waitFor(() => expect(desktopClient.submitJobs).toHaveBeenCalledWith([source], 'censor'))
   })
 
   it('shows queue positions, filters active and waiting work, and removes only a waiting job', async () => {

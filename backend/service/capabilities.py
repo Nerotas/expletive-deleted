@@ -8,6 +8,7 @@ from backend.runtime import (
     get_whisper_device_status,
     inspect_dependencies,
 )
+from backend.runtime.environment import get_managed_ytdlp_path
 from backend.settings import AppSettings
 
 
@@ -20,6 +21,7 @@ def get_capabilities(settings: AppSettings) -> dict[str, object]:
         ffprobe_bin=settings.runtime.ffprobe_path,
         whisper_library=settings.whisper.library,
         whisper_model=settings.whisper.model,
+        ytdlp_bin=settings.runtime.ytdlp_path or get_managed_ytdlp_path(),
     )
     requested_cuda = get_whisper_device_status(settings.whisper.model, "cuda")
     selected = get_whisper_device_status(settings.whisper.model, settings.processing.device)
@@ -43,4 +45,8 @@ def get_capabilities(settings: AppSettings) -> dict[str, object]:
         "whisper_device": selected.selected,
         "whisper_compute_type": selected.compute_type,
         "video_encoders": encoders,
+        "ytdlp": bool(inventory.ytdlp and inventory.ytdlp.ready),
+        "ytdlp_version": inventory.ytdlp.installed_version if inventory.ytdlp else None,
+        "ytdlp_path": str(inventory.ytdlp.path) if inventory.ytdlp and inventory.ytdlp.path else None,
+        "ytdlp_detail": inventory.ytdlp.detail if inventory.ytdlp else "yt-dlp was not found",
     }

@@ -3,6 +3,8 @@ export type Theme = 'light' | 'dark'
 export type LibraryStatus = 'ready' | 'transcribed' | 'finished'
 export type JobStatus =
   | 'queued'
+  | 'downloading'
+  | 'preparing'
   | 'copying'
   | 'transcribing'
   | 'transcribed'
@@ -51,6 +53,10 @@ export type Job = {
   error: JobError | null
   force_transcribe?: boolean
   overwrite_output?: boolean
+  source_type?: 'local' | 'youtube'
+  url?: string
+  video_id?: string
+  title?: string | null
 }
 
 export type JobSubmissionOptions = {
@@ -98,6 +104,10 @@ export type Capabilities = {
   ffmpeg_path?: string | null
   ffprobe_path?: string | null
   model_path?: string | null
+  ytdlp?: boolean
+  ytdlp_version?: string | null
+  ytdlp_path?: string | null
+  ytdlp_detail?: string
 }
 
 export type DictionaryTarget = 'censor' | 'exclude'
@@ -160,6 +170,7 @@ export type Settings = {
   processing: {
     mode: 'report_only' | 'censor'
     device: 'auto' | 'cpu' | 'cuda'
+    auto_censor_after_transcription: boolean
   }
   censoring: {
     stereo_method: 'drop_audio' | 'karaoke'
@@ -175,6 +186,7 @@ export type Settings = {
     ffmpeg_path: string | null
     ffprobe_path: string | null
     whisper_cache: string | null
+    ytdlp_path?: string | null
   }
 }
 

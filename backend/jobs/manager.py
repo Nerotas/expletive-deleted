@@ -7,7 +7,7 @@ import traceback
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import replace
 from pathlib import Path
-from threading import Event, RLock
+from threading import Event, RLock, Semaphore
 from typing import Callable
 from uuid import uuid4
 
@@ -43,7 +43,7 @@ class JobSubmissionError(ValueError):
 
 
 class JobManager:
-    """Run submitted jobs serially and expose polling-friendly records and events."""
+    """Run local media operations in independent serial lanes."""
 
     def __init__(
         self,
@@ -54,8 +54,13 @@ class JobManager:
         settings.validate()
         self.settings = settings
         self._censor_factory = censor_factory
-        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="profanity-job")
+        self._executors = {
+            "copy": ThreadPoolExecutor(max_workers=1, thread_name_prefix="media-copy"),
+            "report_only": ThreadPoolExecutor(max_workers=1, thread_name_prefix="media-transcribe"),
+            "censor": ThreadPoolExecutor(max_workers=1, thread_name_prefix="media-censor"),
+        }
         self._lock = RLock()
+        self._processing_slot = Semaphore(1)
         self._jobs: dict[str, JobRecord] = {}
         self._events: dict[str, list[JobEvent]] = {}
         self._cancellations: dict[str, Event] = {}
@@ -141,7 +146,7 @@ class JobManager:
             self._events[job.id] = []
             self._cancellations[job.id] = cancellation
             self._emit(job.id, "stage", stage="queued", message="Job queued")
-            self._futures[job.id] = self._executor.submit(self._run, job.id)
+            self._futures[job.id] = self._executors[selected_mode].submit(self._run, job.id)
         return job
 
     def submit_many(
@@ -208,7 +213,8 @@ class JobManager:
         return self.get(job_id)
 
     def close(self, wait: bool = True) -> None:
-        self._executor.shutdown(wait=wait, cancel_futures=not wait)
+        for executor in self._executors.values():
+            executor.shutdown(wait=wait, cancel_futures=not wait)
 
     def _emit(self, job_id: str, event: str, **values: object) -> JobEvent:
         self._sequence += 1
@@ -241,6 +247,13 @@ class JobManager:
         self._jobs[job_id] = updated
         event_type = "error" if error else "completed" if status in ("completed", "transcribed") else "stage"
         self._emit(job_id, event_type, stage=status, percent=percent, error=error, message=message)
+        if (
+            status == "transcribed"
+            and current.mode == "report_only"
+            and self.settings.processing.auto_censor_after_transcription
+            and not output_path(current.source, self.settings.directories.output, self.settings.directories.input).exists()
+        ):
+            self.submit(current.source, "censor")
         return updated
 
     def _on_progress(self, job_id: str, progress: dict[str, object]) -> None:
@@ -281,7 +294,13 @@ class JobManager:
 
     def _run(self, job_id: str) -> None:
         cancellation = self._cancellations[job_id]
-        self._runtime.run(job_id, cancellation)
+        if self._jobs[job_id].mode == "copy":
+            self._runtime.run(job_id, cancellation)
+            return
+        # Whisper and FFmpeg may contend for the same GPU, CPU, and media storage.
+        # Keep their queues distinct while allowing only one resource-heavy job at a time.
+        with self._processing_slot:
+            self._runtime.run(job_id, cancellation)
 
     @staticmethod
     def _remove_incomplete_output(

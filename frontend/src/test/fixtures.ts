@@ -8,7 +8,7 @@ export const defaultSettings: Settings = {
     archive: 'C:\\Media\\Processed',
     transcripts: 'C:\\Media\\Transcripts',
   },
-  processing: { mode: 'censor', device: 'auto' },
+  processing: { mode: 'censor', device: 'auto', auto_censor_after_transcription: false },
   censoring: {
     stereo_method: 'drop_audio',
     padding_before_ms: 100,

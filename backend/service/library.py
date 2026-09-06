@@ -74,7 +74,7 @@ def scan_library(
             (
                 path
                 for path in candidates
-                if path.is_file() and not path.is_symlink() and path.suffix.lower() in MEDIA_EXTENSIONS
+                if path.is_file() and not path.is_symlink() and ".downloads" not in path.relative_to(paths.ready).parts and path.suffix.lower() in MEDIA_EXTENSIONS
             ),
             key=lambda path: str(path.relative_to(paths.ready)).casefold(),
         )

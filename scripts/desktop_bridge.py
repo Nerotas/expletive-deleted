@@ -27,6 +27,7 @@ from backend.runtime import (
     inspect_executable,
     inspect_whisper_model,
 )
+from backend.runtime.dependencies import inspect_ytdlp
 from backend.censor import find_review_candidates
 from backend.jobs.media import transcript_path
 from backend.service import BackendService
@@ -329,6 +330,19 @@ class DesktopBridge:
             settings["runtime"] = runtime
             self.service.update_settings(settings)
             return self.service.get_capabilities()
+        if method == "dependencies.locate_ytdlp":
+            selected = params.get("path")
+            if not isinstance(selected, str) or not selected.strip():
+                raise ValueError("Choosing yt-dlp requires an executable path")
+            status = inspect_ytdlp(str(Path(selected).expanduser().resolve()))
+            if not status.ready or not status.path:
+                raise ValueError(f"The selected yt-dlp executable is not ready: {status.detail}")
+            settings = self.service.get_settings()
+            runtime = dict(settings["runtime"])
+            runtime["ytdlp_path"] = str(status.path)
+            settings["runtime"] = runtime
+            self.service.update_settings(settings)
+            return self.service.get_capabilities()
         if method == "library.list":
             return [item.to_dict() for item in self.service.get_library()]
         if method == "library.archive":
@@ -354,6 +368,18 @@ class DesktopBridge:
             return self.service.purge_archive_source(Path(source))
         if method == "jobs.list":
             return [job.to_dict() for job in self.service.jobs.list()]
+        if method == "downloads.list":
+            return [job.to_dict() for job in self.service.downloads.list()]
+        if method == "downloads.submit":
+            url = params.get("url")
+            retry_id = params.get("retry_id")
+            if not isinstance(url, str) or (retry_id is not None and not isinstance(retry_id, str)):
+                raise ValueError("YouTube download requires a video URL")
+            return self.service.submit_youtube_download(url, retry_id).to_dict()
+        if method == "downloads.events":
+            return [event.to_dict() for event in self.service.downloads.events(params["job_id"])]
+        if method == "downloads.cancel":
+            return self.service.downloads.cancel(params["job_id"]).to_dict()
         if method == "jobs.submit":
             mode = params.get("mode")
             source = params.get("source")
@@ -456,6 +482,8 @@ class DesktopBridge:
     def _install_destination(action_id: str, runtime_root: Path, cache_dir: Path) -> str:
         if "ffmpeg" in action_id:
             return str(get_managed_ffmpeg_directory(runtime_root))
+        if "ytdlp" in action_id:
+            return str(runtime_root / "dependencies" / "yt-dlp")
         if action_id.startswith("download-"):
             return str(cache_dir)
         return "The repository-local Python environment"

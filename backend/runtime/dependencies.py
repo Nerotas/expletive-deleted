@@ -22,6 +22,7 @@ from .environment import (
     find_ffprobe,
     get_application_runtime_root,
     get_directory_size,
+    get_managed_ytdlp_path,
     get_whisper_cache_dir,
 )
 
@@ -44,6 +45,8 @@ WHISPER_MODEL_FILES = (
 )
 WHISPER_MODELS = ("tiny", "base", "small", "medium", "large-v3")
 WHISPER_LIBRARIES = ("faster-whisper",)
+YTDLP_VERSION = "2025.02.19"
+YTDLP_RELEASE_URL = f"https://github.com/yt-dlp/yt-dlp/releases/download/{YTDLP_VERSION}/yt-dlp.exe"
 PYTHON_DEPENDENCIES = (
     ("faster-whisper", "1.2.1"),
     ("better-profanity", "0.7.0"),
@@ -92,6 +95,7 @@ class DependencyInventory:
     ffprobe: DependencyStatus
     python: tuple[DependencyStatus, ...]
     whisper_model: DependencyStatus
+    ytdlp: DependencyStatus | None = None
 
     @property
     def ready(self) -> bool:
@@ -196,7 +200,7 @@ def build_install_plan(
 ) -> InstallPlan:
     """Build an inspectable plan without running commands or using the network."""
     requested = tuple(dict.fromkeys(components))
-    unknown = sorted(set(requested) - {"ffmpeg", "python", "whisper_model"})
+    unknown = sorted(set(requested) - {"ffmpeg", "python", "whisper_model", "ytdlp"})
     if unknown:
         raise DependencyPlanError(f"Unknown dependency component(s): {', '.join(unknown)}")
     if whisper_library not in WHISPER_LIBRARIES:
@@ -232,6 +236,7 @@ def build_install_plan(
                 ),
             )
         )
+
         actions.append(
             InstallAction(
                 id="download-managed-ffmpeg-runtime",
@@ -247,6 +252,21 @@ def build_install_plan(
                     "--root",
                     str(runtime_root),
                 ),
+            )
+        )
+
+    if "ytdlp" in requested:
+        if platform_name != "Windows":
+            raise DependencyPlanError("Managed yt-dlp download is currently supported on Windows only")
+        actions.append(
+            InstallAction(
+                id="download-managed-ytdlp",
+                dependency_ids=("ytdlp",),
+                kind="command",
+                description="Download and verify the approved yt-dlp YouTube downloader",
+                source_name="yt-dlp official GitHub release",
+                source_url=YTDLP_RELEASE_URL,
+                command=(str(python_executable), "-m", "scripts.download_ytdlp", "--root", str(runtime_root), "--version", YTDLP_VERSION),
             )
         )
 
@@ -490,6 +510,19 @@ def inspect_executable(
     )
 
 
+def inspect_ytdlp(executable: str | None) -> DependencyStatus:
+    """Verify the pinned yt-dlp executable using its dedicated version protocol."""
+    if not executable:
+        return DependencyStatus("ytdlp", "yt-dlp", "missing", YTDLP_VERSION, None, None, "yt-dlp was not found", True)
+    try:
+        result = subprocess.run([executable, "--version"], capture_output=True, text=True, timeout=10, check=False)
+    except OSError as exc:
+        return DependencyStatus("ytdlp", "yt-dlp", "invalid", YTDLP_VERSION, None, Path(executable), str(exc), True)
+    version = result.stdout.strip().splitlines()[0] if result.returncode == 0 and result.stdout.strip() else None
+    detail = f"installed {version}" if version else (result.stderr.strip() or "yt-dlp did not report a version")
+    return DependencyStatus("ytdlp", "yt-dlp", "ready" if version == YTDLP_VERSION else "invalid", YTDLP_VERSION, version, Path(executable), detail, True)
+
+
 def _version_is_supported(version: str, required_version: str | None) -> bool:
     """Accept every FFmpeg release at or newer than the supported baseline."""
     if required_version != FFMPEG_VERSION:
@@ -602,6 +635,7 @@ def inspect_dependencies(
     ffprobe_bin: str | Path | None = None,
     whisper_library: str = "faster-whisper",
     whisper_model: str = "large-v3",
+    ytdlp_bin: str | Path | None = None,
 ) -> DependencyInventory:
     """Return dependency state without installing or downloading anything."""
     return DependencyInventory(
@@ -623,6 +657,7 @@ def inspect_dependencies(
             library=whisper_library,
             model=whisper_model,
         ),
+        ytdlp=inspect_ytdlp(str(ytdlp_bin or get_managed_ytdlp_path())),
     )
 
 

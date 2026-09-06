@@ -161,9 +161,9 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("-progress", command)
         self.assertEqual(command[command.index("-progress") + 1], "pipe:1")
 
-    def test_clean_file_copy_uses_ffmpeg_progress(self):
+    def test_clean_file_copy_uses_ffmpeg_progress_when_remuxing_is_required(self):
         censor = object.__new__(ProfanityCensor)
-        censor.input_file = "input.mkv"
+        censor.input_file = "input.mp4"
         censor.output_file = "output.mkv"
         censor.ffmpeg_bin = "ffmpeg"
         censor.has_discrete_center_audio = MagicMock(return_value=False)
@@ -179,9 +179,37 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(run.call_args.args[1], 90.0)
         self.assertIn("copy", run.call_args.args[0])
 
+    def test_clean_matching_container_copies_without_ffmpeg(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            source = root / "input.mkv"
+            destination = root / "output.mkv"
+            source.write_bytes(b"clean media")
+            censor = object.__new__(ProfanityCensor)
+            censor.input_file = str(source)
+            censor.output_file = str(destination)
+            censor.cancellation = Event()
+            censor.progress_callback = MagicMock()
+
+            success = censor.censor_video([])
+            copied_bytes = destination.read_bytes()
+
+        self.assertTrue(success)
+        self.assertEqual(copied_bytes, b"clean media")
+        censor.progress_callback.assert_called_with(
+            {
+                "event": "progress",
+                "stage": "censoring",
+                "percent": 100.0,
+                "eta_seconds": None,
+                "fps": None,
+                "message": "Copying source media",
+            }
+        )
+
     def test_clean_hevc_source_is_encoded_when_h264_is_requested(self):
         censor = object.__new__(ProfanityCensor)
-        censor.input_file = "input.mkv"
+        censor.input_file = "input.mp4"
         censor.output_file = "output.mkv"
         censor.ffmpeg_bin = "ffmpeg"
         censor.censor_method = "mute"
