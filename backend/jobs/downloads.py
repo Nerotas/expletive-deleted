@@ -65,7 +65,7 @@ class DownloadRecord:
     error: JobError | None = None
 
     def to_dict(self) -> dict[str, object]:
-        return {"id": self.id, "source": self.url, "source_type": "youtube", "url": self.url,
+        return {"id": self.id, "source": self.url, "mode": "copy", "source_type": "youtube", "url": self.url,
                 "video_id": self.video_id, "status": self.status, "title": self.title,
                 "progress_percent": self.progress_percent, "cookie_browser": self.cookie_browser,
                 "error": self.error.to_dict() if self.error else None}
@@ -121,13 +121,15 @@ class DownloadManager:
     def close(self) -> None: self._executor.shutdown(wait=False, cancel_futures=True)
 
     def _emit(self, job_id: str, event: str, **values: object) -> None:
-        self._sequence += 1
-        self._events[job_id].append(JobEvent(event, job_id, sequence=self._sequence, **values))
+        with self._lock:
+            self._sequence += 1
+            self._events[job_id].append(JobEvent(event, job_id, sequence=self._sequence, **values))
 
     def _set(self, job_id: str, status: str, percent: float | None = None, title: str | None = None, error: JobError | None = None, message: str | None = None) -> None:
-        current = self._records[job_id]
-        self._records[job_id] = replace(current, status=status, progress_percent=percent, title=title or current.title, error=error)
-        self._emit(job_id, "error" if error else "completed" if status == "completed" else "stage", stage=status, percent=percent, error=error, message=message)
+        with self._lock:
+            current = self._records[job_id]
+            self._records[job_id] = replace(current, status=status, progress_percent=percent, title=title or current.title, error=error)
+            self._emit(job_id, "error" if error else "completed" if status == "completed" else "stage", stage=status, percent=percent, error=error, message=message)
 
     def _run(self, job_id: str) -> None:
         staging = self.settings.directories.input.resolve() / ".downloads" / job_id
