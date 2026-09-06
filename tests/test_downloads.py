@@ -4,7 +4,7 @@ from pathlib import Path
 from threading import Event
 from unittest.mock import MagicMock, patch
 
-from backend.jobs.downloads import DownloadManager, DownloadRecord, validate_youtube_url
+from backend.jobs.downloads import DownloadManager, DownloadRecord, YtdlpAuthenticationRequired, validate_youtube_url
 from backend.settings import AppSettings, DirectorySettings
 
 
@@ -31,6 +31,20 @@ class DownloadManagerTests(unittest.TestCase):
         self.assertIn("--ignore-config", run.call_args.args[0])
         self.assertIn("--dump-single-json", run.call_args.args[0])
         self.assertIn("--skip-download", run.call_args.args[0])
+
+    def test_metadata_uses_selected_browser_cookies_only_when_requested(self):
+        completed = MagicMock(returncode=0, stdout='{"title": "Example Movie"}', stderr="")
+        with patch("backend.jobs.downloads.subprocess.run", return_value=completed) as run:
+            DownloadManager._resolve_title(Path("C:/Tools/yt-dlp.exe"), "https://youtu.be/dQw4w9WgXcQ", "edge")
+
+        self.assertIn("--cookies-from-browser", run.call_args.args[0])
+        self.assertIn("edge", run.call_args.args[0])
+
+    def test_authentication_output_is_classified_without_opening_a_browser(self):
+        error = DownloadManager._download_error("ERROR: Sign in to confirm you're not a bot")
+
+        self.assertIsInstance(error, YtdlpAuthenticationRequired)
+        self.assertEqual(error.code, "authentication_required")
 
     def test_remote_job_keeps_url_out_of_filesystem_source_model(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

@@ -94,6 +94,7 @@ class ProcessingSettings:
     mode: ProcessingMode = "censor"
     device: ProcessingDevice = "auto"
     auto_censor_after_transcription: bool = False
+    auto_transcode_youtube_downloads: bool = False
 
 
 @dataclass(frozen=True)
@@ -205,6 +206,8 @@ class AppSettings:
             issues.append("source.scan_subdirectories must be a boolean")
         if not isinstance(self.processing.auto_censor_after_transcription, bool):
             issues.append("processing.auto_censor_after_transcription must be a boolean")
+        if not isinstance(self.processing.auto_transcode_youtube_downloads, bool):
+            issues.append("processing.auto_transcode_youtube_downloads must be a boolean")
         if not isinstance(self.onboarding.completed, bool):
             issues.append("onboarding.completed must be a boolean")
 

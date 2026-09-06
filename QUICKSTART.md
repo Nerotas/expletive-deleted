@@ -56,8 +56,9 @@ Whisper `large-v3` is required for reliable word-level censor timing. Smaller mo
 
 ### Process media
 
-1. In **Settings**, confirm the working folders and processing preferences. Enable **Automatically transcode verified transcripts** only when you want each completed transcription added to the censor queue. The default input folder is `%USERPROFILE%\Documents\Expletive Deleted\Ready`.
+1. In **Settings**, confirm the working folders and processing preferences. Enable **Automatically transcode verified transcripts** only when you want each completed transcription added to the censor queue. Enable **Automatically transcode completed YouTube downloads** when a completed YouTube import should be transcribed, verified, and then added to the censor queue automatically. The default input folder is `%USERPROFILE%\Documents\Expletive Deleted\Ready`.
 2. Add supported audio or video files to the configured Ready/Input folder, drag them into Queue, or use **Download from YouTube** for an individual video you are authorized to download. YouTube import requires the optional `yt-dlp` component.
+   If YouTube requires sign-in or verification, the app shows a browser-session dialog. Choose the visible browser session only when you are ready to retry. **Open YouTube** is optional, opens no browser until you press it, and does not retry the download. Your password is never requested or handled by Expletive Deleted; yt-dlp reads the selected browser's local cookies.
 3. Return to **Queue** and choose an action for one file:
    - **Transcribe only** creates and verifies a transcript without creating media output.
    - **Retranscribe** replaces an existing transcript with a newly generated, verified transcript while retaining any finished output.

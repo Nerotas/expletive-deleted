@@ -29,7 +29,7 @@ import type {
   Settings,
 } from '../../types/domain'
 import { fileName, formatBytes, formatEta } from '../../utils/format'
-import type { QueueController } from './useQueue'
+import type { QueueController, YoutubeSubmitResult } from './useQueue'
 import './queue.css'
 
 type QueuePageProps = {
@@ -41,6 +41,7 @@ type QueuePageProps = {
 }
 type View = 'queue' | 'archive'
 type PurgeRequest = { source: string; label: string } | 'all' | null
+type YoutubeAuthenticationRequest = { url: string; retryId?: string }
 type QueueRowModel = { item: LibraryItem; job?: Job; pendingJob?: Job }
 type QueueFilter = 'all' | 'ready' | 'queued' | 'transcribed' | 'finished'
 type QueueCategory = Exclude<QueueFilter, 'all'> | 'active' | 'other'
@@ -63,6 +64,7 @@ export function QueuePage({ queue, settings, capabilities, onChangeFolder, onRev
   const [copyResults, setCopyResults] = useState<ImportResult[] | null>(null)
   const [purgeRequest, setPurgeRequest] = useState<PurgeRequest>(null)
   const [youtubeDialogOpen, setYoutubeDialogOpen] = useState(false)
+  const [youtubeAuthentication, setYoutubeAuthentication] = useState<YoutubeAuthenticationRequest | null>(null)
   const dragDepth = useRef(0)
   const [dragActive, setDragActive] = useState(false)
 
@@ -197,6 +199,7 @@ export function QueuePage({ queue, settings, capabilities, onChangeFolder, onRev
       onSubmitSelection={submitSelection}
       onChangeFolder={onChangeFolder}
       onReview={onReview}
+      onAuthenticationRequired={(job) => setYoutubeAuthentication({ url: job.url ?? job.source, retryId: job.id })}
     /> : <ArchiveView
       items={queue.archive}
       busy={queue.busy}
@@ -224,7 +227,24 @@ export function QueuePage({ queue, settings, capabilities, onChangeFolder, onRev
       onCancel={() => setPurgeRequest(null)}
       onConfirm={() => void confirmPurge()}
     />}
-    {youtubeDialogOpen && <YoutubeDialog available={Boolean(capabilities?.ytdlp)} busy={queue.busy} onCancel={() => setYoutubeDialogOpen(false)} onConfirm={async (url) => { await queue.submitYoutubeDownload(url); setYoutubeDialogOpen(false) }} />}
+    {youtubeDialogOpen && <YoutubeDialog available={Boolean(capabilities?.ytdlp)} busy={queue.busy} onCancel={() => setYoutubeDialogOpen(false)} onConfirm={async (url) => {
+      const result = await queue.submitYoutubeDownload(url)
+      if (result === 'success') setYoutubeDialogOpen(false)
+      if (result === 'authentication_required') {
+        setYoutubeDialogOpen(false)
+        setYoutubeAuthentication({ url })
+      }
+    }} />}
+    {youtubeAuthentication && <YoutubeAuthenticationDialog
+      busy={queue.busy}
+      onCancel={() => setYoutubeAuthentication(null)}
+      onOpenYoutube={() => void queue.openExternal('https://www.youtube.com/')}
+      onRetry={async (browser) => {
+        const result = await queue.submitYoutubeDownload(youtubeAuthentication.url, youtubeAuthentication.retryId, browser)
+        if (result === 'success') setYoutubeAuthentication(null)
+        return result
+      }}
+    />}
   </section>
 }
 
@@ -236,6 +256,26 @@ function YoutubeDialog({ available, busy, onCancel, onConfirm }: { available: bo
     {available ? <><label htmlFor="youtube-url">YouTube URL</label><input id="youtube-url" type="url" value={url} placeholder="https://www.youtube.com/watch?v=..." onChange={(event) => setUrl(event.target.value)} autoFocus />
       <p>Only download media you are authorized to download and process.</p><div className="modal-actions"><button className="button secondary" disabled={busy} onClick={onCancel}>Cancel</button><button className="button primary" disabled={busy || !valid} onClick={() => void onConfirm(url)}>{busy ? <><LoaderCircle className="spin" size={16} />Adding to Queue…</> : 'Add to Queue'}</button></div></>
       : <><p>yt-dlp is required for YouTube downloads. Get it from System Requirements, then return here to add an individual video.</p><div className="modal-actions"><button className="button primary" onClick={onCancel}>Done</button></div></>}
+  </section></div>
+}
+
+function YoutubeAuthenticationDialog({ busy, onCancel, onOpenYoutube, onRetry }: { busy: boolean; onCancel: () => void; onOpenYoutube: () => void; onRetry: (browser: string) => Promise<YoutubeSubmitResult> }) {
+  const [browser, setBrowser] = useState('chrome')
+  return <div className="modal-backdrop" role="presentation"><section className="modal" role="dialog" aria-modal="true" aria-labelledby="youtube-auth-dialog-title">
+    <p className="eyebrow">YouTube authentication required</p>
+    <h2 id="youtube-auth-dialog-title">YouTube needs your browser session</h2>
+    <p>YouTube would not allow this video to be downloaded without a signed-in or verified browser session.</p>
+    <p>Expletive Deleted can retry through yt-dlp using a browser where you are already signed into YouTube. It does not receive your YouTube password; cookies stay local on your computer.</p>
+    <label htmlFor="youtube-cookie-browser">Browser session</label>
+    <select id="youtube-cookie-browser" value={browser} disabled={busy} onChange={(event) => setBrowser(event.target.value)}>
+      <option value="chrome">Chrome</option><option value="edge">Microsoft Edge</option><option value="firefox">Firefox</option><option value="brave">Brave</option>
+    </select>
+    <p>You may open YouTube to sign in or complete verification, then return here. Opening YouTube does not retry this download.</p>
+    <div className="modal-actions">
+      <button className="button secondary" disabled={busy} onClick={onCancel}>Cancel</button>
+      <button className="button secondary" disabled={busy} onClick={onOpenYoutube}>Open YouTube</button>
+      <button className="button primary" disabled={busy} onClick={() => void onRetry(browser)}>Retry with {browser === 'edge' ? 'Microsoft Edge' : browser[0].toUpperCase() + browser.slice(1)}</button>
+    </div>
   </section></div>
 }
 
@@ -251,6 +291,7 @@ function QueueView({
   onSubmitSelection,
   onChangeFolder,
   onReview,
+  onAuthenticationRequired,
 }: {
   mergedRows: QueueRowModel[]
   queue: QueueController
@@ -263,6 +304,7 @@ function QueueView({
   onSubmitSelection: (mode: Job['mode'], orderedSources: string[]) => Promise<void>
   onChangeFolder: () => void
   onReview: (source: string) => void
+  onAuthenticationRequired: (job: Job) => void
 }) {
   const [filter, setFilter] = useState<QueueFilter>('all')
   const [sort, setSort] = useState<QueueSort>('queue')
@@ -416,6 +458,7 @@ function QueueView({
     onArchive={queue.archiveSource}
     onOpenFile={queue.openFile}
     onRetry={queue.retryJob}
+    onAuthenticationRequired={onAuthenticationRequired}
     onSubmit={queue.submitFile}
     onCancelRunning={queue.cancelJob}
     onRemoveQueued={queue.removeQueued}
@@ -572,6 +615,7 @@ function QueueRow({
   onArchive,
   onOpenFile,
   onRetry,
+  onAuthenticationRequired,
   onSubmit,
   onCancelRunning,
   onRemoveQueued,
@@ -591,6 +635,7 @@ function QueueRow({
   onArchive: (source: string) => Promise<unknown>
   onOpenFile: (filePath: string) => Promise<void>
   onRetry: (job: Job) => Promise<unknown>
+  onAuthenticationRequired: (job: Job) => void
   onSubmit: (source: string, mode: Job['mode'], options?: JobSubmissionOptions) => Promise<void>
   onCancelRunning: (job: Job) => Promise<unknown>
   onRemoveQueued: (job: Job) => Promise<void>
@@ -690,7 +735,8 @@ function QueueRow({
           title={!['transcribed', 'finished'].includes(item.status) ? 'Archive is available after a verified transcript or output exists' : !queueIdle ? 'Wait until the processing queue is idle before archiving' : 'Move the verified source to Processed'}
           onClick={() => void onArchive(item.source)}
         ><ArchiveIcon size={13} />Archive</button>}
-        {job?.status === 'failed' && job.error?.retryable && !pendingJob && <button disabled={busy} onClick={() => void onRetry(job)}>Retry</button>}
+        {job?.status === 'failed' && job.error?.code === 'authentication_required' && !pendingJob && <button disabled={busy} onClick={() => onAuthenticationRequired(job)}>Use browser session</button>}
+        {job?.status === 'failed' && job.error?.retryable && job.error.code !== 'authentication_required' && !pendingJob && <button disabled={busy} onClick={() => void onRetry(job)}>Retry</button>}
       </div>
     </td>
   </tr>

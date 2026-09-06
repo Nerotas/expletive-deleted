@@ -68,6 +68,7 @@ class JobRecord:
     error: JobError | None = None
     force_transcribe: bool = False
     overwrite_output: bool = False
+    auto_censor_after_transcription: bool = False
 
     def __post_init__(self) -> None:
         if not self.id.strip():
@@ -86,6 +87,8 @@ class JobRecord:
             raise ValueError("Only report-only jobs can force a fresh transcript")
         if self.overwrite_output and self.mode != "censor":
             raise ValueError("Only censor jobs can replace an existing output")
+        if self.auto_censor_after_transcription and self.mode != "report_only":
+            raise ValueError("Only transcript-only jobs can automatically queue censorship")
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -97,6 +100,7 @@ class JobRecord:
             "error": self.error.to_dict() if self.error else None,
             "force_transcribe": self.force_transcribe,
             "overwrite_output": self.overwrite_output,
+                "auto_censor_after_transcription": self.auto_censor_after_transcription,
         }
 
 

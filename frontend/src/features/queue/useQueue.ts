@@ -16,6 +16,13 @@ type QueueOptions = {
   pollInterval?: number
 }
 
+export type YoutubeSubmitResult = 'success' | 'authentication_required' | 'failed'
+
+function isAuthenticationRequired(reason: unknown): boolean {
+  return typeof reason === 'object' && reason !== null && 'code' in reason
+    && (reason as { code?: unknown }).code === 'authentication_required'
+}
+
 async function loadQueue(client: DesktopClient) {
   const [library, archive, localJobs, downloads] = await Promise.all([client.listLibrary(), client.listArchive(), client.listJobs(), client.listDownloads()])
   const jobs = [...localJobs, ...downloads]
@@ -60,7 +67,9 @@ export function useQueue({
   const actionMutation = useMutation<unknown, unknown, () => Promise<unknown>>({
     mutationFn: (action) => action(),
     onSuccess: async () => { await query.refetch() },
-    onError: (reason) => onError(errorMessage(reason)),
+    onError: (reason) => {
+      if (!isAuthenticationRequired(reason)) onError(errorMessage(reason))
+    },
   })
   const library = query.data?.library ?? []
   const jobs = query.data?.jobs ?? []
@@ -84,16 +93,22 @@ export function useQueue({
     busy: actionMutation.isPending,
     refresh: async () => { await query.refetch() },
     openTranscodeFolder: () => run(() => client.openTranscodeFolder()).then(() => undefined),
+    openExternal: (url: string) => run(() => client.openExternal(url)).then(() => undefined),
     openFile: (filePath: string) => run(() => client.openFile(filePath)).then(() => undefined),
     submitFile: (source: string, mode: Job['mode'], options?: JobSubmissionOptions) => run(async () => {
       if (options) await client.submitJob(source, mode, options)
       else await client.submitJob(source, mode)
       onNotice(`${fileName(source)} queued`)
     }).then(() => undefined),
-        submitYoutubeDownload: (url: string) => run(async () => {
-          await client.submitYoutubeDownload(url)
-          onNotice('YouTube download queued')
-        }).then(() => undefined),
+    submitYoutubeDownload: async (url: string, retryId?: string, cookieBrowser?: string): Promise<YoutubeSubmitResult> => {
+      try {
+        await actionMutation.mutateAsync(() => client.submitYoutubeDownload(url, retryId, cookieBrowser))
+        onNotice(retryId ? 'YouTube download queued again' : 'YouTube download queued')
+        return 'success'
+      } catch (reason) {
+        return isAuthenticationRequired(reason) ? 'authentication_required' : 'failed'
+      }
+    },
     submitFiles: async (sources: string[], mode: Job['mode']): Promise<JobSubmissionResult[]> => {
       const results = await run(() => client.submitJobs(sources, mode))
       if (!results) return []

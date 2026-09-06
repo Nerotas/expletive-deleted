@@ -82,6 +82,7 @@ class JobManager:
         *,
         force_transcribe: bool = False,
         overwrite_output: bool = False,
+        auto_censor_after_transcription: bool = False,
     ) -> JobRecord:
         source = source.expanduser().resolve()
         selected_mode = mode or self.settings.processing.mode
@@ -115,6 +116,7 @@ class JobManager:
             selected_mode,
             force_transcribe=force_transcribe,
             overwrite_output=overwrite_output,
+            auto_censor_after_transcription=auto_censor_after_transcription,
         )
         cancellation = Event()
         with self._lock:
@@ -250,7 +252,7 @@ class JobManager:
         if (
             status == "transcribed"
             and current.mode == "report_only"
-            and self.settings.processing.auto_censor_after_transcription
+            and (self.settings.processing.auto_censor_after_transcription or current.auto_censor_after_transcription)
             and not output_path(current.source, self.settings.directories.output, self.settings.directories.input).exists()
         ):
             self.submit(current.source, "censor")

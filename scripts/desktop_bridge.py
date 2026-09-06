@@ -379,9 +379,10 @@ class DesktopBridge:
         if method == "downloads.submit":
             url = params.get("url")
             retry_id = params.get("retry_id")
-            if not isinstance(url, str) or (retry_id is not None and not isinstance(retry_id, str)):
+            cookie_browser = params.get("cookie_browser")
+            if not isinstance(url, str) or (retry_id is not None and not isinstance(retry_id, str)) or (cookie_browser is not None and cookie_browser not in {"brave", "chrome", "edge", "firefox"}):
                 raise ValueError("YouTube download requires a video URL")
-            return self.service.submit_youtube_download(url, retry_id).to_dict()
+            return self.service.submit_youtube_download(url, retry_id, cookie_browser).to_dict()
         if method == "downloads.events":
             return [event.to_dict() for event in self.service.downloads.events(params["job_id"])]
         if method == "downloads.cancel":
@@ -536,7 +537,7 @@ def serve(
             response = {
                 "id": request_id,
                 "ok": False,
-                "error": {"type": type(exc).__name__, "message": str(exc)},
+                "error": {"type": type(exc).__name__, "message": str(exc), "code": getattr(exc, "code", None)},
             }
         with output_lock:
             output_stream.write(json.dumps(response, separators=(",", ":")) + "\n")

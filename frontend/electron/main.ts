@@ -4,7 +4,7 @@ import { existsSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { backendEnvironment, findBackendRoot, findPythonRuntime } from './backend-runtime.js'
 
-type BridgeResponse = { id: number; ok: true; result: unknown } | { id: number; ok: false; error: { message?: string } }
+type BridgeResponse = { id: number; ok: true; result: unknown } | { id: number; ok: false; error: { message?: string; code?: string } }
 
 let window: BrowserWindow | undefined
 let bridge: ChildProcessWithoutNullStreams | undefined
@@ -77,7 +77,9 @@ function startBridge(): void {
         else {
           const message = response.error.message ?? 'The local processing service rejected the request.'
           logDevelopmentError('Python bridge request failed:', message)
-          request.reject(new Error(message))
+          const error = new Error(message) as Error & { code?: string }
+          if (typeof response.error.code === 'string') error.code = response.error.code
+          request.reject(error)
         }
       } catch { /* ignore malformed private protocol output */ }
     }

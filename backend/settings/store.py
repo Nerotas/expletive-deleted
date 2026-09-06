@@ -111,6 +111,7 @@ _INI_SECTIONS = (
 )
 _INI_BOOLEAN_FIELDS = {
     ("processing", "auto_censor_after_transcription"),
+    ("processing", "auto_transcode_youtube_downloads"),
     ("source", "archive_after_success"),
     ("source", "scan_subdirectories"),
     ("onboarding", "completed"),

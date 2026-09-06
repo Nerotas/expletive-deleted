@@ -61,6 +61,22 @@ class BackendServiceTests(unittest.TestCase):
         self.assertTrue(managers[0].closed)
         self.assertTrue(managers[1].closed)
 
+    def test_completed_youtube_download_queues_transcript_first_automation(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            service = BackendService(
+                self.create_store(Path(temporary_directory)),
+                manager_factory=StubManager,
+            )
+            submit = MagicMock()
+            service.jobs.submit = submit
+            source = service.settings.directories.input / "downloaded-video.mp4"
+            try:
+                service._queue_completed_youtube_download(source)
+            finally:
+                service.close()
+
+        submit.assert_called_once_with(source, "report_only", auto_censor_after_transcription=True)
+
     def test_capabilities_without_configured_cache_inspect_managed_cache(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             service = BackendService(

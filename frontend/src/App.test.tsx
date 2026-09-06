@@ -229,6 +229,22 @@ describe('desktop application renderer', () => {
     ))
   })
 
+  it('saves automatic processing for completed YouTube downloads', async () => {
+    const user = userEvent.setup()
+    renderApp('/settings')
+
+    const automation = await screen.findByRole('checkbox', { name: /Automatically transcode completed YouTube downloads/ })
+    expect(automation).not.toBeChecked()
+    await user.click(automation)
+    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    await waitFor(() => expect(desktopClient.updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        processing: expect.objectContaining({ auto_transcode_youtube_downloads: true }),
+      }),
+    ))
+  })
+
   it('discards a draft locally and disables actions when the form is clean', async () => {
     const user = userEvent.setup()
     renderApp('/settings')
@@ -461,6 +477,37 @@ describe('desktop application renderer', () => {
 
     expect(screen.getByRole('button', { name: 'Adding to Queue…' })).toBeDisabled()
     await act(async () => resolveDownload())
+  })
+
+  it('requires explicit browser choices after YouTube authentication fails', async () => {
+    const url = 'https://youtu.be/dQw4w9WgXcQ'
+    const authenticationError = Object.assign(new Error('YouTube requires authentication or verification'), {
+      code: 'authentication_required',
+    })
+    vi.mocked(desktopClient.getCapabilities).mockResolvedValue({ ...readyCapabilities, ytdlp: true })
+    vi.mocked(desktopClient.submitYoutubeDownload)
+      .mockRejectedValueOnce(authenticationError)
+      .mockResolvedValueOnce({
+        id: 'youtube-job', source: url, source_type: 'youtube', url, video_id: 'dQw4w9WgXcQ',
+        mode: 'copy', status: 'queued', progress_percent: null, error: null,
+      })
+    const openExternal = vi.spyOn(desktopClient, 'openExternal').mockResolvedValue()
+    const user = userEvent.setup()
+    renderApp('/')
+
+    await user.click(await screen.findByRole('button', { name: 'Download from YouTube' }))
+    await user.type(screen.getByLabelText('YouTube URL'), url)
+    await user.click(screen.getByRole('button', { name: 'Add to Queue' }))
+    expect(await screen.findByRole('heading', { name: 'YouTube needs your browser session' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Open YouTube' }))
+    expect(openExternal).toHaveBeenCalledWith('https://www.youtube.com/')
+    expect(desktopClient.submitYoutubeDownload).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('heading', { name: 'YouTube needs your browser session' })).toBeInTheDocument()
+
+    await user.selectOptions(screen.getByLabelText('Browser session'), 'edge')
+    await user.click(screen.getByRole('button', { name: 'Retry with Microsoft Edge' }))
+    await waitFor(() => expect(desktopClient.submitYoutubeDownload).toHaveBeenLastCalledWith(url, undefined, 'edge'))
   })
 
   it('offers finished files a fresh transcript and recensor action', async () => {

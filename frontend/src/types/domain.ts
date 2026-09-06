@@ -57,6 +57,7 @@ export type Job = {
   url?: string
   video_id?: string
   title?: string | null
+  cookie_browser?: string | null
 }
 
 export type JobSubmissionOptions = {
@@ -171,6 +172,7 @@ export type Settings = {
     mode: 'report_only' | 'censor'
     device: 'auto' | 'cpu' | 'cuda'
     auto_censor_after_transcription: boolean
+    auto_transcode_youtube_downloads: boolean
   }
   censoring: {
     stereo_method: 'drop_audio' | 'karaoke'

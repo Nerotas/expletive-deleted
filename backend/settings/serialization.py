@@ -107,7 +107,7 @@ def settings_from_dict(data: object, defaults: AppSettings | None = None) -> App
 
     base = defaults or AppSettings.defaults()
     directories = _group(mapping, "directories", {"input", "output", "archive", "transcripts"})
-    processing = _group(mapping, "processing", {"mode", "device", "auto_censor_after_transcription"})
+    processing = _group(mapping, "processing", {"mode", "device", "auto_censor_after_transcription", "auto_transcode_youtube_downloads"})
     censoring = _group(
         mapping,
         "censoring",
@@ -148,6 +148,12 @@ def settings_from_dict(data: object, defaults: AppSettings | None = None) -> App
                 "auto_censor_after_transcription",
                 base.processing.auto_censor_after_transcription,
                 "processing.auto_censor_after_transcription",
+            ),
+            auto_transcode_youtube_downloads=_boolean(
+                processing,
+                "auto_transcode_youtube_downloads",
+                base.processing.auto_transcode_youtube_downloads,
+                "processing.auto_transcode_youtube_downloads",
             ),
         ),
         censoring=CensoringSettings(
@@ -261,6 +267,7 @@ def settings_to_dict(settings: AppSettings) -> dict[str, object]:
             "mode": settings.processing.mode,
             "device": settings.processing.device,
             "auto_censor_after_transcription": settings.processing.auto_censor_after_transcription,
+                "auto_transcode_youtube_downloads": settings.processing.auto_transcode_youtube_downloads,
         },
         "censoring": {
             "stereo_method": settings.censoring.stereo_method,

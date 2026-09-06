@@ -50,7 +50,7 @@ class BackendService:
         self.settings = load_effective_settings(self.store)
         ensure_directories(self.settings.directories)
         self.jobs = manager_factory(self.settings)
-        self.downloads = DownloadManager(self.settings)
+        self.downloads = DownloadManager(self.settings, self._queue_completed_youtube_download)
 
     def get_settings(self) -> dict[str, object]:
         return settings_to_dict(self.settings)
@@ -69,7 +69,7 @@ class BackendService:
         self.downloads.close()
         self.settings = updated
         self.jobs = self._manager_factory(updated)
-        self.downloads = DownloadManager(updated)
+        self.downloads = DownloadManager(updated, self._queue_completed_youtube_download)
         return settings_to_dict(updated)
 
     def get_library(self) -> tuple[LibraryItem, ...]:
@@ -105,8 +105,11 @@ class BackendService:
         """Submit a selective batch while retaining ordered per-source results."""
         return self.jobs.submit_many(sources, mode)
 
-    def submit_youtube_download(self, url: str, retry_id: str | None = None) -> DownloadRecord:
-        return self.downloads.submit(url, retry_id)
+    def submit_youtube_download(self, url: str, retry_id: str | None = None, cookie_browser: str | None = None) -> DownloadRecord:
+        return self.downloads.submit(url, retry_id, cookie_browser)
+
+    def _queue_completed_youtube_download(self, source: Path) -> None:
+        self.jobs.submit(source, "report_only", auto_censor_after_transcription=True)
 
     def archive_source(self, source: Path) -> dict[str, object]:
         """Move a completed or transcribed source out of the Queue without touching artifacts."""

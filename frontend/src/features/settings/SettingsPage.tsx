@@ -115,6 +115,20 @@ export function SettingsPage({ controller, capabilities, checkingSystem, onCheck
               })}
             />
           </label>
+          <label className="toggle-row">
+            <div>
+              <strong>Automatically transcode completed YouTube downloads</strong>
+              <span>After a YouTube video reaches Ready, create its verified transcript, then queue its transcoded copy.</span>
+            </div>
+            <input
+              type="checkbox"
+              checked={settings.processing.auto_transcode_youtube_downloads}
+              onChange={(event) => setGroup('processing', {
+                ...settings.processing,
+                auto_transcode_youtube_downloads: event.target.checked,
+              })}
+            />
+          </label>
         </SettingsSection>
 
         <SettingsSection title="Censoring" description="Audio treatment and interval timing">
