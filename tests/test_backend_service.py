@@ -1,11 +1,13 @@
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from threading import Event
 from unittest.mock import MagicMock, patch
 
 from backend.jobs import JobManager, JobRecord
-from backend.service import ArchiveSourceError, BackendService, ServiceBusyError
+from backend.jobs.models import JobError
+from backend.service import ArchiveSourceError, BackendService, LibraryItem, ServiceBusyError
 from backend.service.capabilities import get_capabilities
 from backend.settings import AppSettings, DirectorySettings, SettingsStore
 
@@ -203,7 +205,7 @@ class BackendServiceTests(unittest.TestCase):
             self.assertFalse(archived.exists())
             self.assertTrue((root / "Processed" / "notes.txt").is_file())
 
-    def test_archive_requires_idle_queue_and_never_overwrites_destination(self):
+    def test_archive_blocks_own_job_and_never_overwrites_destination(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             service = BackendService(self.create_store(root), manager_factory=StubManager)
@@ -227,6 +229,52 @@ class BackendServiceTests(unittest.TestCase):
 
             self.assertEqual(source.read_bytes(), b"source")
             self.assertEqual(destination.read_bytes(), b"existing")
+
+    def test_archive_lock_is_per_source_for_all_job_states(self):
+        for library_status in ("finished", "transcribed"):
+            for job_status in ("queued", "copying", "transcribing", "censoring", "verifying", "awaiting_review", "completed", "transcribed", "failed", "cancelled"):
+                for same_source in (False, True):
+                    with self.subTest(library_status=library_status, job_status=job_status, same_source=same_source), tempfile.TemporaryDirectory() as temporary_directory:
+                        root = Path(temporary_directory)
+                        service = BackendService(self.create_store(root), manager_factory=StubManager)
+                        source = service.settings.directories.input / "movie.mkv"
+                        source.write_bytes(b"original")
+                        other = service.settings.directories.input / "other.mkv"
+                        other.write_bytes(b"other original")
+                        artifact = (service.settings.directories.output / "movie-censored.mkv"
+                                    if library_status == "finished" else
+                                    service.settings.directories.transcripts / "movie-transcript.json")
+                        artifact.write_bytes(b"{}")
+                        # Resolve equivalent paths before comparing source identity.
+                        job_source = source.parent / "nested" / ".." / source.name if same_source else other
+                        job = JobRecord("job", job_source, "censor", job_status, 25.0,
+                                        error=JobError("processing_failed", "Failed") if job_status == "failed" else None)
+                        service.jobs._jobs = (job,)
+                        destination = service.settings.directories.archive / source.name
+                        library_item = LibraryItem(
+                            source,
+                            library_status,
+                            datetime.now(timezone.utc),
+                            transcript=artifact if library_status == "transcribed" else None,
+                            output=artifact if library_status == "finished" else None,
+                        )
+                        try:
+                            with patch.object(service, "get_library", return_value=(library_item,)):
+                                if same_source and job_status not in ("completed", "transcribed", "failed", "cancelled"):
+                                    with self.assertRaisesRegex(ServiceBusyError, "This file.*queued or processing"):
+                                        service.archive_source(source)
+                                    self.assertEqual(source.read_bytes(), b"original")
+                                    self.assertFalse(destination.exists())
+                                else:
+                                    result = service.archive_source(source)
+                                    self.assertEqual(result["archived_to"], str(destination))
+                                    self.assertFalse(source.exists())
+                                    self.assertEqual(destination.read_bytes(), b"original")
+                            self.assertEqual(service.jobs.list(), (job,))
+                            self.assertEqual(other.read_bytes(), b"other original")
+                            self.assertEqual(artifact.read_bytes(), b"{}")
+                        finally:
+                            service.close()
 
     def test_restore_archive_moves_file_back_to_ready_without_overwriting(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

@@ -76,7 +76,7 @@ Documents\Expletive Deleted\Processed
 Documents\Expletive Deleted\Transcripts
 ```
 
-All four paths are independently configurable and validated. The application keeps source media by default. Manual archival is available after a verified transcript or output exists and only while the processing queue is idle.
+All four paths are independently configurable and validated. The application keeps source media by default. Manual archival is available after a verified transcript or output exists and the source has no queued or active job. Unrelated queued or processing files do not block archival.
 
 ## Commands
 

@@ -27,6 +27,8 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 concurrency:
   group: release-main
@@ -35,6 +37,9 @@ concurrency:
 jobs:
   release:
     name: Version, validate, and publish
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      published: ${{ steps.version.outputs.published }}
     runs-on: windows-latest
     timeout-minutes: 60
     env:
@@ -205,3 +210,29 @@ jobs:
           $installer = "frontend/release/Expletive-Deleted-Setup-$version-x64.exe"
           if (-not (Test-Path $installer)) { throw "Installer was not created: $installer" }
           gh release create "v$version" $installer --verify-tag --generate-notes --title "Expletive Deleted $version"
+
+  deploy-product-site:
+    name: Deploy released product site
+    needs: release
+    if: needs.release.outputs.published != 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check out released source
+        uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.release.outputs.version }}
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload product site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+      - name: Deploy product site
+        id: deployment
+        uses: actions/deploy-pages@v4

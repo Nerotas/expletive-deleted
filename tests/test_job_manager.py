@@ -311,6 +311,31 @@ class JobManagerTests(unittest.TestCase):
 
         self.assertEqual(censored.status, "completed")
 
+    def test_transcription_lane_waits_for_active_censor_resource_slot(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            settings = self.create_settings(Path(temporary_directory))
+            censoring_source = settings.directories.input / "censoring.mkv"
+            transcribing_source = settings.directories.input / "transcribing.mkv"
+            censoring_source.write_bytes(b"source")
+            transcribing_source.write_bytes(b"source")
+            self.write_verified_transcript(settings, censoring_source)
+            blocker = Event()
+            FakeCensor.block = blocker
+            manager = JobManager(settings, censor_factory=FakeCensor)
+            try:
+                censor = manager.submit(censoring_source, "censor")
+                self.assertTrue(FakeCensor.started.wait(timeout=1))
+                transcription = manager.submit(transcribing_source, "report_only")
+                self.assertEqual(manager.get(transcription.id).status, "queued")
+                self.assertEqual(len(FakeCensor.instances), 1)
+                blocker.set()
+                manager.wait(censor.id, timeout=2)
+                transcribed = manager.wait(transcription.id, timeout=2)
+            finally:
+                manager.close()
+
+        self.assertEqual(transcribed.status, "transcribed")
+
     def test_duplicate_non_terminal_job_is_rejected_but_cancelled_job_can_retry(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             settings = self.create_settings(Path(temporary_directory))

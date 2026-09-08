@@ -449,7 +449,6 @@ function QueueView({
     active={active}
     queuePosition={queuePosition}
     event={pendingJob ? queue.jobEvents[pendingJob.id] : job ? queue.jobEvents[job.id] : undefined}
-    queueIdle={queue.queueIdle}
     processingReady={Boolean(capabilities?.ready)}
     busy={queue.busy}
     selected={selectedSources.has(item.source)}
@@ -606,7 +605,6 @@ function QueueRow({
   active,
   queuePosition,
   event,
-  queueIdle,
   processingReady,
   busy,
   selected,
@@ -626,7 +624,6 @@ function QueueRow({
   active: boolean
   queuePosition?: number
   event?: JobEvent
-  queueIdle: boolean
   processingReady: boolean
   busy: boolean
   selected: boolean
@@ -651,7 +648,7 @@ function QueueRow({
   const selectable = isBulkSelectable(item, job, pendingJob)
   const processingDisabled = busy || !processingReady || Boolean(pendingJob)
   const transcribeDisabled = processingDisabled
-  const archiveDisabled = busy || !queueIdle || !['transcribed', 'finished'].includes(item.status)
+  const archiveDisabled = busy || Boolean(pendingJob) || !['transcribed', 'finished'].includes(item.status)
   const processingReason = !processingReady
     ? 'Complete setup before processing this file'
     : pendingJob
@@ -732,7 +729,7 @@ function QueueRow({
         {!remote && <button
           className="archive-action"
           disabled={archiveDisabled}
-          title={!['transcribed', 'finished'].includes(item.status) ? 'Archive is available after a verified transcript or output exists' : !queueIdle ? 'Wait until the processing queue is idle before archiving' : 'Move the verified source to Processed'}
+          title={!['transcribed', 'finished'].includes(item.status) ? 'Archive is available after a verified transcript or output exists' : busy ? 'Wait for the current queue action to finish' : pendingJob ? 'This file is already queued or processing' : 'Move the verified source to Processed'}
           onClick={() => void onArchive(item.source)}
         ><ArchiveIcon size={13} />Archive</button>}
         {job?.status === 'failed' && job.error?.code === 'authentication_required' && !pendingJob && <button disabled={busy} onClick={() => onAuthenticationRequired(job)}>Use browser session</button>}

@@ -753,6 +753,55 @@ describe('desktop application renderer', () => {
     expect(fileRows[1]).toHaveTextContent('zulu.mkv')
   })
 
+  it.each(['queued', 'transcribing', 'censoring', 'verifying'] as const)(
+    'allows eligible files to be archived while an unrelated job is %s', async (status) => {
+      const user = userEvent.setup()
+      const sources = ['finished', 'transcribed'].map((name) => `C:/Media/Ready/${name}.mkv`)
+      vi.mocked(desktopClient.listLibrary).mockResolvedValue(sources.map((source, index) => ({
+        source, status: index === 0 ? 'finished' : 'transcribed', date_added: '2026-09-01T12:00:00Z',
+        transcript: 'C:/Media/Transcripts/movie.json', output: index === 0 ? 'C:/Media/Finished/movie.mkv' : null,
+      })))
+      vi.mocked(desktopClient.listJobs).mockResolvedValue([{
+        id: 'unrelated', source: 'C:/Media/Ready/other.mkv', mode: 'censor', status, progress_percent: 25, error: null,
+      }])
+      renderApp('/')
+
+      const buttons = await screen.findAllByRole('button', { name: /^archive$/i })
+      expect(buttons).toHaveLength(2)
+      for (const button of buttons) expect(button).toBeEnabled()
+      await user.click(buttons[0])
+      await waitFor(() => expect(desktopClient.archiveSource).toHaveBeenCalledWith(sources[0]))
+      await waitFor(() => expect(buttons[1]).toBeEnabled())
+      await user.click(buttons[1])
+      await waitFor(() => expect(desktopClient.archiveSource).toHaveBeenCalledWith(sources[1]))
+      expect(desktopClient.cancelJob).not.toHaveBeenCalled()
+      expect(desktopClient.submitJob).not.toHaveBeenCalled()
+    },
+  )
+
+  it.each(['queued', 'transcribing', 'censoring', 'verifying'] as const)(
+    'disables Archive for its own %s job even with later terminal history', async (status) => {
+      const source = 'C:/Media/Ready/movie.mkv'
+      vi.mocked(desktopClient.listLibrary).mockResolvedValue([{
+        source, status: 'finished', date_added: '2026-09-01T12:00:00Z', transcript: null, output: 'C:/Media/Finished/movie.mkv',
+      }])
+      vi.mocked(desktopClient.listJobs).mockResolvedValue([
+        { id: 'pending', source, mode: 'censor', status, progress_percent: 25, error: null },
+        { id: 'history', source, mode: 'censor', status: 'completed', progress_percent: 100, error: null },
+      ])
+      renderApp('/')
+
+      if (status === 'queued') {
+        expect(await screen.findByRole('button', { name: /^archive$/i })).toBeDisabled()
+      } else {
+        // Running jobs use the active-job panel, which exposes only cancellation.
+        await screen.findByRole('button', { name: /cancel job/i })
+        expect(screen.queryByRole('button', { name: /^archive$/i })).not.toBeInTheDocument()
+      }
+      expect(desktopClient.archiveSource).not.toHaveBeenCalled()
+    },
+  )
+
   it('shows archived originals in the Queue archive view', async () => {
     vi.mocked(desktopClient.listArchive).mockResolvedValueOnce([{
       source: 'C:\\Media\\Processed\\movie.mkv',
