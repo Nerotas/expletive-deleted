@@ -75,7 +75,7 @@ function SetupItem({ label, ready, busy, action, locate }: SetupItemProps) {
       {!ready && (locate || action) && (
         <div className="setup-item-actions">
           {locate && <button className="secondary" disabled={busy} onClick={locate}>Locate existing</button>}
-          {action && <button disabled={busy} onClick={action}>Get</button>}
+          {action && <button disabled={busy} onClick={action}>Get Components</button>}
         </div>
       )}
     </div>

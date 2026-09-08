@@ -390,7 +390,7 @@ describe('desktop application renderer', () => {
     renderApp('/')
 
     const whisperModel = await screen.findByText('Whisper large-v3')
-    await user.click(within(whisperModel.closest('.setup-item')!).getByRole('button', { name: 'Get' }))
+    await user.click(within(whisperModel.closest('.setup-item')!).getByRole('button', { name: 'Get Components' }))
     await user.click(screen.getByRole('button', { name: 'Continue' }))
     await screen.findByText('Installation complete and verified')
     await user.click(screen.getByRole('link', { name: 'Settings' }))
@@ -904,7 +904,7 @@ describe('desktop application renderer', () => {
     const user = userEvent.setup()
     renderApp('/')
 
-    await user.click((await screen.findAllByRole('button', { name: 'Get' }))[0])
+    await user.click((await screen.findAllByRole('button', { name: 'Get Components' }))[0])
 
     expect(await screen.findByRole('dialog', { name: 'Retrieve required components?' })).toBeInTheDocument()
     expect(screen.getByText('static-ffmpeg platform binaries')).toBeInTheDocument()

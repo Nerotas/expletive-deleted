@@ -43,7 +43,7 @@ function ComponentRow({ title, detail, ready, checking, busy, onLocate, onGet, o
     <b>{state}</b>
     {!ready && <div className="component-actions">
       {onLocate && <button className="button secondary" disabled={busy} onClick={onLocate}>Locate existing</button>}
-      {onGet && <button className="button primary" disabled={busy} onClick={onGet}>Review setup</button>}
+      {onGet && <button className="button primary" disabled={busy} onClick={onGet}>Get Components</button>}
     </div>}
   </article>
 }
