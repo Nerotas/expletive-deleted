@@ -35,7 +35,7 @@ Automated transcription and censorship are not perfect. Always review the transc
 1. Add media by placing it in the configured **Ready** folder, dragging it into the Queue, or importing an individual YouTube video you are authorized to download.
 2. Choose **Transcribe only** to create and review a local transcript.
 3. Classify discovered words as **Censor** or **Ignore** in the Dictionary when needed.
-4. In the **Transcribed** Queue view, select verified transcripts and choose **Queue censor** to create censored copies in **Finished**. Alternatively, enable **Automatically transcode verified transcripts** in Settings to queue this step after each successful transcription.
+4. In the **Transcribed** Queue view, select verified transcripts and choose **Queue censor** to create censored copies in **Finished**. Alternatively, enable **Automatically create a censored copy after transcription** in Settings to queue this step after each successful transcription.
 5. Review the finished file. The original remains in Ready unless you deliberately archive it after success.
 
 Transcoding uses only a persisted, verified transcript. It never begins a second Whisper transcription. **Retranscribe** replaces an existing transcript while retaining finished media.
@@ -55,7 +55,7 @@ YouTube import is local and optional. The app uses the separately approved `yt-d
 1. Install Python 3.9 or later from a trusted Python distribution. Ensure the `py` launcher or `python` command is available.
 2. Download `Expletive-Deleted-Setup-1.0.1-x64.exe` from the [latest release](https://github.com/Nerotas/expletive-deleted/releases/latest).
 3. Run the installer, then open **Expletive Deleted** from the Start menu or desktop shortcut.
-4. Complete the first-run walkthrough. It checks required components, prepares your dictionary, and confirms working folders and censoring preferences.
+4. Complete the first-run walkthrough: Welcome, Get ready, Your settings, Add a file, Process safely, and Finish. It checks required components, prepares your dictionary, confirms folders and censoring preferences, and lets you choose the automatic local and YouTube workflows. It saves progress only when you choose **Save & Continue**.
 
 The installer contains the Electron application and first-party Python backend. It does **not** bundle Python, Python processing packages, the external `ffmpeg.exe`/`ffprobe.exe` runtime, or Whisper models.
 

@@ -33,7 +33,8 @@ Both package commands audit `win-unpacked` and fail if it contains `ffmpeg.exe`,
 ## Renderer architecture
 
 - `src/App.tsx` composes the shell, global status, and routes.
-- `src/features/` owns Queue, Dictionary, Settings, and capability state.
+- `src/features/` owns Queue, Dictionary, Settings, Onboarding, and capability state.
+- `src/features/onboarding/` keeps each walkthrough section in its own component: Welcome, Components, Initial Settings, Add Media, Process Media, Finish, and backend-startup recovery. `OnboardingPage.tsx` owns only composition, saved-step navigation, and the temporary settings draft.
 - `src/components/ui/` contains reusable controls and presentation primitives.
 - `src/services/desktop-client.ts` is the typed boundary around Electron IPC.
 - React Router handles renderer navigation, TanStack Query owns backend state, and React Hook Form owns the persisted/draft settings lifecycle.
@@ -44,7 +45,7 @@ Both package commands audit `win-unpacked` and fail if it contains `ffmpeg.exe`,
 - Ready-file checkboxes submit transcript jobs; Transcribed-file checkboxes submit an exact ordered censor selection through the typed `jobs.submit_many` bridge operation.
 - The table can filter Ready, Queued, Active, Transcribed, and Finished rows and sort by queue position, file name, or status.
 - Waiting jobs show their position and can be removed independently; the running job can be cancelled from its row or the top-level cancel action.
-- The optional persisted setting `processing.auto_censor_after_transcription` promotes each newly verified transcript to the censor queue.
+- The optional persisted setting `processing.auto_censor_after_transcription` promotes each newly verified transcript to the censored-copy queue. `processing.auto_transcode_youtube_downloads` starts the same chain after a completed YouTube download.
 - The renderer never decides that a transcript is safe for transcoding. That mandatory persisted-artifact gate belongs to the Python backend.
 
 ## Dictionary behavior
