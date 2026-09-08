@@ -110,6 +110,16 @@ describe('desktop application renderer', () => {
     expect(await screen.findByText('System ready')).toBeInTheDocument()
   })
 
+  it('reopens onboarding from Settings without resetting saved preferences', async () => {
+    const user = userEvent.setup()
+    renderApp('/settings')
+
+    await user.click(await screen.findByRole('button', { name: 'Redo onboarding' }))
+
+    expect(await screen.findByRole('heading', { name: 'Welcome to Expletive Deleted' })).toBeInTheDocument()
+    expect(desktopClient.updateSettings).not.toHaveBeenCalled()
+  })
+
   it('opens onboarding for fresh settings and gates components on live readiness', async () => {
     persisted.onboarding.completed = false
     persisted.onboarding.last_step = 'welcome'

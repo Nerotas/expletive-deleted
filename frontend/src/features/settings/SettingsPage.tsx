@@ -315,7 +315,14 @@ export function SettingsPage({ controller, capabilities, checkingSystem, onCheck
             <strong>{APPLICATION_DISPLAY_NAME} 1.0.1</strong>
             <span>Electron desktop · local processing · Windows</span>
           </div>
-          <button className="button secondary" onClick={onOpenOnboarding}>Open setup walkthrough</button>
+        </SettingsSection>
+
+        <SettingsSection title="Onboarding" description="Replay the guided setup whenever you need it">
+          <div className="about-setting">
+            <strong>Redo onboarding</strong>
+            <span>Start again at Welcome while keeping your saved dictionary, folders, and processing preferences.</span>
+          </div>
+          <button className="button secondary" onClick={onOpenOnboarding}>Redo onboarding</button>
         </SettingsSection>
 
         <SettingsSection title="Support" description="Help sustain future development">
