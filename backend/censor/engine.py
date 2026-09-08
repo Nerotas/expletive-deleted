@@ -901,17 +901,18 @@ class ProfanityCensor:
                 return False
 
         if profane_segments:
-            method = "surround center-channel ducking" if source_has_center_channel else self.censor_method
+            method = self.censor_method
             print(f"[*] Applying censoring (method: {method})...")
         elif source_has_center_channel and surround_output == "downmix_stereo":
             print("[*] No profanity detected. Downmixing surround audio to stereo...")
         else:
             print("[*] No profanity detected. Applying requested output settings...")
 
-        # Supported surround layouts always use their center channel; stereo karaoke remains opt-in.
+        # Karaoke is opt-in. Muting must affect every channel so dialogue cannot
+        # remain audible through a surround channel outside the front center.
         use_filter_complex = False
         filter_complex = None
-        if profane_segments and (source_has_center_channel or self.censor_method == "karaoke"):
+        if profane_segments and self.censor_method == "karaoke":
             filter_complex = self.generate_karaoke_filter_complex(profane_segments)
             use_filter_complex = filter_complex is not None
 

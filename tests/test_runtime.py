@@ -365,7 +365,7 @@ class RuntimeTests(unittest.TestCase):
         censor.get_media_duration_seconds = MagicMock(return_value=60.0)
         return censor
 
-    def test_5_1_downmix_occurs_after_center_channel_censorship(self):
+    def test_5_1_downmix_mutes_all_channels_before_downmixing(self):
         censor = self.create_surround_censor()
         censor.surround_output = "downmix_stereo"
 
@@ -375,9 +375,11 @@ class RuntimeTests(unittest.TestCase):
 
         self.assertTrue(success)
         command = run.call_args.args[0]
-        self.assertIn("-filter_complex", command)
+        self.assertIn("-af", command)
+        self.assertIn("volume=0:enable='between(t,0.85,2.15)'", command)
+        self.assertNotIn("-filter_complex", command)
         self.assertEqual(command[command.index("-ac") + 1], "2")
-        self.assertLess(command.index("-filter_complex"), command.index("-ac"))
+        self.assertLess(command.index("-af"), command.index("-ac"))
 
     def test_5_1_output_preserves_surround_layout_when_requested(self):
         censor = self.create_surround_censor()
@@ -388,7 +390,11 @@ class RuntimeTests(unittest.TestCase):
             success = censor.censor_video([{"start": 1.0, "end": 2.0}])
 
         self.assertTrue(success)
-        self.assertNotIn("-ac", run.call_args.args[0])
+        command = run.call_args.args[0]
+        self.assertIn("-af", command)
+        self.assertIn("volume=0:enable='between(t,0.85,2.15)'", command)
+        self.assertNotIn("-filter_complex", command)
+        self.assertNotIn("-ac", command)
 
     def test_preserve_source_video_uses_stream_copy(self):
         censor = self.create_surround_censor()
