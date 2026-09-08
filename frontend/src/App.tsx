@@ -13,6 +13,7 @@ import { useCapabilities } from './features/capabilities/useCapabilities'
 import { QueuePage } from './features/queue/QueuePage'
 import { useQueue } from './features/queue/useQueue'
 import { OnboardingPage } from './features/onboarding/OnboardingPage'
+import { BackendSetupPage } from './features/onboarding/BackendSetupPage'
 import { SettingsPage } from './features/settings/SettingsPage'
 import { useSettingsController } from './features/settings/useSettingsController'
 import { useTheme } from './hooks/use-theme'
@@ -49,7 +50,8 @@ function App() {
   )
 
   const queue = useQueue({
-    enabled: location.pathname === '/' && settings.persisted?.onboarding.completed === true,
+    enabled: (location.pathname === '/' && settings.persisted?.onboarding.completed === true)
+      || location.pathname === '/onboarding',
     onError: reportError,
     onNotice: reportNotice,
   })
@@ -82,7 +84,7 @@ function App() {
           />
         )}
 
-        <Routes>
+        {settings.error ? <BackendSetupPage detail={settings.error instanceof Error ? settings.error.message : String(settings.error)} /> : <Routes>
           <Route
             path="/onboarding"
             element={
@@ -95,6 +97,7 @@ function App() {
                     checking={capabilities.checking}
                     capabilityBusy={capabilities.busy}
                     dictionary={dictionary}
+                    queue={queue}
                     onReviewInstall={(components) => void capabilities.reviewInstall(components)}
                     onLocateExisting={(component) => void capabilities.locateExisting(component)}
                     onCheckAgain={() => void capabilities.refresh()}
@@ -147,7 +150,7 @@ function App() {
             }
           />
           <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        </Routes>}
       </main>
       {dictionary.review && (
         <ReviewDialog

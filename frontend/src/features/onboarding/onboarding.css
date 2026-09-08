@@ -27,6 +27,33 @@
 .onboarding-summary strong { font-size: 12px; }
 .onboarding-summary span { color: var(--muted); font-size: 10px; line-height: 1.5; }
 .onboarding-caution { padding: 12px 14px; margin: 22px 0 0; border: 1px solid color-mix(in srgb, var(--warning) 42%, var(--line)); background: color-mix(in srgb, var(--warning) 8%, var(--surface)); color: var(--muted); font-size: 11px; line-height: 1.55; }
+.onboarding-caution svg { vertical-align: text-bottom; margin-right: 5px; }
+.onboarding-setting-section { border-top: 1px solid var(--line); margin-top: 24px; padding-top: 22px; }
+.onboarding-setting-section:first-of-type { border-top: 0; margin-top: 0; padding-top: 0; }
+.onboarding-section-heading { margin-bottom: 14px; }
+.onboarding-section-heading h3 { font: 700 17px var(--display); margin: 0 0 5px; }
+.onboarding-section-heading p { color: var(--muted); font-size: 11px; line-height: 1.5; margin: 0; }
+.onboarding-automation { margin-top: 10px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.onboarding-automation:first-of-type { border-top: 1px solid var(--line); }
+.onboarding-import { display: grid; justify-items: center; gap: 10px; padding: 28px; margin-top: 20px; border: 2px dashed var(--line); background: var(--surface-raised); text-align: center; }
+.onboarding-import svg { color: var(--signal); }
+.onboarding-import h3 { margin: 0; font: 700 17px var(--display); }
+.onboarding-import p { margin: 0; color: var(--muted); font-size: 11px; }
+.onboarding-import code { overflow-wrap: anywhere; }
+.onboarding-import-confirmation { display: grid; gap: 8px; margin-top: 14px; padding: 15px; border: 1px solid var(--line); }
+.onboarding-import-confirmation strong { font-size: 12px; }
+.onboarding-import-confirmation span { color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+.onboarding-import-confirmation .button { justify-self: start; }
+.onboarding-first-file { padding: 20px; border: 1px solid var(--line); background: var(--surface-raised); }
+.onboarding-first-file h3 { margin: 0 0 8px; font: 700 17px var(--display); }
+.onboarding-first-file > p { color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+.onboarding-helper { line-height: 1.55; }
+.backend-setup-page { max-width: 760px; margin: 42px auto; padding: 42px; border: 1px solid var(--line); background: var(--surface); box-shadow: 0 18px 50px var(--shadow); }
+.backend-setup-page > svg { color: var(--warning); }
+.backend-setup-page h1 { margin: 8px 0 14px; font: 700 30px/1.1 var(--display); }
+.backend-setup-page > p, .backend-setup-page li { color: var(--muted); font-size: 13px; line-height: 1.6; }
+.backend-setup-detail { padding: 12px; border-left: 3px solid var(--warning); background: var(--surface-raised); overflow-wrap: anywhere; }
+.backend-setup-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
 .component-list { border: 1px solid var(--line); }
 .component-row { min-height: 86px; display: grid; grid-template-columns: 28px minmax(190px, 1fr) auto auto; align-items: center; gap: 12px; padding: 13px 15px; border-bottom: 1px solid var(--line); }
 .component-row:last-child { border-bottom: 0; }
@@ -72,4 +99,4 @@
 .finish-summary dd { margin: 0; font-size: 11px; overflow-wrap: anywhere; }
 [data-theme='dark'] .onboarding-rail { background: #0d2838; }
 @media (max-width: 900px) { .onboarding-page { grid-template-columns: 180px minmax(0, 1fr); } .onboarding-step { padding: 34px 28px 24px; } .component-row { grid-template-columns: 28px 1fr auto; } .component-actions { grid-column: 2 / -1; } }
-@media (max-width: 680px) { .onboarding-page { grid-template-columns: 1fr; } .onboarding-rail { padding: 20px; } .onboarding-rail h1 { margin-bottom: 14px; } .onboarding-rail ol { grid-template-columns: repeat(8, 1fr); gap: 4px; } .onboarding-rail li { font-size: 0; justify-content: center; } .onboarding-rail > small { display: none; } .onboarding-workspace { min-height: 600px; } .onboarding-step { padding: 26px 18px; } .two-column, .onboarding-summary, .workflow-steps { grid-template-columns: 1fr; } .onboarding-folders label { grid-template-columns: 1fr; gap: 6px; } .onboarding-actions { padding: 14px; } }
+@media (max-width: 680px) { .onboarding-page { grid-template-columns: 1fr; } .onboarding-rail { padding: 20px; } .onboarding-rail h1 { margin-bottom: 14px; } .onboarding-rail ol { grid-template-columns: repeat(6, 1fr); gap: 4px; } .onboarding-rail li { font-size: 0; justify-content: center; } .onboarding-rail > small { display: none; } .onboarding-workspace { min-height: 600px; } .onboarding-step { padding: 26px 18px; } .two-column, .onboarding-summary, .workflow-steps { grid-template-columns: 1fr; } .onboarding-folders label { grid-template-columns: 1fr; gap: 6px; } .onboarding-actions { padding: 14px; } .onboarding-actions > span { font-size: 0; } .backend-setup-page { margin: 20px; padding: 26px 20px; } }

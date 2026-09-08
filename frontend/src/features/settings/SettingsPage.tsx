@@ -103,8 +103,8 @@ export function SettingsPage({ controller, capabilities, checkingSystem, onCheck
           </Field>
           <label className="toggle-row">
             <div>
-              <strong>Automatically transcode verified transcripts</strong>
-              <span>Place each newly transcribed video in the separate transcode queue.</span>
+              <strong>Automatically create a censored copy after transcription</strong>
+              <span>Place each newly verified transcript in the separate censored-copy queue.</span>
             </div>
             <input
               type="checkbox"
@@ -117,8 +117,8 @@ export function SettingsPage({ controller, capabilities, checkingSystem, onCheck
           </label>
           <label className="toggle-row">
             <div>
-              <strong>Automatically transcode completed YouTube downloads</strong>
-              <span>After a YouTube video reaches Ready, create its verified transcript, then queue its transcoded copy.</span>
+              <strong>Automatically process YouTube downloads</strong>
+              <span>After a YouTube video reaches Ready, create its verified transcript, then queue its censored copy.</span>
             </div>
             <input
               type="checkbox"
