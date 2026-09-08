@@ -126,16 +126,29 @@ class SettingsModelTests(unittest.TestCase):
 
     def test_onboarding_defaults_incomplete_and_round_trips(self):
         settings = AppSettings.defaults()
-        completed = replace(settings, onboarding=replace(settings.onboarding, completed=True))
+        completed = replace(settings, onboarding=replace(settings.onboarding, completed=True, last_step="finish"))
 
         self.assertFalse(settings.onboarding.completed)
+        self.assertEqual(settings.onboarding.last_step, "welcome")
         self.assertTrue(settings_from_dict(settings_to_dict(completed)).onboarding.completed)
+        self.assertEqual(settings_from_dict(settings_to_dict(completed)).onboarding.last_step, "finish")
 
     def test_invalid_onboarding_value_is_rejected(self):
         payload = settings_to_dict(AppSettings.defaults())
         payload["onboarding"] = {"completed": "yes"}
 
         with self.assertRaisesRegex(SettingsValidationError, "onboarding.completed must be a boolean"):
+            settings_from_dict(payload)
+
+    def test_invalid_onboarding_step_is_rejected(self):
+        payload = settings_to_dict(AppSettings.defaults())
+        payload["onboarding"]["last_step"] = ""
+
+        with self.assertRaisesRegex(SettingsValidationError, "onboarding.last_step must be a non-empty string"):
+            settings_from_dict(payload)
+
+        payload["onboarding"]["last_step"] = "unknown"
+        with self.assertRaisesRegex(SettingsValidationError, "not a supported walkthrough section"):
             settings_from_dict(payload)
 
     def test_unknown_fields_are_rejected(self):
