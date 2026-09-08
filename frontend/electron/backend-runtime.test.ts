@@ -34,4 +34,11 @@ describe('backend runtime resolution', () => {
     expect(backendEnvironment({ CENSOR_PROJECT_ROOT: String.raw`D:\Program Files\Expletive Deleted\resources\app-backend` }))
       .toMatchObject({ CENSOR_PROJECT_ROOT: '' })
   })
+
+  it('passes Electron\'s app-data root to the Python bridge', () => {
+    const localAppData = path.resolve('parent-local-app-data')
+
+    expect(backendEnvironment({ LOCALAPPDATA: localAppData }))
+      .toMatchObject({ CENSOR_APP_DATA_DIR: path.join(localAppData, 'ExpletiveDeleted') })
+  })
 })

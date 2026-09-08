@@ -11,7 +11,12 @@ export type BackendRuntime = {
 export function backendEnvironment(
   environment: NodeJS.ProcessEnv = process.env,
 ): NodeJS.ProcessEnv {
-  return { ...environment, CENSOR_PROJECT_ROOT: '' }
+  const localAppData = environment.LOCALAPPDATA?.trim()
+  return {
+    ...environment,
+    CENSOR_PROJECT_ROOT: '',
+    ...(localAppData ? { CENSOR_APP_DATA_DIR: path.join(localAppData, 'ExpletiveDeleted') } : {}),
+  }
 }
 
 type BackendRootOptions = {

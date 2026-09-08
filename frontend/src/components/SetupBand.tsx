@@ -10,6 +10,12 @@ type SetupBandProps = {
 }
 
 export function SetupBand({ capabilities, reviewInstall, locateExisting, checkAgain, busy }: SetupBandProps) {
+  const requiredComponents = [
+    !(capabilities.ffmpeg && capabilities.ffprobe) && 'ffmpeg',
+    !capabilities.whisper && 'python',
+    !(capabilities.whisper_model_ready && capabilities.whisper_model === 'large-v3') && 'whisper_model',
+  ].filter((component): component is string => Boolean(component))
+
   return (
     <section className="setup-band">
       <div>
@@ -51,9 +57,12 @@ export function SetupBand({ capabilities, reviewInstall, locateExisting, checkAg
         />
         <SetupItem label="yt-dlp (YouTube downloads, optional)" ready={Boolean(capabilities.ytdlp)} busy={busy} locate={() => locateExisting('ytdlp')} action={!capabilities.ytdlp ? () => reviewInstall(['ytdlp']) : undefined} />
       </div>
-      <button className="setup-check" disabled={busy} onClick={checkAgain}>
-        <RefreshCw className={busy ? 'spin' : undefined} size={15} /> Check again
-      </button>
+      <div className="setup-band-controls">
+        {requiredComponents.length > 1 && <button className="setup-get-all" disabled={busy} onClick={() => reviewInstall(requiredComponents)}>Get required components</button>}
+        <button className="setup-check" disabled={busy} onClick={checkAgain}>
+          <RefreshCw className={busy ? 'spin' : undefined} size={15} /> Check again
+        </button>
+      </div>
     </section>
   )
 }

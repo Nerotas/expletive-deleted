@@ -239,7 +239,17 @@ describe('desktop application renderer', () => {
 
     expect(await screen.findByRole('heading', { name: 'Finish preparing this computer' })).toBeInTheDocument()
     expect(screen.getAllByText('Python was not found')).not.toHaveLength(0)
-    expect(screen.getByRole('button', { name: /Open Python downloads/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Get Python' })).toBeInTheDocument()
+  })
+
+  it('makes a missing Python runtime an explicit first-run step', async () => {
+    vi.mocked(desktopClient.getSettings).mockRejectedValueOnce(new Error('Python 3.9 or later is required. Install Python, then restart Expletive Deleted.'))
+    const user = userEvent.setup()
+    renderApp('/onboarding')
+
+    expect(await screen.findByRole('heading', { name: 'Install Python to continue' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Get Python' }))
+    expect(desktopClient.openExternal).toHaveBeenCalledWith('https://www.python.org/downloads/windows/')
   })
 
   it('keeps a Karaoke draft without running Queue polling off the Queue route', async () => {
@@ -915,6 +925,23 @@ describe('desktop application renderer', () => {
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(desktopClient.installDependencies).not.toHaveBeenCalled()
+  })
+
+  it('combines every missing required component into one reviewed plan', async () => {
+    vi.mocked(desktopClient.getCapabilities).mockResolvedValue({
+      ...readyCapabilities,
+      ready: false,
+      ffmpeg: false,
+      ffprobe: false,
+      whisper: false,
+      whisper_model_ready: false,
+    })
+    const user = userEvent.setup()
+    renderApp('/')
+
+    await user.click(await screen.findByRole('button', { name: 'Get required components' }))
+
+    expect(desktopClient.planDependencies).toHaveBeenCalledWith(['ffmpeg', 'python', 'whisper_model'])
   })
 
   it('returns an archived original to Ready', async () => {

@@ -171,6 +171,13 @@ class SettingsStoreTests(unittest.TestCase):
         root = default_app_data_root({"LOCALAPPDATA": "C:\\Users\\User\\AppData\\Local"})
         self.assertEqual(root, Path("C:\\Users\\User\\AppData\\Local\\ExpletiveDeleted"))
 
+    def test_explicit_app_data_root_wins_over_virtualized_local_app_data(self):
+        root = default_app_data_root({
+            "CENSOR_APP_DATA_DIR": "C:\\Users\\User\\AppData\\Local\\ExpletiveDeleted",
+            "LOCALAPPDATA": "C:\\Users\\User\\AppData\\Local\\Packages\\Python\\LocalCache\\Local",
+        })
+        self.assertEqual(root, Path("C:\\Users\\User\\AppData\\Local\\ExpletiveDeleted"))
+
     def test_app_data_requires_local_app_data(self):
         with self.assertRaisesRegex(RuntimeError, "LOCALAPPDATA is required"):
             default_app_data_root({})

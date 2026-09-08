@@ -66,6 +66,10 @@
 .component-actions { display: flex; gap: 6px; }
 .component-actions .button { height: 32px; padding: 0 10px; }
 .check-components { margin-top: 14px; }
+.onboarding-get-all { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 14px; padding: 14px; border: 1px solid var(--signal); background: var(--soft); }
+.onboarding-get-all > div { display: grid; gap: 3px; }
+.onboarding-get-all strong { font-size: 12px; }
+.onboarding-get-all span { color: var(--muted); font-size: 10px; line-height: 1.45; }
 .two-column { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .onboarding-choices > button { min-height: 145px; padding: 20px; text-align: left; border: 1px solid var(--line); background: var(--surface); color: var(--ink); display: flex; flex-direction: column; gap: 9px; }
 .onboarding-choices > button:hover, .onboarding-choices > button.selected { border-color: var(--signal); }
@@ -99,4 +103,4 @@
 .finish-summary dd { margin: 0; font-size: 11px; overflow-wrap: anywhere; }
 [data-theme='dark'] .onboarding-rail { background: #0d2838; }
 @media (max-width: 900px) { .onboarding-page { grid-template-columns: 180px minmax(0, 1fr); } .onboarding-step { padding: 34px 28px 24px; } .component-row { grid-template-columns: 28px 1fr auto; } .component-actions { grid-column: 2 / -1; } }
-@media (max-width: 680px) { .onboarding-page { grid-template-columns: 1fr; } .onboarding-rail { padding: 20px; } .onboarding-rail h1 { margin-bottom: 14px; } .onboarding-rail ol { grid-template-columns: repeat(6, 1fr); gap: 4px; } .onboarding-rail li { font-size: 0; justify-content: center; } .onboarding-rail > small { display: none; } .onboarding-workspace { min-height: 600px; } .onboarding-step { padding: 26px 18px; } .two-column, .onboarding-summary, .workflow-steps { grid-template-columns: 1fr; } .onboarding-folders label { grid-template-columns: 1fr; gap: 6px; } .onboarding-actions { padding: 14px; } .onboarding-actions > span { font-size: 0; } .backend-setup-page { margin: 20px; padding: 26px 20px; } }
+@media (max-width: 680px) { .onboarding-page { grid-template-columns: 1fr; } .onboarding-rail { padding: 20px; } .onboarding-rail h1 { margin-bottom: 14px; } .onboarding-rail ol { grid-template-columns: repeat(6, 1fr); gap: 4px; } .onboarding-rail li { font-size: 0; justify-content: center; } .onboarding-rail > small { display: none; } .onboarding-workspace { min-height: 600px; } .onboarding-step { padding: 26px 18px; } .two-column, .onboarding-summary, .workflow-steps { grid-template-columns: 1fr; } .onboarding-folders label { grid-template-columns: 1fr; gap: 6px; } .onboarding-get-all { align-items: stretch; flex-direction: column; } .onboarding-actions { padding: 14px; } .onboarding-actions > span { font-size: 0; } .backend-setup-page { margin: 20px; padding: 26px 20px; } }

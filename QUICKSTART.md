@@ -9,9 +9,9 @@ Normal users should follow the desktop application workflow. Do not start `backe
 
 ## Installed Windows application (recommended)
 
-1. Install Python 3.9 or later from an approved Python distribution and ensure the `py` launcher or `python` command is available.
-2. Run `Expletive-Deleted-Setup-<version>-x64.exe` and choose the installation directory.
-3. Start **Expletive Deleted** from the Start menu or desktop shortcut.
+1. Run `Expletive-Deleted-Setup-<version>-x64.exe` and choose the installation directory.
+2. Start **Expletive Deleted** from the Start menu or desktop shortcut.
+3. If Python is missing, the first screen explains why it is needed and offers **Get Python**, which opens the official download page. After Python 3.9 or later is installed, return to the app and choose **Try again**.
 4. Follow the in-app walkthrough to check local components, choose initial settings, and optionally try a first file.
 
 The installer contains the application and its first-party backend, but does not bundle or silently retrieve Python, the external `ffmpeg.exe`/`ffprobe.exe` processing runtime, Python speech-recognition packages, or Whisper models. Electron's required Chromium codec `ffmpeg.dll` is part of the desktop framework, cannot process jobs, and does not count as an installed FFmpeg dependency. Uninstalling the application does not delete settings, downloaded runtime components, models, or user media beneath `%LOCALAPPDATA%\ExpletiveDeleted` and `%USERPROFILE%\Documents\Expletive Deleted`.
@@ -52,7 +52,7 @@ The first launch checks the local system for:
 - Python speech-recognition dependencies
 - Whisper `large-v3`
 
-If anything is missing, the **Get ready** section shows the affected component. Choose **Locate existing** to select and verify an installation already on the computer, or choose **Review setup** to review the exact third-party source, local destination, and download size before continuing. Canceling the disclosure does not start retrieval. After an approved operation, the backend verifies the component and refreshes System Ready status.
+If two or more required components are missing, choose **Get required components** to prepare one combined plan. It includes FFmpeg/FFprobe, Python speech-recognition packages, and the Whisper model, but never optional yt-dlp. You can also choose **Locate existing** to verify an installation already on the computer, or **Get Components** for one item. The review shows each third-party source, local destination, and download size before continuing. Canceling the disclosure does not start retrieval. After an approved operation, the backend verifies the component and refreshes System Ready status.
 
 Approved FFmpeg binaries and Whisper models are stored beneath `%LOCALAPPDATA%\ExpletiveDeleted\`, outside the application package and user-media folders. The app does not modify the global Windows `PATH`. Runtime locations remain inspectable and changeable under **Settings → Runtime components**.
 

@@ -18,7 +18,7 @@ Run the backend regression suite separately:
 
 ## FFmpeg or FFprobe Is Missing
 
-In the desktop app, use **Get ready → Locate existing** to select `ffmpeg.exe`; the backend also locates and verifies the adjacent `ffprobe.exe`. Or choose **Review setup**, review the source and destination disclosure, and select **Continue**. The managed copy is stored below `%LOCALAPPDATA%\ExpletiveDeleted\dependencies\ffmpeg\` and does not modify the global `PATH`.
+In the desktop app, use **Get ready → Locate existing** to select `ffmpeg.exe`; the backend also locates and verifies the adjacent `ffprobe.exe`. Or choose **Get Components**, review the source and destination disclosure, and select **Continue**. The managed copy is stored below `%LOCALAPPDATA%\ExpletiveDeleted\dependencies\ffmpeg\` and does not modify the global `PATH`.
 
 For advanced command-line use, install FFmpeg and rerun diagnostics.
 
@@ -73,7 +73,7 @@ Show cache locations and sizes:
 .\.venv\Scripts\python.exe manage_whisper_cache.py status
 ```
 
-In the desktop app, choose **Review setup** only when you are ready to review and approve the model source, destination, and approximate size. Choose **Locate existing** to verify an existing faster-whisper cache instead. Processing never starts a model download implicitly.
+In the desktop app, choose **Get Components** only when you are ready to review and approve the model source, destination, and approximate size. Choose **Locate existing** to verify an existing faster-whisper cache instead. Processing never starts a model download implicitly.
 
 Override the cache location when needed:
 

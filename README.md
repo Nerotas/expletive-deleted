@@ -52,14 +52,14 @@ YouTube import is local and optional. The app uses the separately approved `yt-d
 
 ## Install on Windows
 
-1. Install Python 3.9 or later from a trusted Python distribution. Ensure the `py` launcher or `python` command is available.
-2. Download `Expletive-Deleted-Setup-1.0.1-x64.exe` from the [latest release](https://github.com/Nerotas/expletive-deleted/releases/latest).
-3. Run the installer, then open **Expletive Deleted** from the Start menu or desktop shortcut.
+1. Download `Expletive-Deleted-Setup-1.0.1-x64.exe` from the [latest release](https://github.com/Nerotas/expletive-deleted/releases/latest).
+2. Run the installer, then open **Expletive Deleted** from the Start menu or desktop shortcut.
+3. If Python is not available, the app opens a first-run screen with **Get Python**, which opens the official Python download page. Install Python 3.9 or later, then choose **Try again** in the app.
 4. Complete the first-run walkthrough: Welcome, Get ready, Your settings, Add a file, Process safely, and Finish. It checks required components, prepares your dictionary, confirms folders and censoring preferences, and lets you choose the automatic local and YouTube workflows. It saves progress only when you choose **Save & Continue**.
 
 The installer contains the Electron application and first-party Python backend. It does **not** bundle Python, Python processing packages, the external `ffmpeg.exe`/`ffprobe.exe` runtime, or Whisper models.
 
-When a component is missing, the app shows its status and offers an inspectable setup plan. Nothing is retrieved until you choose an action, review the source and destination, and approve it. Valid existing installations can be selected instead.
+When two or more required components are missing, **Get required components** prepares one combined, inspectable setup plan for FFmpeg/FFprobe, Python packages, and the Whisper model. Nothing is retrieved until you review every source and destination and approve the plan. Valid existing installations can be selected instead.
 
 ## Requirements
 
