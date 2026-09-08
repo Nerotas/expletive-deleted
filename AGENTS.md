@@ -145,6 +145,7 @@ Coding agents may inspect the repository, modify files in the working tree, run 
 Repository history and remote repositories require explicit user authorization.
 
 - Do not create a Git commit unless the user explicitly asks for a commit.
+- A prior request to commit applies only to the changes named or completed at that time. Do not commit later work unless the user explicitly asks again.
 - Do not push commits or branches to any remote unless the user explicitly asks for a push.
 - Permission to modify files does not imply permission to commit.
 - Permission to commit does not imply permission to push.
