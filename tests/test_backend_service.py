@@ -1,12 +1,13 @@
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from threading import Event
 from unittest.mock import MagicMock, patch
 
 from backend.jobs import JobManager, JobRecord
 from backend.jobs.models import JobError
-from backend.service import ArchiveSourceError, BackendService, ServiceBusyError
+from backend.service import ArchiveSourceError, BackendService, LibraryItem, ServiceBusyError
 from backend.service.capabilities import get_capabilities
 from backend.settings import AppSettings, DirectorySettings, SettingsStore
 
@@ -250,8 +251,15 @@ class BackendServiceTests(unittest.TestCase):
                                         error=JobError("processing_failed", "Failed") if job_status == "failed" else None)
                         service.jobs._jobs = (job,)
                         destination = service.settings.directories.archive / source.name
+                        library_item = LibraryItem(
+                            source,
+                            library_status,
+                            datetime.now(timezone.utc),
+                            transcript=artifact if library_status == "transcribed" else None,
+                            output=artifact if library_status == "finished" else None,
+                        )
                         try:
-                            with patch("backend.service.library.transcript_cache_is_compatible", return_value=True):
+                            with patch.object(service, "get_library", return_value=(library_item,)):
                                 if same_source and job_status not in ("completed", "transcribed", "failed", "cancelled"):
                                     with self.assertRaisesRegex(ServiceBusyError, "This file.*queued or processing"):
                                         service.archive_source(source)
