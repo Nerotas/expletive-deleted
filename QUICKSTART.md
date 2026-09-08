@@ -62,7 +62,7 @@ Whisper `large-v3` is required for reliable word-level censor timing. Smaller mo
 3. Return to **Queue** and choose an action for one file:
    - **Transcribe only** creates and verifies a transcript without creating media output.
    - **Retranscribe** replaces an existing transcript with a newly generated, verified transcript while retaining any finished output.
-   - **Archive** moves an original with a verified transcript or output to Processed while the queue is idle.
+   - **Archive** moves an original with a verified transcript or output to Processed when that file has no queued or active job. Other files can continue processing or waiting in the queue.
 4. To process selected files, check Ready rows and choose **Queue transcript only**. In the **Transcribed** view, check verified transcript rows and choose **Queue censor**. Valid files remain queued if another selected file is rejected.
 5. Use the status filters and sort control to inspect Ready, Queued, Active, Transcribed, or Finished files. The active row can be cancelled from its Actions group; waiting rows show their queue position and can be removed independently.
 6. Review discovered potential profanity and update the local censor or ignore policy in the app when appropriate.

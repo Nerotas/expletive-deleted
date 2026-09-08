@@ -113,14 +113,13 @@ class BackendService:
 
     def archive_source(self, source: Path) -> dict[str, object]:
         """Move a completed or transcribed source out of the Queue without touching artifacts."""
-        active = tuple(
-            job for job in self.jobs.list()
-            if job.status not in ("completed", "failed", "cancelled", "transcribed")
-        )
-        if active:
-            raise ServiceBusyError("Files cannot be archived while jobs are active")
-
         source = source.expanduser().resolve()
+        if any(
+            job.source.expanduser().resolve() == source
+            and job.status not in ("completed", "failed", "cancelled", "transcribed")
+            for job in self.jobs.list()
+        ):
+            raise ServiceBusyError("This file cannot be archived while it is queued or processing")
         input_root = self.settings.directories.input.resolve()
         try:
             relative_media_path(source, input_root)

@@ -40,7 +40,7 @@ Both package commands audit `win-unpacked` and fail if it contains `ffmpeg.exe`,
 
 ## Queue behavior
 
-- Each local file exposes **Transcribe** or **Retranscribe** and guarded **Archive** actions. Censor submission is available in bulk from the Transcribed filter.
+- Each local file exposes **Transcribe** or **Retranscribe** and guarded **Archive** actions. Archive requires a verified transcript or output and no queued or active job for that source; unrelated jobs do not block it. Censor submission is available in bulk from the Transcribed filter.
 - Ready-file checkboxes submit transcript jobs; Transcribed-file checkboxes submit an exact ordered censor selection through the typed `jobs.submit_many` bridge operation.
 - The table can filter Ready, Queued, Active, Transcribed, and Finished rows and sort by queue position, file name, or status.
 - Waiting jobs show their position and can be removed independently; the running job can be cancelled from its row or the top-level cancel action.
