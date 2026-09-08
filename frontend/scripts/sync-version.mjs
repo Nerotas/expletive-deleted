@@ -46,6 +46,10 @@ const updates = [
     patterns: [
       [/Version \d+\.\d+\.\d+/, `Version ${version}`],
       [/Expletive Deleted \d+\.\d+\.\d+/, `Expletive Deleted ${version}`],
+      [
+        /https:\/\/github\.com\/Nerotas\/expletive-deleted\/releases\/download\/v\d+\.\d+\.\d+\/Expletive-Deleted-Setup-\d+\.\d+\.\d+-x64\.exe/g,
+        `https://github.com/Nerotas/expletive-deleted/releases/download/v${version}/Expletive-Deleted-Setup-${version}-x64.exe`,
+      ],
     ],
   },
 ]
