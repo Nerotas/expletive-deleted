@@ -729,7 +729,7 @@ function QueueRow({
         {!remote && <button
           className="archive-action"
           disabled={archiveDisabled}
-          title={!['transcribed', 'finished'].includes(item.status) ? 'Archive is available after a verified transcript or output exists' : pendingJob ? 'This file is already queued or processing' : 'Move the verified source to Processed'}
+          title={!['transcribed', 'finished'].includes(item.status) ? 'Archive is available after a verified transcript or output exists' : busy ? 'Wait for the current queue action to finish' : pendingJob ? 'This file is already queued or processing' : 'Move the verified source to Processed'}
           onClick={() => void onArchive(item.source)}
         ><ArchiveIcon size={13} />Archive</button>}
         {job?.status === 'failed' && job.error?.code === 'authentication_required' && !pendingJob && <button disabled={busy} onClick={() => onAuthenticationRequired(job)}>Use browser session</button>}
