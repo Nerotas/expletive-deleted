@@ -163,7 +163,7 @@ class DownloadManager:
             source = next((item for item in staging.glob("source.*") if item.suffix != ".part"), None)
             if source is None: raise RuntimeError("yt-dlp completed without creating media")
             final = staging / "final.mp4"
-            self._set(job_id, "preparing", message="Preparing H.264/AAC MP4")
+            self._set(job_id, "preparing", message="Preparing downloaded media")
             self._prepare(job_id, source, final, str(ffmpeg), str(ffprobe), cancellation)
             title = self._records[job_id].title or record.video_id
             destination = self._destination(title, record.video_id)
@@ -188,15 +188,24 @@ class DownloadManager:
 
     def _prepare(self, job_id: str, source: Path, final: Path, ffmpeg: str, ffprobe: str, cancellation: Event) -> None:
         duration_seconds = self._duration(source, ffprobe)
+        h264_requested = self.settings.video.mode == "h264"
         copy = self._run_ffmpeg(job_id, [ffmpeg, "-y", "-i", str(source), "-map", "0:v:0", "-map", "0:a:0", "-c", "copy", str(final)], cancellation, duration_seconds)
         if copy.returncode == 0:
-            try: self._verify(final, ffprobe); return
-            except RuntimeError: final.unlink(missing_ok=True)
+            try:
+                self._verify(final, ffprobe, require_h264=h264_requested)
+                return
+            except RuntimeError:
+                final.unlink(missing_ok=True)
+        if not h264_requested:
+            raise RuntimeError(
+                "The downloaded streams cannot be copied into an MP4 file. "
+                "Choose Convert to H.264 in Settings or select a compatible source."
+            )
         encoder = select_working_video_encoder(ffmpeg, available_encoders(ffmpeg))
         convert = self._run_ffmpeg(job_id, [ffmpeg, "-y", "-i", str(source), "-map", "0:v:0", "-map", "0:a:0", "-c:v", encoder, "-c:a", "aac", str(final)], cancellation, duration_seconds)
         if cancellation.is_set(): raise InterruptedError
         if convert.returncode: raise RuntimeError((convert.stderr or convert.stdout or "FFmpeg conversion failed").strip().splitlines()[-1])
-        self._verify(final, ffprobe)
+        self._verify(final, ffprobe, require_h264=True)
 
     def _run_ffmpeg(self, job_id: str, command: list[str], cancellation: Event, duration_seconds: float | None) -> subprocess.CompletedProcess[str]:
         progress_command = [command[0], "-progress", "pipe:2", "-nostats", *command[1:]]
@@ -213,8 +222,8 @@ class DownloadManager:
                 except ValueError: pass
             elif key == "progress" and duration_seconds and encoded_seconds:
                 percent = min(100.0, encoded_seconds / duration_seconds * 100)
-                self._set(job_id, "preparing", percent, message="Preparing H.264/AAC MP4")
-                self._emit(job_id, "progress", stage="preparing", percent=percent, message="Preparing H.264/AAC MP4")
+                self._set(job_id, "preparing", percent, message="Preparing downloaded media")
+                self._emit(job_id, "progress", stage="preparing", percent=percent, message="Preparing downloaded media")
             if cancellation.is_set():
                 process.terminate()
                 raise InterruptedError
@@ -235,11 +244,12 @@ class DownloadManager:
         return duration if result.returncode == 0 and duration > 0 else None
 
     @staticmethod
-    def _verify(path: Path, ffprobe: str) -> None:
+    def _verify(path: Path, ffprobe: str, *, require_h264: bool) -> None:
         result = subprocess.run([ffprobe, "-v", "error", "-show_entries", "stream=codec_type,codec_name", "-of", "json", str(path)], capture_output=True, text=True)
         try: codecs = {(entry.get("codec_type"), entry.get("codec_name")) for entry in json.loads(result.stdout).get("streams", [])}
         except json.JSONDecodeError as exc: raise RuntimeError("FFprobe could not read prepared output") from exc
-        if not path.is_file() or path.stat().st_size == 0 or ("video", "h264") not in codecs or ("audio", "aac") not in codecs: raise RuntimeError("Prepared output is not a readable H.264 video with AAC audio")
+        if not path.is_file() or path.stat().st_size == 0 or not any(kind == "video" for kind, _codec in codecs) or not any(kind == "audio" for kind, _codec in codecs): raise RuntimeError("Prepared output is not a readable audio/video file")
+        if require_h264 and ("video", "h264") not in codecs: raise RuntimeError("Prepared output is not readable H.264 video")
 
     def _destination(self, title: str, video_id: str) -> Path:
         safe = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", title).strip(" .") or video_id

@@ -83,6 +83,26 @@ class DownloadManagerTests(unittest.TestCase):
         self.assertEqual(retry.id, first.id)
         self.assertEqual(len(manager.list()), 1)
 
+    def test_preserve_source_youtube_import_never_encodes_after_remux_failure(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            settings = AppSettings(directories=DirectorySettings(root / "Ready", root / "Finished", root / "Processed", root / "Transcripts"))
+            manager = DownloadManager(settings)
+            source, final = root / "source.webm", root / "final.mp4"
+            source.touch()
+            failed_copy = MagicMock(returncode=1, stdout="copy failed", stderr="copy failed")
+
+            with (
+                patch.object(manager, "_duration", return_value=None),
+                patch.object(manager, "_run_ffmpeg", return_value=failed_copy) as run,
+                patch("backend.jobs.downloads.select_working_video_encoder") as select_encoder,
+                self.assertRaisesRegex(RuntimeError, "Choose Convert to H.264"),
+            ):
+                manager._prepare("download-job", source, final, "ffmpeg", "ffprobe", Event())
+
+        self.assertEqual(run.call_count, 1)
+        select_encoder.assert_not_called()
+
     def test_ffmpeg_preparation_emits_media_time_progress(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
