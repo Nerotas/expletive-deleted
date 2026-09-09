@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { access, readFile, readdir } from 'node:fs/promises'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const suppliedDirectory = process.argv[2] ?? process.env.BUNDLED_RUNTIME_DIR
 if (!suppliedDirectory) throw new Error('Pass the staged runtime directory or set BUNDLED_RUNTIME_DIR.')
@@ -18,14 +19,6 @@ const requiredFiles = [
 ]
 const forbiddenNames = new Set(['libx264.dll', 'libx265.dll', 'yt-dlp.exe', 'model.bin'])
 const forbiddenFragments = ['models--', 'whisper-cache']
-const requiredSbomComponents = [
-  { label: 'Python', names: ['python', 'cpython'], license: 'PSF-2.0' },
-  { label: 'FFmpeg', names: ['ffmpeg'], license: 'LGPL-2.1-or-later' },
-  { label: 'PyAV', names: ['pyav', 'av'], license: 'BSD-3-Clause' },
-  { label: 'faster-whisper', names: ['faster-whisper'], license: 'MIT' },
-  { label: 'CTranslate2', names: ['ctranslate2'], license: 'MIT' },
-]
-
 for (const relativePath of requiredFiles) await access(path.join(runtimeRoot, relativePath))
 await access(path.join(runtimeRoot, 'LICENSES'))
 
@@ -34,6 +27,25 @@ const hash = async (relativePath) => createHash('sha256')
   .digest('hex')
 
 const manifest = JSON.parse(await readFile(path.join(runtimeRoot, 'runtime-manifest.json'), 'utf8'))
+const requirementsPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'requirements.txt')
+const requirements = new Map(
+  (await readFile(requirementsPath, 'utf8')).split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line.split('=='))
+    .filter(([name, version]) => Boolean(name && version))
+    .map(([name, version]) => [name.toLowerCase(), version]),
+)
+const requiredSbomComponents = [
+  { label: 'Python', names: ['python', 'cpython'], version: manifest.python?.version, license: 'PSF-2.0' },
+  { label: 'FFmpeg', names: ['ffmpeg'], version: manifest.ffmpeg?.version, license: 'LGPL-2.1-or-later' },
+  { label: 'PyAV', names: ['pyav', 'av'], version: requirements.get('av'), license: 'BSD-3-Clause' },
+  { label: 'faster-whisper', names: ['faster-whisper'], version: requirements.get('faster-whisper'), license: 'MIT' },
+  { label: 'CTranslate2', names: ['ctranslate2'], version: requirements.get('ctranslate2'), license: 'MIT' },
+  { label: 'NumPy', names: ['numpy'], version: requirements.get('numpy'), license: 'BSD-3-Clause' },
+  { label: 'better-profanity', names: ['better-profanity'], version: requirements.get('better-profanity'), license: 'MIT' },
+  { label: 'huggingface-hub', names: ['huggingface-hub', 'huggingface_hub'], version: requirements.get('huggingface-hub'), license: 'Apache-2.0' },
+]
 const manifestErrors = []
 if (manifest.schema_version !== 1) manifestErrors.push('schema_version must be 1')
 if (manifest.platform !== 'win32-x64') manifestErrors.push('platform must be win32-x64')
@@ -96,6 +108,11 @@ for (const artifact of artifacts.keys()) {
   }
 }
 
+const notices = (await readFile(path.join(runtimeRoot, 'THIRD_PARTY_NOTICES.md'), 'utf8')).toLowerCase()
+for (const component of requiredSbomComponents) {
+  if (!component.names.some((name) => notices.includes(name))) violations.push(`third-party notices must identify ${component.label}`)
+}
+
 const licenseIds = new Set()
 for (const license of manifest.licenses) {
   if (!license || typeof license.path !== 'string' || typeof license.spdx !== 'string') {
@@ -113,6 +130,8 @@ for (const licenseId of new Set(requiredSbomComponents.map((component) => compon
 
 const build = JSON.parse(await readFile(path.join(runtimeRoot, 'ffmpeg-build.json'), 'utf8'))
 if (typeof build.source_revision !== 'string' || !build.source_revision) violations.push('ffmpeg-build.json needs source_revision')
+if (typeof build.source_url !== 'string' || !/^https:\/\//.test(build.source_url)) violations.push('ffmpeg-build.json needs an HTTPS source_url')
+if (build.version !== manifest.ffmpeg?.version) violations.push('ffmpeg-build.json version must exactly match runtime manifest')
 if (!Array.isArray(build.patches)) violations.push('ffmpeg-build.json needs patches')
 if (typeof build.compiler !== 'string' || !build.compiler) violations.push('ffmpeg-build.json needs compiler')
 if (!Array.isArray(build.configure) || JSON.stringify(build.configure) !== JSON.stringify(configure)) {
@@ -130,7 +149,9 @@ if (sbom.bomFormat !== 'CycloneDX' || !Array.isArray(sbom.components)) {
     const component = sbom.components.find((candidate) => requirement.names.includes(String(candidate.name).toLowerCase()))
     const componentLicenses = component?.licenses ?? []
     const hasLicense = componentLicenses.some((entry) => entry?.license?.id === requirement.license)
-    if (!component || !hasLicense) violations.push(`SBOM must identify ${requirement.label} under ${requirement.license}`)
+    if (!component || !hasLicense || component.version !== requirement.version) {
+      violations.push(`SBOM must identify ${requirement.label} ${requirement.version} under ${requirement.license}`)
+    }
   }
 }
 
