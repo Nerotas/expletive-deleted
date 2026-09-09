@@ -1,17 +1,6 @@
 name: Release
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "backend/**"
-      - "frontend/**"
-      - "resources/**"
-      - "scripts/**"
-      - "*.py"
-      - "requirements.txt"
-      - "config.example.ini"
-      - "convert-profanity-censor.ps1"
   workflow_dispatch:
     inputs:
       bump:
