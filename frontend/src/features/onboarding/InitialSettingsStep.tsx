@@ -5,10 +5,10 @@ import type { DictionaryController } from '../dictionary/useDictionary'
 import { OnboardingStepHeading } from './OnboardingStepHeading'
 
 const DIRECTORY_LABELS: Record<keyof Settings['directories'], { title: string; detail: string }> = {
-  input: { title: 'Ready folder', detail: 'Media waiting to be processed' },
-  output: { title: 'Finished folder', detail: 'Verified censored copies' },
-  archive: { title: 'Processed folder', detail: 'Originals archived only after success' },
-  transcripts: { title: 'Transcripts folder', detail: 'Reusable local transcripts' },
+  input: { title: 'Ready / Input', detail: 'Media waiting to be processed' },
+  output: { title: 'Finished / Output', detail: 'Verified censored copies' },
+  archive: { title: 'Processed / Archive', detail: 'Originals archived only after success' },
+  transcripts: { title: 'Transcripts', detail: 'Reusable local transcripts' },
 }
 
 type InitialSettingsStepProps = {
