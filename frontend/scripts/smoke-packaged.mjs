@@ -33,6 +33,13 @@ try {
   await window.waitForLoadState('domcontentloaded')
   await window.getByRole('heading', { name: 'Welcome to Expletive Deleted', exact: true }).waitFor()
 
+  if (requireBundledRuntime) {
+    await window.getByRole('button', { name: /Continue/ }).click()
+    await window.getByRole('heading', { name: 'Prepare this computer', exact: true }).waitFor()
+    await window.getByText('Expletive Deleted components', { exact: true }).waitFor()
+    await window.getByRole('button', { name: 'Download large-v3 model', exact: true }).waitFor()
+  }
+
   const freshSettings = await window.evaluate(() => window.expletiveDeleted.invoke('settings.get'))
   if (freshSettings.onboarding.completed) throw new Error('Fresh packaged settings should require onboarding')
   await window.evaluate((settings) => window.expletiveDeleted.invoke('settings.update', {
@@ -66,6 +73,12 @@ try {
   }))
   if (legacyBridgePresent) throw new Error('Obsolete preload bridge is still exposed')
   if (requireBundledRuntime) {
+    if (capabilities.app_runtime !== 'ready' || capabilities.app_runtime_source !== 'bundled') {
+      throw new Error('Clean packaged app did not verify its private runtime.')
+    }
+    if (capabilities.speech_model === 'ready' || capabilities.processing_ready !== false) {
+      throw new Error('Clean packaged app unexpectedly included a speech model.')
+    }
     const expectedFfmpeg = path.join(runtimeRoot, 'ffmpeg', 'ffmpeg.exe').toLowerCase()
     if (String(capabilities.ffmpeg_path ?? '').toLowerCase() !== expectedFfmpeg) {
       throw new Error('Packaged bridge did not use the bundled FFmpeg runtime.')

@@ -37,10 +37,11 @@ function rejectPending(message: string): void {
 function startBridge(): void {
   let root: string
   let runtime: ReturnType<typeof findPythonRuntime>
-  const bundledRuntime = app.isPackaged
-    ? requireBundledRuntime(process.resourcesPath, process.platform)
-    : {}
+  let bundledRuntime: ReturnType<typeof requireBundledRuntime> = {}
   try {
+    bundledRuntime = app.isPackaged
+      ? requireBundledRuntime(process.resourcesPath, process.platform)
+      : {}
     root = findBackendRoot({
       isPackaged: app.isPackaged,
       resourcesPath: process.resourcesPath,
