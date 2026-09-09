@@ -23,9 +23,16 @@
     "preview": "electron-vite preview",
     "smoke": "npm run build && node scripts/smoke.mjs",
     "audit:package": "node scripts/audit-package.mjs",
-    "package:dir": "npm run build && node scripts/package-windows.mjs dir && npm run audit:package",
-    "package:win": "npm run build && node scripts/package-windows.mjs nsis && npm run audit:package",
-    "smoke:package": "node scripts/smoke-packaged.mjs"
+    "audit:bundled-runtime": "node scripts/audit-bundled-runtime.mjs",
+    "verify:bundled-runtime": "node scripts/verify-bundled-runtime.mjs",
+    "generate:bundled-manifest": "node scripts/generate-bundled-runtime-manifest.mjs",
+    "stage:bundled-runtime": "node scripts/stage-bundled-runtime.mjs",
+    "package:dir": "npm run build && npm run stage:bundled-runtime && node scripts/package-windows.mjs dir && npm run audit:package",
+    "package:win": "npm run build && npm run stage:bundled-runtime && node scripts/package-windows.mjs nsis && npm run audit:package",
+    "package:bundled-dir": "npm run build && node scripts/stage-bundled-runtime.mjs --required && node scripts/package-windows.mjs dir && node scripts/audit-package.mjs --require-bundled-runtime",
+    "package:bundled-win": "npm run build && node scripts/stage-bundled-runtime.mjs --required && node scripts/package-windows.mjs nsis && node scripts/audit-package.mjs --require-bundled-runtime",
+    "smoke:package": "node scripts/smoke-packaged.mjs",
+    "smoke:bundled-package": "node scripts/smoke-packaged.mjs --require-bundled-runtime"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "^5.3.0",

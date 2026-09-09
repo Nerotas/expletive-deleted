@@ -29,8 +29,10 @@ except ImportError:
 
 CONFIG_FILE = PROJECT_ROOT / "config.ini"
 ENCODER_PREFERENCE = (
+    "h264_mf",
     "h264_nvenc",
     "h264_qsv",
+    "h264_amf",
     "h264_videotoolbox",
     "libx264",
 )
@@ -111,6 +113,9 @@ def get_managed_ffmpeg_directory(root: Path | None = None) -> Path:
 
 def get_managed_ytdlp_path(root: Path | None = None) -> Path:
     """Return the approved per-user yt-dlp location without downloading it."""
+    bundled = os.environ.get("CENSOR_YTDLP", "").strip()
+    if bundled:
+        return Path(bundled).expanduser().resolve()
     runtime_root = (root or get_application_runtime_root()).expanduser().resolve()
     return runtime_root / "dependencies" / "yt-dlp" / "yt-dlp.exe"
 
@@ -363,16 +368,20 @@ def _find_executable(name: str, environment_variable: str) -> str | None:
 
 
 def find_ffmpeg() -> str | None:
-    """Find configured or app-managed FFmpeg before falling back to the system."""
+    """Find the approved FFmpeg runtime without escaping a packaged installation."""
     configured = os.environ.get("CENSOR_FFMPEG")
+    if os.environ.get("CENSOR_BUNDLED_RUNTIME") == "1" and not configured:
+        return None
     if configured:
         return _find_executable("ffmpeg", "CENSOR_FFMPEG")
     return get_managed_ffmpeg_paths()[0] or _find_executable("ffmpeg", "CENSOR_FFMPEG")
 
 
 def find_ffprobe() -> str | None:
-    """Find configured or app-managed FFprobe before falling back to the system."""
+    """Find the approved FFprobe runtime without escaping a packaged installation."""
     configured = os.environ.get("CENSOR_FFPROBE")
+    if os.environ.get("CENSOR_BUNDLED_RUNTIME") == "1" and not configured:
+        return None
     if configured:
         return _find_executable("ffprobe", "CENSOR_FFPROBE")
     return get_managed_ffmpeg_paths()[1] or _find_executable("ffprobe", "CENSOR_FFPROBE")

@@ -22,6 +22,13 @@ type AppHeaderProps = {
   onOpenInstall: () => void
 }
 
+function readinessLabel(capabilities: Capabilities | null) {
+  if (capabilities?.processing_ready ?? capabilities?.ready) return 'System ready'
+  if (capabilities?.app_runtime === 'invalid') return 'App repair needed'
+  if (capabilities?.speech_model && capabilities.speech_model !== 'ready') return 'Download speech model'
+  return 'Setup required'
+}
+
 export function AppHeader({
   capabilities,
   checking,
@@ -30,6 +37,8 @@ export function AppHeader({
   toggleTheme,
   onOpenInstall,
 }: AppHeaderProps) {
+  const processingReady = capabilities?.processing_ready ?? capabilities?.ready
+  const label = readinessLabel(capabilities)
   return (
     <header className="app-header">
       <div className="brand-lockup">
@@ -59,13 +68,13 @@ export function AppHeader({
             {installState.message || 'Installing…'}
           </button>
         ) : (
-          <div className={`runtime-pill ${checking ? 'checking' : capabilities?.ready ? 'ready' : 'attention'}`}>
+          <div className={`runtime-pill ${checking ? 'checking' : processingReady ? 'ready' : 'attention'}`}>
             {checking
               ? <LoaderCircle className="spin" size={16} />
-              : capabilities?.ready
+              : processingReady
                 ? <ShieldCheck size={16} />
                 : <AlertCircle size={16} />}
-            {checking ? 'Checking system' : capabilities?.ready ? 'System ready' : 'Setup required'}
+            {checking ? 'Checking system' : label}
           </div>
         )}
       </div>

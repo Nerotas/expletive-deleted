@@ -9,10 +9,10 @@ Normal users should follow the desktop application workflow. Do not start `backe
 
 ## Installed Windows application (recommended)
 
-1. Install Python 3.9 or later from an approved Python distribution and ensure the `py` launcher or `python` command is available.
-2. Run `Expletive-Deleted-Setup-<version>-x64.exe` and choose the installation directory.
-3. Start **Expletive Deleted** from the Start menu or desktop shortcut.
-4. Complete the explicit dependency plans shown by **Finish local setup**.
+1. Run `Expletive-Deleted-Setup-<version>-x64.exe` and choose the installation directory.
+2. Start **Expletive Deleted** from the Start menu or desktop shortcut.
+3. If Python is missing, the first screen explains why it is needed and offers **Get Python**, which opens the official download page. After Python 3.9 or later is installed, return to the app and choose **Try again**.
+4. Follow the in-app walkthrough to check local components, choose initial settings, and optionally try a first file.
 
 The installer contains the application and its first-party backend, but does not bundle or silently retrieve Python, the external `ffmpeg.exe`/`ffprobe.exe` processing runtime, Python speech-recognition packages, or Whisper models. Electron's required Chromium codec `ffmpeg.dll` is part of the desktop framework, cannot process jobs, and does not count as an installed FFmpeg dependency. Uninstalling the application does not delete settings, downloaded runtime components, models, or user media beneath `%LOCALAPPDATA%\ExpletiveDeleted` and `%USERPROFILE%\Documents\Expletive Deleted`.
 
@@ -42,13 +42,17 @@ npm run dev
 
 ### Complete first-run setup in the app
 
+The walkthrough has six sections: Welcome, Get ready, Your settings, Add a file, Process safely, and Finish. Each section is implemented under `frontend/src/features/onboarding/` so developers can change and test it without editing the rest of the walkthrough. The app saves progress when you choose **Save & Continue**, so an unfinished first run resumes at the last saved section. Reopening a completed walkthrough starts at Welcome and leaves its completed status intact until you finish again.
+
+If the private local processing service cannot start, the Electron window explains that Python or its required packages need attention and links to the official Python download page. No media is uploaded or changed while the service is unavailable.
+
 The first launch checks the local system for:
 
 - FFmpeg and FFprobe
 - Python speech-recognition dependencies
 - Whisper `large-v3`
 
-If anything is missing, the **Finish local setup** panel shows the affected component. Choose **Locate existing** to select and verify an installation already on the computer, or choose **Get** to review the exact third-party source, local destination, and download size before continuing. Canceling the disclosure does not start retrieval. After an approved operation, the backend verifies the component and refreshes System Ready status.
+In a packaged build, the application components, including FFmpeg/FFprobe, Python speech-recognition packages, and yt-dlp, are verified automatically. The only required download is the Whisper model. Development checkouts may use **Get required components** or **Locate existing** for external tools. The review shows each third-party source, local destination, and download size before continuing. Canceling the disclosure does not start retrieval. After an approved operation, the backend verifies the component and refreshes System Ready status.
 
 Approved FFmpeg binaries and Whisper models are stored beneath `%LOCALAPPDATA%\ExpletiveDeleted\`, outside the application package and user-media folders. The app does not modify the global Windows `PATH`. Runtime locations remain inspectable and changeable under **Settings → Runtime components**.
 
@@ -56,8 +60,8 @@ Whisper `large-v3` is required for reliable word-level censor timing. Smaller mo
 
 ### Process media
 
-1. In **Settings**, confirm the working folders and processing preferences. Enable **Automatically transcode verified transcripts** only when you want each completed transcription added to the censor queue. Enable **Automatically transcode completed YouTube downloads** when a completed YouTube import should be transcribed, verified, and then added to the censor queue automatically. The default input folder is `%USERPROFILE%\Documents\Expletive Deleted\Ready`.
-2. Add supported audio or video files to the configured Ready/Input folder, drag them into Queue, or use **Download from YouTube** for an individual video you are authorized to download. YouTube import requires the optional `yt-dlp` component.
+1. In **Your settings** during first-run setup, or later in **Settings**, confirm the working folders and processing preferences. **Automatically create a censored copy after transcription** queues a censored copy after every newly verified transcript; leave it off to review the transcript first. **Automatically process YouTube downloads** sends a completed YouTube import through Ready, transcription, and the censored-copy queue. Both are off by default and saving either choice never starts files already in Ready. The default input folder is `%USERPROFILE%\Documents\Expletive Deleted\Ready`.
+2. Add supported audio or video files to the configured Ready/Input folder, drag them into Queue, or use **Download from YouTube** for an individual video you are authorized to download. The included `yt-dlp` component is used only for YouTube import.
    If YouTube requires sign-in or verification, the app shows a browser-session dialog. Choose the visible browser session only when you are ready to retry. **Open YouTube** is optional, opens no browser until you press it, and does not retry the download. Your password is never requested or handled by Expletive Deleted; yt-dlp reads the selected browser's local cookies.
 3. Return to **Queue** and choose an action for one file:
    - **Transcribe only** creates and verifies a transcript without creating media output.

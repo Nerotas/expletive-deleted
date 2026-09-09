@@ -77,20 +77,19 @@ the renderer. The locked Fontsource packages and upstream font notices are:
 
 The SIL Open Font License 1.1 is reproduced in Appendix C.
 
+### Bundled processing runtime
+
+The audited Windows runtime includes the pinned yt-dlp `2026.08.19` official
+Windows executable at `yt-dlp/yt-dlp.exe`. yt-dlp is released under the
+Unlicense. Each generated runtime must retain its license text in `LICENSES/`
+and record the release URL, SHA-256, and SBOM entry for the exact executable.
+
 ## 2. Not bundled; installed or retrieved separately after user approval
 
 The application can prepare an inspectable setup plan and, after the user
 approves it, install or download the following items into the user's Python
 environment or local application-data directories. A user can instead select
 a compatible installation already present on the system.
-
-### yt-dlp YouTube downloader
-
-`yt-dlp` is not bundled with the installer. YouTube importing is optional; after
-the user approves the displayed setup plan, the application may retrieve its
-pinned executable from the [official yt-dlp releases](https://github.com/yt-dlp/yt-dlp/releases)
-into the local application-data dependency directory. The project and license
-information are available from [yt-dlp](https://github.com/yt-dlp/yt-dlp).
 
 ### Python and Python packages
 

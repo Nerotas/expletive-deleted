@@ -35,7 +35,7 @@ Automated transcription and censorship are not perfect. Always review the transc
 1. Add media by placing it in the configured **Ready** folder, dragging it into the Queue, or importing an individual YouTube video you are authorized to download.
 2. Choose **Transcribe only** to create and review a local transcript.
 3. Classify discovered words as **Censor** or **Ignore** in the Dictionary when needed.
-4. In the **Transcribed** Queue view, select verified transcripts and choose **Queue censor** to create censored copies in **Finished**. Alternatively, enable **Automatically transcode verified transcripts** in Settings to queue this step after each successful transcription.
+4. In the **Transcribed** Queue view, select verified transcripts and choose **Queue censor** to create censored copies in **Finished**. Alternatively, enable **Automatically create a censored copy after transcription** in Settings to queue this step after each successful transcription.
 5. Review the finished file. The original remains in Ready unless you deliberately archive it after success.
 
 Transcoding uses only a persisted, verified transcript. It never begins a second Whisper transcription. **Retranscribe** replaces an existing transcript while retaining finished media.
@@ -48,29 +48,26 @@ Found a video you are allowed to download and want to share with fewer surprises
 2. Watch its download and compatibility preparation progress. The finished H.264/AAC MP4 appears in **Ready** automatically.
 3. Choose **Transcribe**, review any detected words, then choose **Censor** to create the family-friendly copy in **Finished**.
 
-YouTube import is local and optional. The app uses the separately approved `yt-dlp` component, gives the imported video its real title, and keeps the original downloaded file in Ready. If YouTube asks for sign-in or verification, Expletive Deleted pauses and asks before doing anything with a browser. Choose a visible browser session to retry, or explicitly choose **Open YouTube** to sign in; the app never opens a browser or uses browser cookies automatically, and never sees your password.
+YouTube import is local and user-initiated. The app includes the approved `yt-dlp` component, gives the imported video its real title, and keeps the original downloaded file in Ready. If YouTube asks for sign-in or verification, Expletive Deleted pauses and asks before doing anything with a browser. Choose a visible browser session to retry, or explicitly choose **Open YouTube** to sign in; the app never opens a browser or uses browser cookies automatically, and never sees your password.
 
 ## Install on Windows
 
-1. Install Python 3.9 or later from a trusted Python distribution. Ensure the `py` launcher or `python` command is available.
-2. Download `Expletive-Deleted-Setup-1.0.1-x64.exe` from the [latest release](https://github.com/Nerotas/expletive-deleted/releases/latest).
-3. Run the installer, then open **Expletive Deleted** from the Start menu or desktop shortcut.
-4. Complete the first-run walkthrough. It checks required components, prepares your dictionary, and confirms working folders and censoring preferences.
+1. Download `Expletive-Deleted-Setup-1.0.1-x64.exe` from the [latest release](https://github.com/Nerotas/expletive-deleted/releases/latest).
+2. Run the installer, then open **Expletive Deleted** from the Start menu or desktop shortcut.
+3. If an application component cannot be verified, the app opens repair guidance. A packaged installation does not require a separate Python installation.
+4. Complete the first-run walkthrough: Welcome, Get ready, Your settings, Add a file, Process safely, and Finish. It checks required components, prepares your dictionary, confirms folders and censoring preferences, and lets you choose the automatic local and YouTube workflows. It saves progress only when you choose **Save & Continue**.
 
-The installer contains the Electron application and first-party Python backend. It does **not** bundle Python, Python processing packages, the external `ffmpeg.exe`/`ffprobe.exe` runtime, or Whisper models.
+The installer contains the Electron application, private Python processing runtime, yt-dlp, FFmpeg/FFprobe, and Python packages. It does not bundle Whisper models.
 
-When a component is missing, the app shows its status and offers an inspectable setup plan. Nothing is retrieved until you choose an action, review the source and destination, and approve it. Valid existing installations can be selected instead.
+In a packaged build, application components are verified automatically and the walkthrough requests only the Whisper model. Development checkouts can use **Get required components** to prepare an inspectable setup plan for external tools. Nothing is retrieved until you review every source and destination and approve the plan.
 
 ## Requirements
 
 - Windows x64
-- Python 3.9 or later
-- FFmpeg and FFprobe
-- `faster-whisper` and its Python dependencies
 - Whisper `large-v3`, the supported accuracy baseline
 - Disk space for the model, source media, transcripts, and finished copies
 
-YouTube importing is optional and requires a separately obtained, verified `yt-dlp` installation. The app supports individual YouTube videos only and prepares them locally as H.264/AAC MP4 files in the Ready folder.
+YouTube importing supports individual videos and uses the included, verified `yt-dlp` executable. It prepares them locally as H.264/AAC MP4 files in the Ready folder.
 
 The first-run walkthrough verifies readiness. A network connection is needed only when you choose to retrieve a missing third-party component.
 

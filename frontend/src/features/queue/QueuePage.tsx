@@ -318,12 +318,18 @@ function QueueView({
     actions: '18vw',
   })
   const selectedCount = selectedSources.size
-  const processingUnavailable = !capabilities?.ready
+  const processingReady = capabilities?.processing_ready ?? capabilities?.ready ?? false
+  const processingUnavailable = !processingReady
+  const setupReason = capabilities?.app_runtime === 'invalid'
+    ? 'Repair Expletive Deleted before processing files'
+    : capabilities?.speech_model && capabilities.speech_model !== 'ready'
+      ? 'Download the speech model before processing files'
+      : 'Complete setup before processing files'
   const batchDisabled = queue.busy || processingUnavailable || selectedCount === 0
   const bulkMode: Job['mode'] = filter === 'transcribed' ? 'censor' : 'report_only'
   const bulkActionLabel = bulkMode === 'censor' ? 'Queue censor' : 'Queue transcript'
   const bulkActionTitle = processingUnavailable
-    ? 'Complete setup before processing files'
+    ? setupReason
     : selectedCount
       ? bulkMode === 'censor'
         ? 'Create censored copies from the verified transcripts for selected files'
@@ -449,7 +455,8 @@ function QueueView({
     active={active}
     queuePosition={queuePosition}
     event={pendingJob ? queue.jobEvents[pendingJob.id] : job ? queue.jobEvents[job.id] : undefined}
-    processingReady={Boolean(capabilities?.ready)}
+    processingReady={processingReady}
+    setupReason={setupReason}
     busy={queue.busy}
     selected={selectedSources.has(item.source)}
     onToggleSelection={onToggleSelection}
@@ -606,6 +613,7 @@ function QueueRow({
   queuePosition,
   event,
   processingReady,
+  setupReason,
   busy,
   selected,
   onToggleSelection,
@@ -625,6 +633,7 @@ function QueueRow({
   queuePosition?: number
   event?: JobEvent
   processingReady: boolean
+  setupReason: string
   busy: boolean
   selected: boolean
   onToggleSelection: (source: string) => void
@@ -650,7 +659,7 @@ function QueueRow({
   const transcribeDisabled = processingDisabled
   const archiveDisabled = busy || Boolean(pendingJob) || !['transcribed', 'finished'].includes(item.status)
   const processingReason = !processingReady
-    ? 'Complete setup before processing this file'
+    ? setupReason
     : pendingJob
       ? 'This file is already queued or processing'
       : busy

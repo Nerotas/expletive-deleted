@@ -13,6 +13,7 @@ from backend.runtime.paths import RuntimePaths
 
 ProcessingMode = Literal["report_only", "censor"]
 ProcessingDevice = Literal["auto", "cpu", "cuda"]
+OnboardingStep = Literal["welcome", "components", "settings", "add-media", "process-media", "finish"]
 StereoCensorMethod = Literal["drop_audio", "karaoke"]
 SurroundOutput = Literal["preserve_5_1", "downmix_stereo"]
 VideoMode = Literal["h264", "preserve_source"]
@@ -111,7 +112,7 @@ class AudioSettings:
 
 @dataclass(frozen=True)
 class VideoSettings:
-    mode: VideoMode = "h264"
+    mode: VideoMode = "preserve_source"
 
 
 @dataclass(frozen=True)
@@ -137,6 +138,7 @@ class RuntimeSettings:
 @dataclass(frozen=True)
 class OnboardingSettings:
     completed: bool = False
+    last_step: OnboardingStep = "welcome"
 
 
 @dataclass(frozen=True)
@@ -210,6 +212,10 @@ class AppSettings:
             issues.append("processing.auto_transcode_youtube_downloads must be a boolean")
         if not isinstance(self.onboarding.completed, bool):
             issues.append("onboarding.completed must be a boolean")
+        if not isinstance(self.onboarding.last_step, str) or not self.onboarding.last_step.strip():
+            issues.append("onboarding.last_step must be a non-empty string")
+        elif self.onboarding.last_step not in {"welcome", "components", "settings", "add-media", "process-media", "finish"}:
+            issues.append("onboarding.last_step is not a supported walkthrough section")
 
         for name, value in (
             ("runtime.ffmpeg_path", self.runtime.ffmpeg_path),

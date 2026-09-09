@@ -11,7 +11,7 @@ import shutil
 import subprocess
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from threading import Event
 from typing import Callable, Literal
@@ -89,26 +89,30 @@ class DependencyStatus:
         return self.state == "ready"
 
 
+def _missing_ytdlp_status() -> DependencyStatus:
+    return DependencyStatus("ytdlp", "yt-dlp", "missing", YTDLP_VERSION, None, None, "yt-dlp was not found", True)
+
+
 @dataclass(frozen=True)
 class DependencyInventory:
     ffmpeg: DependencyStatus
     ffprobe: DependencyStatus
     python: tuple[DependencyStatus, ...]
     whisper_model: DependencyStatus
-    ytdlp: DependencyStatus | None = None
+    ytdlp: DependencyStatus = field(default_factory=_missing_ytdlp_status)
 
     @property
     def ready(self) -> bool:
         return all(
             status.ready
-            for status in (self.ffmpeg, self.ffprobe, *self.python, self.whisper_model)
+            for status in (self.ffmpeg, self.ffprobe, *self.python, self.ytdlp, self.whisper_model)
         )
 
     @property
     def missing(self) -> tuple[DependencyStatus, ...]:
         return tuple(
             status
-            for status in (self.ffmpeg, self.ffprobe, *self.python, self.whisper_model)
+            for status in (self.ffmpeg, self.ffprobe, *self.python, self.ytdlp, self.whisper_model)
             if not status.ready
         )
 
@@ -414,8 +418,7 @@ def _status_by_id(inventory: DependencyInventory) -> dict[str, DependencyStatus]
         status.id: status
         for status in (inventory.ffmpeg, inventory.ffprobe, *inventory.python, inventory.whisper_model)
     }
-    if inventory.ytdlp is not None:
-        statuses[inventory.ytdlp.id] = inventory.ytdlp
+    statuses[inventory.ytdlp.id] = inventory.ytdlp
     return statuses
 
 

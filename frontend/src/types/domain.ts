@@ -93,6 +93,14 @@ export type WhisperModel = 'tiny' | 'base' | 'small' | 'medium' | 'large-v3'
 
 export type Capabilities = {
   ready: boolean
+  processing_ready?: boolean
+  app_runtime?: 'ready' | 'missing' | 'invalid'
+  app_runtime_source?: 'bundled' | 'development'
+  app_runtime_detail?: string
+  speech_model?: 'ready' | 'missing' | 'invalid'
+  speech_model_name?: WhisperModel
+  speech_model_detail?: string
+  h264_conversion?: 'available' | 'unavailable' | 'not_requested'
   ffmpeg: boolean
   ffprobe: boolean
   whisper: boolean
@@ -105,7 +113,7 @@ export type Capabilities = {
   ffmpeg_path?: string | null
   ffprobe_path?: string | null
   model_path?: string | null
-  ytdlp?: boolean
+  ytdlp: boolean
   ytdlp_version?: string | null
   ytdlp_path?: string | null
   ytdlp_detail?: string
@@ -183,7 +191,7 @@ export type Settings = {
   video: { mode: 'h264' | 'preserve_source' }
   whisper: { library: WhisperLibrary; model: WhisperModel }
   source: { archive_after_success: boolean; scan_subdirectories: boolean }
-  onboarding: { completed: boolean }
+  onboarding: { completed: boolean; last_step: string }
   runtime: {
     ffmpeg_path: string | null
     ffprobe_path: string | null

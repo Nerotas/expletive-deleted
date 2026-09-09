@@ -109,6 +109,7 @@ export function useSettingsController({
     persisted: settingsQuery.data ?? null,
     draft,
     loading: settingsQuery.isLoading,
+    error: settingsQuery.error,
     busy: saveMutation.isPending,
     dirty: form.formState.isDirty,
     form,

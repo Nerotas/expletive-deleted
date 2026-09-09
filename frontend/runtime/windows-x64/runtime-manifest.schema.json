@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Expletive Deleted audited Windows runtime manifest",
+  "type": "object",
+  "required": ["schema_version", "platform", "python", "ffmpeg", "pyav", "ytdlp", "files", "licenses"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "platform": { "const": "win32-x64" },
+    "python": {
+      "type": "object",
+      "required": ["path", "version", "license"],
+      "properties": {
+        "path": { "const": "python/python.exe" },
+        "version": { "type": "string", "minLength": 1 },
+        "license": { "const": "PSF-2.0" }
+      }
+    },
+    "ffmpeg": {
+      "type": "object",
+      "required": ["ffmpeg_path", "ffprobe_path", "version", "license", "configure"],
+      "properties": {
+        "ffmpeg_path": { "const": "ffmpeg/ffmpeg.exe" },
+        "ffprobe_path": { "const": "ffmpeg/ffprobe.exe" },
+        "version": { "type": "string", "minLength": 1 },
+        "license": { "const": "LGPL-2.1-or-later" },
+        "configure": {
+          "type": "array",
+          "items": { "type": "string", "not": { "enum": ["--enable-gpl", "--enable-nonfree"] } }
+        }
+      }
+    },
+    "pyav": {
+      "type": "object",
+      "required": ["version", "license", "ffmpeg_library_origin"],
+      "properties": {
+        "version": { "type": "string", "minLength": 1 },
+        "license": { "const": "BSD-3-Clause" },
+        "ffmpeg_library_origin": { "const": "bundled-lgpl-build" }
+      }
+    },
+    "ytdlp": {
+      "type": "object",
+      "required": ["path", "version", "source", "license"],
+      "properties": {
+        "path": { "const": "yt-dlp/yt-dlp.exe" },
+        "version": { "type": "string", "minLength": 1 },
+        "source": { "type": "string", "pattern": "^https://" },
+        "license": { "const": "Unlicense" }
+      }
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["path", "sha256"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+        }
+      }
+    },
+    "licenses": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["path", "spdx"],
+        "properties": {
+          "path": { "type": "string", "pattern": "^LICENSES/" },
+          "spdx": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

@@ -63,6 +63,7 @@ describe('desktop application renderer', () => {
       id: jobId, source: 'C:\\Media\\Ready\\movie.mkv', mode: 'censor', status: 'cancelled', progress_percent: 0, error: null,
     }))
     vi.spyOn(desktopClient, 'archiveSource').mockResolvedValue({})
+    vi.spyOn(desktopClient, 'importSources').mockResolvedValue([])
     vi.spyOn(desktopClient, 'restoreArchiveSource').mockResolvedValue({})
     vi.spyOn(desktopClient, 'selectDirectory').mockResolvedValue(undefined)
     vi.spyOn(desktopClient, 'selectFile').mockResolvedValue(undefined)
@@ -91,6 +92,7 @@ describe('desktop application renderer', () => {
     vi.spyOn(desktopClient, 'exportDictionary').mockResolvedValue({ path: 'C:\\backup\\dictionary.json' })
     vi.spyOn(desktopClient, 'getReview').mockResolvedValue({ source: '', candidates: [], censored: [] })
     vi.spyOn(desktopClient, 'openExternal').mockResolvedValue()
+    vi.spyOn(desktopClient, 'getDroppedFilePath').mockReturnValue('C:\\Source\\movie.mp4')
     localStorage.clear()
   })
 
@@ -108,8 +110,57 @@ describe('desktop application renderer', () => {
     expect(await screen.findByText('System ready')).toBeInTheDocument()
   })
 
+  it('identifies a missing bundled speech model in the header and setup band', async () => {
+    vi.mocked(desktopClient.getCapabilities).mockResolvedValueOnce({
+      ...readyCapabilities,
+      ready: false,
+      processing_ready: false,
+      app_runtime: 'ready',
+      app_runtime_source: 'bundled',
+      app_runtime_detail: 'Application components are verified.',
+      speech_model: 'missing',
+      whisper_model_ready: false,
+    })
+    renderApp('/')
+
+    expect(await screen.findByText('Download speech model')).toBeInTheDocument()
+    expect(screen.getByText('Local processing status')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Download large-v3 model' })).toBeInTheDocument()
+  })
+
+  it('explains that app repair is needed before queue processing', async () => {
+    vi.mocked(desktopClient.getCapabilities).mockResolvedValueOnce({
+      ...readyCapabilities,
+      ready: false,
+      processing_ready: false,
+      app_runtime: 'invalid',
+      app_runtime_source: 'bundled',
+      speech_model: 'ready',
+    })
+    vi.mocked(desktopClient.listLibrary).mockResolvedValueOnce([{
+      source: 'C:\\Media\\Ready\\movie.mp4', status: 'ready', date_added: '', transcript: null, output: null,
+    }])
+    renderApp('/')
+
+    const transcribe = await screen.findByRole('button', { name: 'Transcribe only' })
+    expect(transcribe).toBeDisabled()
+    expect(transcribe).toHaveAttribute('title', 'Repair Expletive Deleted before processing files')
+    expect(await screen.findByText('App repair needed')).toBeInTheDocument()
+  })
+
+  it('reopens onboarding from Settings without resetting saved preferences', async () => {
+    const user = userEvent.setup()
+    renderApp('/settings')
+
+    await user.click(await screen.findByRole('button', { name: 'Redo onboarding' }))
+
+    expect(await screen.findByRole('heading', { name: 'Welcome to Expletive Deleted' })).toBeInTheDocument()
+    expect(desktopClient.updateSettings).not.toHaveBeenCalled()
+  })
+
   it('opens onboarding for fresh settings and gates components on live readiness', async () => {
     persisted.onboarding.completed = false
+    persisted.onboarding.last_step = 'welcome'
     vi.mocked(desktopClient.getCapabilities).mockResolvedValue({
       ...readyCapabilities,
       ready: false,
@@ -120,12 +171,13 @@ describe('desktop application renderer', () => {
     renderApp('/')
 
     expect(await screen.findByRole('heading', { name: 'Welcome to Expletive Deleted' })).toBeInTheDocument()
-    expect(desktopClient.listLibrary).not.toHaveBeenCalled()
     await user.click(screen.getByRole('button', { name: /Continue/ }))
 
-    expect(await screen.findByRole('heading', { name: 'Prepare required components' })).toBeInTheDocument()
-    expect(screen.getByText('FFmpeg and FFprobe')).toBeInTheDocument()
-    expect(screen.getByText('Speech recognition')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Prepare this computer' })).toBeInTheDocument()
+    expect(screen.queryByText('Expletive Deleted components')).not.toBeInTheDocument()
+    expect(screen.queryByText('FFmpeg and FFprobe')).not.toBeInTheDocument()
+    expect(screen.queryByText('Speech recognition')).not.toBeInTheDocument()
+    expect(screen.queryByText('yt-dlp for YouTube downloads')).not.toBeInTheDocument()
     expect(screen.getByText('Whisper large-v3 model')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Continue/ })).toBeDisabled()
     expect(desktopClient.installDependencies).not.toHaveBeenCalled()
@@ -133,6 +185,7 @@ describe('desktop application renderer', () => {
 
   it('requires the supported large-v3 model even when aggregate capabilities are ready', async () => {
     persisted.onboarding.completed = false
+    persisted.onboarding.last_step = 'welcome'
     vi.mocked(desktopClient.getCapabilities).mockResolvedValue({
       ...readyCapabilities,
       whisper_model: 'medium',
@@ -151,31 +204,91 @@ describe('desktop application renderer', () => {
 
     await user.click(await screen.findByRole('button', { name: /Continue/ }))
     await user.click(screen.getByRole('button', { name: /Continue/ }))
-    expect(await screen.findByRole('heading', { name: 'Prepare your dictionary' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Choose your settings' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Keep my current dictionary/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^Use default censored words/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^Import a dictionary/ })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Karaoke' }))
+    await user.click(screen.getByRole('checkbox', { name: /Automatically create a censored copy after transcription/ }))
+    await user.click(screen.getByRole('checkbox', { name: /Automatically process YouTube downloads/ }))
     await user.click(screen.getByRole('button', { name: /Continue/ }))
-
-    await user.click(await screen.findByRole('button', { name: 'Karaoke' }))
-    expect(screen.getByText('Not appropriate for mono audio')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Add a first file' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /Continue/ }))
-    expect(await screen.findByDisplayValue('C:\\Media\\Ready')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: /Continue/ }))
-
-    expect(await screen.findByText('Drag and drop')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: /Continue/ }))
-    expect(await screen.findByText('Transcribe only')).toBeInTheDocument()
-    expect(screen.getByText('Automatic transcode')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Process safely' })).toBeInTheDocument()
+    expect(screen.getByText(/selected automatic workflow queues this after verified transcription/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /Continue/ }))
     await user.click(await screen.findByRole('button', { name: 'Finish setup' }))
 
     await waitFor(() => expect(desktopClient.updateSettings).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        onboarding: { completed: true },
+        onboarding: { completed: true, last_step: 'finish' },
         censoring: expect.objectContaining({ stereo_method: 'karaoke' }),
+        processing: expect.objectContaining({
+          auto_censor_after_transcription: true,
+          auto_transcode_youtube_downloads: true,
+        }),
       }),
     ))
     expect(await screen.findByText('Drop media here to add it')).toBeInTheDocument()
+  })
+
+  it('resumes an unfinished walkthrough from its saved settings section', async () => {
+    persisted.onboarding = { completed: false, last_step: 'settings' }
+    const user = userEvent.setup()
+    renderApp('/')
+
+    expect(await screen.findByRole('heading', { name: 'Choose your settings' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Save & Continue/ })).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: /^Keep my current dictionary/ }))
+    await user.click(screen.getByRole('button', { name: /Save & Continue/ }))
+    await waitFor(() => expect(desktopClient.updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ onboarding: { completed: false, last_step: 'add-media' } }),
+    ))
+  })
+
+  it('copies a chosen first file only after confirmation and can start its transcript', async () => {
+    persisted.onboarding = { completed: false, last_step: 'add-media' }
+    vi.mocked(desktopClient.importSources).mockResolvedValue([{
+      source: 'C:\\Source\\movie.mp4',
+      destination: 'C:\\Media\\Ready\\movie.mp4',
+      status: 'added',
+    }])
+    const user = userEvent.setup()
+    const { container } = renderApp('/')
+
+    expect(await screen.findByRole('heading', { name: 'Add a first file' })).toBeInTheDocument()
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement
+    await user.upload(fileInput, new File(['media'], 'movie.mp4', { type: 'video/mp4' }))
+    await user.click(screen.getByRole('button', { name: 'Copy to Ready' }))
+    await waitFor(() => expect(desktopClient.importSources).toHaveBeenCalledWith([
+      'C:\\Source\\movie.mp4',
+    ]))
+    expect(await screen.findByText(/File added to Ready/)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /Save & Continue/ }))
+    await user.click(await screen.findByRole('button', { name: 'Create transcript' }))
+    await waitFor(() => expect(desktopClient.submitJob).toHaveBeenCalledWith(
+      'C:\\Media\\Ready\\movie.mp4',
+      'report_only',
+    ))
+  })
+
+  it('shows app-repair guidance when the local processing service cannot load settings', async () => {
+    vi.mocked(desktopClient.getSettings).mockRejectedValueOnce(new Error('Python was not found'))
+    renderApp('/onboarding')
+
+    expect(await screen.findByRole('heading', { name: 'Repair Expletive Deleted' })).toBeInTheDocument()
+    expect(screen.getAllByText('Python was not found')).not.toHaveLength(0)
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Get Python' })).not.toBeInTheDocument()
+  })
+
+  it('treats a missing private Python runtime as an app repair issue', async () => {
+    vi.mocked(desktopClient.getSettings).mockRejectedValueOnce(new Error('Python 3.9 or later is required.'))
+    renderApp('/onboarding')
+
+    expect(await screen.findByRole('heading', { name: 'Repair Expletive Deleted' })).toBeInTheDocument()
+    expect(screen.queryByText(/Install Python/i)).not.toBeInTheDocument()
   })
 
   it('keeps a Karaoke draft without running Queue polling off the Queue route', async () => {
@@ -217,7 +330,7 @@ describe('desktop application renderer', () => {
     const user = userEvent.setup()
     renderApp('/settings')
 
-    const automation = await screen.findByRole('checkbox', { name: /Automatically transcode verified transcripts/ })
+    const automation = await screen.findByRole('checkbox', { name: /Automatically create a censored copy after transcription/ })
     expect(automation).not.toBeChecked()
     await user.click(automation)
     await user.click(screen.getByRole('button', { name: 'Save changes' }))
@@ -233,7 +346,7 @@ describe('desktop application renderer', () => {
     const user = userEvent.setup()
     renderApp('/settings')
 
-    const automation = await screen.findByRole('checkbox', { name: /Automatically transcode completed YouTube downloads/ })
+    const automation = await screen.findByRole('checkbox', { name: /Automatically process YouTube downloads/ })
     expect(automation).not.toBeChecked()
     await user.click(automation)
     await user.click(screen.getByRole('button', { name: 'Save changes' }))
@@ -271,7 +384,24 @@ describe('desktop application renderer', () => {
       'Using automatic detection',
     )
     expect(screen.getByText(/they do not add FFmpeg command-line flags/i)).toBeInTheDocument()
-    expect(screen.getByText('All required components are verified.')).toBeInTheDocument()
+    expect(screen.getByText('Application components and speech model are verified.')).toBeInTheDocument()
+  })
+
+  it('hides FFmpeg path overrides for the bundled application runtime', async () => {
+    vi.mocked(desktopClient.getCapabilities).mockResolvedValueOnce({
+      ...readyCapabilities,
+      processing_ready: true,
+      app_runtime: 'ready',
+      app_runtime_source: 'bundled',
+      app_runtime_detail: 'Application components are verified.',
+      speech_model: 'ready',
+    })
+    renderApp('/settings')
+
+    expect(await screen.findByText(/came with Expletive Deleted/i)).toBeInTheDocument()
+    expect(screen.queryByLabelText('FFmpeg path override')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('FFprobe path override')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Whisper model location')).toBeInTheDocument()
   })
 
   it('opens optional Ko-fi support only after an explicit Settings action', async () => {
@@ -304,6 +434,10 @@ describe('desktop application renderer', () => {
     vi.mocked(desktopClient.getCapabilities).mockImplementation(async () => ({
       ...readyCapabilities,
       ready: persisted.runtime.whisper_cache !== null,
+      processing_ready: false,
+      app_runtime: 'ready',
+      app_runtime_source: 'development',
+      speech_model: persisted.runtime.whisper_cache !== null ? 'ready' : 'missing',
       whisper_model_ready: persisted.runtime.whisper_cache !== null,
     }))
     vi.mocked(desktopClient.installDependencies).mockImplementationOnce(async () => {
@@ -325,8 +459,8 @@ describe('desktop application renderer', () => {
     const user = userEvent.setup()
     renderApp('/')
 
-    const whisperModel = await screen.findByText('Whisper large-v3')
-    await user.click(within(whisperModel.closest('.setup-item')!).getByRole('button', { name: 'Get' }))
+    expect(await screen.findByText('Whisper large-v3')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Download large-v3 model' }))
     await user.click(screen.getByRole('button', { name: 'Continue' }))
     await screen.findByText('Installation complete and verified')
     await user.click(screen.getByRole('link', { name: 'Settings' }))
@@ -816,41 +950,6 @@ describe('desktop application renderer', () => {
     expect((await screen.findAllByText('movie.mkv')).length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: 'Return to Queue' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Delete permanently' })).toBeInTheDocument()
-  })
-
-  it('shows source, destination, and size before an external retrieval can begin', async () => {
-    vi.mocked(desktopClient.getCapabilities).mockResolvedValue({
-      ...readyCapabilities,
-      ready: false,
-      ffmpeg: false,
-      ffprobe: false,
-    })
-    vi.mocked(desktopClient.planDependencies).mockResolvedValueOnce({
-      plan_id: 'ffmpeg-plan',
-      actions: [{
-        id: 'download-managed-ffmpeg-runtime',
-        dependencies: ['ffmpeg', 'ffprobe'],
-        description: 'Download and verify FFmpeg and FFprobe',
-        source_name: 'static-ffmpeg platform binaries',
-        source_url: 'https://pypi.org/project/static-ffmpeg/',
-        estimated_download_bytes: 1073741824,
-        destination: 'C:\\Users\\Parent\\AppData\\Local\\ExpletiveDeleted\\dependencies\\ffmpeg',
-      }],
-    })
-    const user = userEvent.setup()
-    renderApp('/')
-
-    await user.click((await screen.findAllByRole('button', { name: 'Get' }))[0])
-
-    expect(await screen.findByRole('dialog', { name: 'Retrieve required components?' })).toBeInTheDocument()
-    expect(screen.getByText('static-ffmpeg platform binaries')).toBeInTheDocument()
-    expect(screen.getByText(/ExpletiveDeleted/)).toBeInTheDocument()
-    expect(screen.getByText('1.0 GB (approximately)')).toBeInTheDocument()
-    expect(desktopClient.installDependencies).not.toHaveBeenCalled()
-
-    await user.click(screen.getByRole('button', { name: 'Cancel' }))
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(desktopClient.installDependencies).not.toHaveBeenCalled()
   })
 
   it('returns an archived original to Ready', async () => {

@@ -44,6 +44,10 @@ electron-debug.log*
 
 # Windows Application Packaging
 /frontend/release/
+/frontend/runtime/windows-x64/*
+!/frontend/runtime/windows-x64/README.md
+!/frontend/runtime/windows-x64/runtime-manifest.schema.json
+!/frontend/runtime/windows-x64/build-inputs.json
 /frontend/win-unpacked/
 /frontend/builder-effective-config.yaml
 /frontend/Expletive-Deleted-Setup-*.exe

@@ -13,6 +13,7 @@ import { useCapabilities } from './features/capabilities/useCapabilities'
 import { QueuePage } from './features/queue/QueuePage'
 import { useQueue } from './features/queue/useQueue'
 import { OnboardingPage } from './features/onboarding/OnboardingPage'
+import { BackendSetupPage } from './features/onboarding/BackendSetupPage'
 import { SettingsPage } from './features/settings/SettingsPage'
 import { useSettingsController } from './features/settings/useSettingsController'
 import { useTheme } from './hooks/use-theme'
@@ -47,9 +48,11 @@ function App() {
     && ['running', 'canceling'].includes(capabilities.installState.status)
     && capabilities.installState.install_id !== dismissedInstallId,
   )
+  const backendDetail = settings.error instanceof Error ? settings.error.message : settings.error ? String(settings.error) : undefined
 
   const queue = useQueue({
-    enabled: location.pathname === '/' && settings.persisted?.onboarding.completed === true,
+    enabled: (location.pathname === '/' && settings.persisted?.onboarding.completed === true)
+      || location.pathname === '/onboarding',
     onError: reportError,
     onNotice: reportNotice,
   })
@@ -72,17 +75,16 @@ function App() {
       <main>
         {error && <AlertBanner tone="error" message={error} onDismiss={() => setError(null)} />}
         {notice && <AlertBanner tone="success" message={notice} onDismiss={() => setNotice(null)} />}
-        {location.pathname !== '/onboarding' && !capabilities.loading && capabilities.capabilities && !capabilities.capabilities.ready && (
+        {location.pathname !== '/onboarding' && !capabilities.loading && capabilities.capabilities && !(capabilities.capabilities.processing_ready ?? capabilities.capabilities.ready) && (
           <SetupBand
             capabilities={capabilities.capabilities}
             reviewInstall={(components) => void capabilities.reviewInstall(components)}
-            locateExisting={(component) => void capabilities.locateExisting(component)}
             checkAgain={() => void capabilities.refresh()}
             busy={capabilities.busy}
           />
         )}
 
-        <Routes>
+        {settings.error ? <BackendSetupPage detail={backendDetail} /> : <Routes>
           <Route
             path="/onboarding"
             element={
@@ -95,6 +97,7 @@ function App() {
                     checking={capabilities.checking}
                     capabilityBusy={capabilities.busy}
                     dictionary={dictionary}
+                    queue={queue}
                     onReviewInstall={(components) => void capabilities.reviewInstall(components)}
                     onLocateExisting={(component) => void capabilities.locateExisting(component)}
                     onCheckAgain={() => void capabilities.refresh()}
@@ -147,7 +150,7 @@ function App() {
             }
           />
           <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        </Routes>}
       </main>
       {dictionary.review && (
         <ReviewDialog

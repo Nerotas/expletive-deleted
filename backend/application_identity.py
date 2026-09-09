@@ -10,6 +10,7 @@ from pathlib import Path
 DISPLAY_NAME = "Expletive Deleted"
 APP_DATA_DIRECTORY_NAME = "ExpletiveDeleted"
 DOCUMENTS_DIRECTORY_NAME = DISPLAY_NAME
+APP_DATA_ROOT_ENVIRONMENT_VARIABLE = "CENSOR_APP_DATA_DIR"
 
 
 def get_app_data_root(
@@ -18,6 +19,9 @@ def get_app_data_root(
 ) -> Path:
     """Return the canonical application-managed data root without creating it."""
     environment = os.environ if environment is None else environment
+    configured_root = environment.get(APP_DATA_ROOT_ENVIRONMENT_VARIABLE, "").strip()
+    if configured_root:
+        return Path(configured_root).expanduser()
     local_app_data = environment.get("LOCALAPPDATA", "").strip()
     if not local_app_data:
         raise RuntimeError("LOCALAPPDATA is required to locate Expletive Deleted application data")

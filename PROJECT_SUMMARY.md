@@ -6,6 +6,8 @@ This repository contains the Python profanity-censor pipeline, local application
 
 The master product and architecture direction is recorded in [docs/Profanity Censor Desktop App - Master Project Handoff.md](docs/Profanity%20Censor%20Desktop%20App%20%E2%80%94%20Master%20Project%20Handoff.md).
 
+The proposed Windows runtime distribution change is recorded in [docs/BUNDLED_RUNTIME_PACKAGING_PLAN.md](docs/BUNDLED_RUNTIME_PACKAGING_PLAN.md). It is a plan, not current release behavior.
+
 ## Working Pipeline
 
 ```text
@@ -23,6 +25,7 @@ The current desktop and backend application supports:
 - Explicit single-file transcription, transcript-first censoring, and archival actions
 - Checkbox-based selective transcription from Ready and selective censoring from Transcribed
 - An opt-in automatic handoff from a verified transcript to the censor queue
+- An opt-in YouTube download to transcription to censor-queue workflow
 - Separate download, copy, transcription, and censor queue states
 - A shared resource slot for transcription and censoring to prevent CPU, GPU, and storage contention
 - Ready, Queued, Active, Transcribed, and Finished filtering with queue positions
@@ -30,7 +33,7 @@ The current desktop and backend application supports:
 - Report-only transcription and detection
 - Stereo muting or karaoke cancellation
 - Discrete center-channel handling for recognized surround layouts
-- H.264 stream copy or detected encoder selection
+- Source-video preservation by default and explicit H.264 encoder selection
 - Reusable transcript caches
 - A mandatory persisted-transcript gate before any censor/transcode work
 - FFmpeg and Whisper progress reporting
@@ -64,6 +67,8 @@ The root compatibility files remain intentionally thin. New backend code should 
 ## Persistent Settings
 
 Settings default to `%LOCALAPPDATA%\ExpletiveDeleted\settings.ini`. It is created automatically from validated defaults, remains outside the repository, and has a tracked [`config.example.ini`](config.example.ini) schema template.
+
+First-run state is stored with the settings as `onboarding.completed` and `onboarding.last_step`. The Electron walkthrough resumes only an unfinished setup at its last saved section. Its six focused renderer sections live in `frontend/src/features/onboarding/`; settings, dictionary, import, and queue behavior remain owned by their existing feature/backend boundaries.
 
 The live user dictionary is stored in `%LOCALAPPDATA%\ExpletiveDeleted\dictionary\censored.json`, `exclusions.json`, and `discovered.json`. Shipped files under `resources/` seed the classified stores on first use and supply explicit restore-defaults behavior only. Upgrades do not silently merge changed defaults into an existing user's policy. A combined JSON document is used only for explicit import and export.
 

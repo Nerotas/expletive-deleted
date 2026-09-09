@@ -8,10 +8,69 @@ export type BackendRuntime = {
   args: string[]
 }
 
+export type BundledRuntimePaths = {
+  python?: string
+  ffmpeg?: string
+  ffprobe?: string
+  ytdlp?: string
+}
+
+export function findBundledRuntime(
+  resourcesPath: string,
+  platform: NodeJS.Platform,
+  exists: (candidate: string) => boolean = existsSync,
+): BundledRuntimePaths {
+  const executableName = platform === 'win32' ? 'python.exe' : 'python'
+  const ffmpegName = platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg'
+  const ffprobeName = platform === 'win32' ? 'ffprobe.exe' : 'ffprobe'
+  const ytdlpName = platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp'
+  const runtimeRoot = path.join(resourcesPath, 'app-runtime')
+  const python = path.join(runtimeRoot, 'python', executableName)
+  const ffmpeg = path.join(runtimeRoot, 'ffmpeg', ffmpegName)
+  const ffprobe = path.join(runtimeRoot, 'ffmpeg', ffprobeName)
+  const ytdlp = path.join(runtimeRoot, 'yt-dlp', ytdlpName)
+
+  if (!exists(python) || !exists(ffmpeg) || !exists(ffprobe) || !exists(ytdlp)) return {}
+  return { python, ffmpeg, ffprobe, ytdlp }
+}
+
+export function requireBundledRuntime(
+  resourcesPath: string,
+  platform: NodeJS.Platform,
+  exists: (candidate: string) => boolean = existsSync,
+): BundledRuntimePaths {
+  const manifest = path.join(resourcesPath, 'app-runtime', 'runtime-manifest.json')
+  if (!exists(manifest)) return {}
+  const runtime = findBundledRuntime(resourcesPath, platform, exists)
+  if (runtime.python && runtime.ffmpeg && runtime.ffprobe && runtime.ytdlp) return runtime
+  throw new Error('The installed local processing runtime is incomplete. Reinstall Expletive Deleted.')
+}
+
 export function backendEnvironment(
   environment: NodeJS.ProcessEnv = process.env,
+  bundledRuntime: BundledRuntimePaths = {},
 ): NodeJS.ProcessEnv {
-  return { ...environment, CENSOR_PROJECT_ROOT: '' }
+  const localAppData = environment.LOCALAPPDATA?.trim()
+  const bundledFfmpegDirectory = bundledRuntime.ffmpeg
+    ? path.dirname(bundledRuntime.ffmpeg)
+    : undefined
+  const completeBundledRuntime = Boolean(
+    bundledRuntime.python && bundledRuntime.ffmpeg && bundledRuntime.ffprobe && bundledRuntime.ytdlp,
+  )
+  const currentPath = environment.PATH ?? ''
+
+  return {
+    ...environment,
+    CENSOR_PROJECT_ROOT: '',
+    ...(localAppData ? { CENSOR_APP_DATA_DIR: path.join(localAppData, 'ExpletiveDeleted') } : {}),
+    ...(completeBundledRuntime ? { CENSOR_BUNDLED_RUNTIME: '1' } : {}),
+    ...(bundledRuntime.ffmpeg ? { CENSOR_FFMPEG: bundledRuntime.ffmpeg } : {}),
+    ...(bundledRuntime.ffprobe ? { CENSOR_FFPROBE: bundledRuntime.ffprobe } : {}),
+    ...(bundledRuntime.ytdlp ? { CENSOR_YTDLP: bundledRuntime.ytdlp } : {}),
+    ...(bundledFfmpegDirectory
+      ? { PATH: currentPath ? bundledFfmpegDirectory + path.delimiter + currentPath : bundledFfmpegDirectory }
+      : {}),
+  }
 }
 
 type BackendRootOptions = {
@@ -51,9 +110,11 @@ export function findPythonRuntime(
   root: string,
   platform: NodeJS.Platform,
   environment: NodeJS.ProcessEnv = process.env,
+  bundledPython?: string,
 ): Omit<BackendRuntime, 'root'> {
   const configured = environment.CENSOR_PYTHON?.trim()
   const candidates: Array<{ command: string; prefix: string[] }> = []
+  if (bundledPython && existsSync(bundledPython)) candidates.push({ command: bundledPython, prefix: [] })
   if (configured) candidates.push({ command: configured, prefix: [] })
 
   const localPython = path.join(

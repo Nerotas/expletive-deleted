@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, shell, type IpcMainInvokeEve
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { existsSync, statSync } from 'node:fs'
 import path from 'node:path'
-import { backendEnvironment, findBackendRoot, findPythonRuntime } from './backend-runtime.js'
+import { backendEnvironment, findBackendRoot, findPythonRuntime, requireBundledRuntime } from './backend-runtime.js'
 
 type BridgeResponse = { id: number; ok: true; result: unknown } | { id: number; ok: false; error: { message?: string; code?: string } }
 
@@ -37,7 +37,11 @@ function rejectPending(message: string): void {
 function startBridge(): void {
   let root: string
   let runtime: ReturnType<typeof findPythonRuntime>
+  let bundledRuntime: ReturnType<typeof requireBundledRuntime>
   try {
+    bundledRuntime = app.isPackaged
+      ? requireBundledRuntime(process.resourcesPath, process.platform)
+      : {}
     root = findBackendRoot({
       isPackaged: app.isPackaged,
       resourcesPath: process.resourcesPath,
@@ -45,14 +49,14 @@ function startBridge(): void {
       cwd: process.cwd(),
       moduleDirectory: __dirname,
     })
-    runtime = findPythonRuntime(root, process.platform)
+    runtime = findPythonRuntime(root, process.platform, process.env, bundledRuntime.python)
   } catch (error) {
     bridgeFailure = error instanceof Error ? error.message : String(error)
     return
   }
   bridge = spawn(runtime.command, runtime.args, {
     cwd: root,
-    env: backendEnvironment(),
+    env: backendEnvironment(process.env, bundledRuntime),
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
   })

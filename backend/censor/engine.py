@@ -338,7 +338,7 @@ class ProfanityCensor:
                  whisper_device: str = "auto",
                  censor_method: str = "mute", padding_before_ms: int = 150,
                  padding_after_ms: int = 150, surround_output: str = "preserve_5_1",
-                 video_mode: str = "h264",
+                 video_mode: str = "preserve_source",
                  progress_callback: Callable[[dict[str, object]], None] | None = None,
                  cancellation: Event | None = None, ffmpeg_bin: str | None = None,
                  ffprobe_bin: str | None = None, whisper_cache_dir: Path | None = None,
@@ -852,7 +852,7 @@ class ProfanityCensor:
         os.makedirs(os.path.dirname(os.path.abspath(self.output_file)), exist_ok=True)
         source_has_center_channel = self.has_discrete_center_audio()
         audio_only = self.is_audio_only()
-        video_mode = getattr(self, "video_mode", "h264")
+        video_mode = getattr(self, "video_mode", "preserve_source")
         surround_output = getattr(self, "surround_output", "preserve_5_1")
         source_video_codec = "" if audio_only else self.get_video_codec()
         requires_video_encoder = (
@@ -976,29 +976,6 @@ class ProfanityCensor:
                 lambda progress: self._emit_progress("censoring", **progress),
                 getattr(self, "cancellation", None),
             )
-
-            # A detected hardware encoder may still fail at runtime (for example, no GPU device).
-            if (
-                result.returncode != 0
-                and not audio_only
-                and getattr(self, "video_mode", "h264") == 'h264'
-                and video_codec != 'h264'
-                and self.video_encoder != 'libx264'
-                and 'libx264' in self.encoders
-            ):
-                error_lines = [line for line in result.stderr.splitlines() if line.strip()]
-                error_detail = error_lines[-1] if error_lines else "unknown FFmpeg error"
-                print(
-                    f"[!] Encoder {self.video_encoder} failed ({error_detail}); "
-                    "using software fallback..."
-                )
-                cmd = _build_cmd('libx264')
-                result = run_ffmpeg_with_progress(
-                    cmd,
-                    duration,
-                    lambda progress: self._emit_progress("censoring", **progress),
-                    getattr(self, "cancellation", None),
-                )
 
             if result.returncode == 0:
                 print(f"[+] Video censored: {self.output_file}")
@@ -1210,7 +1187,7 @@ def main():
     parser.add_argument(
         "--video-mode",
         choices=["h264", "preserve_source"],
-        default="h264",
+        default="preserve_source",
     )
     args = parser.parse_args()
 

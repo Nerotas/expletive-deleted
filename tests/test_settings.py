@@ -39,6 +39,7 @@ class SettingsModelTests(unittest.TestCase):
         self.assertEqual(settings.directories.output, root / "Finished")
         self.assertEqual(settings.directories.archive, root / "Processed")
         self.assertEqual(settings.directories.transcripts, root / "Transcripts")
+        self.assertEqual(settings.video.mode, "preserve_source")
         settings.validate()
 
     def test_independent_directories_convert_to_runtime_paths(self):
@@ -126,16 +127,29 @@ class SettingsModelTests(unittest.TestCase):
 
     def test_onboarding_defaults_incomplete_and_round_trips(self):
         settings = AppSettings.defaults()
-        completed = replace(settings, onboarding=replace(settings.onboarding, completed=True))
+        completed = replace(settings, onboarding=replace(settings.onboarding, completed=True, last_step="finish"))
 
         self.assertFalse(settings.onboarding.completed)
+        self.assertEqual(settings.onboarding.last_step, "welcome")
         self.assertTrue(settings_from_dict(settings_to_dict(completed)).onboarding.completed)
+        self.assertEqual(settings_from_dict(settings_to_dict(completed)).onboarding.last_step, "finish")
 
     def test_invalid_onboarding_value_is_rejected(self):
         payload = settings_to_dict(AppSettings.defaults())
         payload["onboarding"] = {"completed": "yes"}
 
         with self.assertRaisesRegex(SettingsValidationError, "onboarding.completed must be a boolean"):
+            settings_from_dict(payload)
+
+    def test_invalid_onboarding_step_is_rejected(self):
+        payload = settings_to_dict(AppSettings.defaults())
+        payload["onboarding"]["last_step"] = ""
+
+        with self.assertRaisesRegex(SettingsValidationError, "onboarding.last_step must be a non-empty string"):
+            settings_from_dict(payload)
+
+        payload["onboarding"]["last_step"] = "unknown"
+        with self.assertRaisesRegex(SettingsValidationError, "not a supported walkthrough section"):
             settings_from_dict(payload)
 
     def test_unknown_fields_are_rejected(self):
@@ -156,6 +170,13 @@ class SettingsModelTests(unittest.TestCase):
 class SettingsStoreTests(unittest.TestCase):
     def test_windows_app_data_default(self):
         root = default_app_data_root({"LOCALAPPDATA": "C:\\Users\\User\\AppData\\Local"})
+        self.assertEqual(root, Path("C:\\Users\\User\\AppData\\Local\\ExpletiveDeleted"))
+
+    def test_explicit_app_data_root_wins_over_virtualized_local_app_data(self):
+        root = default_app_data_root({
+            "CENSOR_APP_DATA_DIR": "C:\\Users\\User\\AppData\\Local\\ExpletiveDeleted",
+            "LOCALAPPDATA": "C:\\Users\\User\\AppData\\Local\\Packages\\Python\\LocalCache\\Local",
+        })
         self.assertEqual(root, Path("C:\\Users\\User\\AppData\\Local\\ExpletiveDeleted"))
 
     def test_app_data_requires_local_app_data(self):

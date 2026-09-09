@@ -12,6 +12,7 @@ from .models import (
     CensoringSettings,
     DirectorySettings,
     OnboardingSettings,
+    OnboardingStep,
     ProcessingDevice,
     ProcessingMode,
     ProcessingSettings,
@@ -118,7 +119,7 @@ def settings_from_dict(data: object, defaults: AppSettings | None = None) -> App
     whisper = _group(mapping, "whisper", {"library", "model"})
     source = _group(mapping, "source", {"archive_after_success", "scan_subdirectories"})
     runtime = _group(mapping, "runtime", {"ffmpeg_path", "ffprobe_path", "whisper_cache", "ytdlp_path"})
-    onboarding = _group(mapping, "onboarding", {"completed"})
+    onboarding = _group(mapping, "onboarding", {"completed", "last_step"})
 
     parsed = AppSettings(
         directories=DirectorySettings(
@@ -245,7 +246,16 @@ def settings_from_dict(data: object, defaults: AppSettings | None = None) -> App
                 "completed",
                 base.onboarding.completed,
                 "onboarding.completed",
-            )
+            ),
+            last_step=cast(
+                OnboardingStep,
+                _string(
+                    onboarding,
+                    "last_step",
+                    base.onboarding.last_step,
+                    "onboarding.last_step",
+                ),
+            ),
         ),
     )
     parsed.validate()
@@ -287,5 +297,8 @@ def settings_to_dict(settings: AppSettings) -> dict[str, object]:
             "whisper_cache": str(settings.runtime.whisper_cache) if settings.runtime.whisper_cache else None,
             "ytdlp_path": str(settings.runtime.ytdlp_path) if settings.runtime.ytdlp_path else None,
         },
-        "onboarding": {"completed": settings.onboarding.completed},
+        "onboarding": {
+            "completed": settings.onboarding.completed,
+            "last_step": settings.onboarding.last_step,
+        },
     }

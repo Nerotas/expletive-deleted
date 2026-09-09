@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 from backend.jobs import JobManager, JobRecord
 from backend.jobs.models import JobError
+from backend.runtime.dependencies import DependencyInventory, DependencyStatus
 from backend.service import ArchiveSourceError, BackendService, LibraryItem, ServiceBusyError
 from backend.service.capabilities import get_capabilities
 from backend.settings import AppSettings, DirectorySettings, SettingsStore
@@ -78,6 +79,32 @@ class BackendServiceTests(unittest.TestCase):
                 service.close()
 
         submit.assert_called_once_with(source, "report_only", auto_censor_after_transcription=True)
+
+    def test_capabilities_classify_missing_bundled_tooling_as_app_repair(self):
+        def status(identifier: str, name: str, state: str = "ready") -> DependencyStatus:
+            return DependencyStatus(identifier, name, state, "1", "1" if state == "ready" else None, None, f"{state} detail", False)
+
+        inventory = DependencyInventory(
+            ffmpeg=status("ffmpeg", "FFmpeg", "missing"),
+            ffprobe=status("ffprobe", "FFprobe"),
+            python=(status("python:faster-whisper", "faster-whisper"),),
+            whisper_model=status("whisper:large-v3", "Whisper large-v3", "missing"),
+            ytdlp=status("ytdlp", "yt-dlp", "missing"),
+        )
+        selected = MagicMock(selected="cpu", compute_type="int8")
+        with (
+            patch("backend.service.capabilities.inspect_dependencies", return_value=inventory),
+            patch("backend.service.capabilities.get_whisper_device_status", return_value=selected),
+            patch.dict("os.environ", {"CENSOR_BUNDLED_RUNTIME": "1"}, clear=False),
+        ):
+            result = get_capabilities(AppSettings.defaults(Path("C:/media")))
+
+        self.assertFalse(result["processing_ready"])
+        self.assertEqual(result["app_runtime"], "invalid")
+        self.assertEqual(result["app_runtime_source"], "bundled")
+        self.assertEqual(result["speech_model"], "missing")
+        self.assertFalse(result["ytdlp"])
+        self.assertIn("Reinstall", result["app_runtime_detail"])
 
     def test_capabilities_without_configured_cache_inspect_managed_cache(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
