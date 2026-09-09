@@ -37,7 +37,7 @@ function rejectPending(message: string): void {
 function startBridge(): void {
   let root: string
   let runtime: ReturnType<typeof findPythonRuntime>
-  let bundledRuntime: ReturnType<typeof requireBundledRuntime> = {}
+  let bundledRuntime: ReturnType<typeof requireBundledRuntime>
   try {
     bundledRuntime = app.isPackaged
       ? requireBundledRuntime(process.resourcesPath, process.platform)
