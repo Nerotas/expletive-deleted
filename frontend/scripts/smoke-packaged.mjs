@@ -4,7 +4,7 @@ import path from 'node:path'
 const executable = process.env.PACKAGED_EXECUTABLE
   ? path.resolve(process.env.PACKAGED_EXECUTABLE)
   : path.resolve('release', 'win-unpacked', 'Expletive Deleted.exe')
-const requireBundledRuntime = process.env.REQUIRE_BUNDLED_RUNTIME === '1'
+const requireBundledRuntime = process.argv.includes('--require-bundled-runtime') || process.env.REQUIRE_BUNDLED_RUNTIME === '1'
 await access(executable)
 
 const temporaryDirectory = path.resolve('node_modules', '.tmp', 'playwright-packaged')

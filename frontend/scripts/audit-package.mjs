@@ -6,7 +6,7 @@ import path from 'node:path'
 const packageRoot = path.resolve('release', 'win-unpacked')
 const bundledRuntimeRoot = path.join(packageRoot, 'resources', 'app-runtime')
 const bundledRuntimeManifest = path.join(bundledRuntimeRoot, 'runtime-manifest.json')
-const requireBundledRuntime = process.env.REQUIRE_BUNDLED_RUNTIME === '1'
+const requireBundledRuntime = process.argv.includes('--require-bundled-runtime') || process.env.REQUIRE_BUNDLED_RUNTIME === '1'
 const violations = []
 let electronCodecDlls = 0
 

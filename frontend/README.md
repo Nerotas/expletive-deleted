@@ -22,13 +22,18 @@ npm run smoke
 npm run package:dir
 npm run smoke:package
 npm run package:win
+
+# Release-only: requires BUNDLED_RUNTIME_DIR to point to an audited Windows runtime.
+npm run package:bundled-dir
+npm run smoke:bundled-package
+npm run package:bundled-win
 ```
 
-`package:dir` creates `release/win-unpacked` for packaged-runtime testing. `package:win` creates the assisted x64 NSIS installer in `release/`. The package contains Electron and first-party Python sources only; required third-party runtimes and models remain under the explicit setup policy. The installed app locates Python 3.9+ through `CENSOR_PYTHON`, the Windows `py` launcher, or `python`.
+`package:dir` and `package:win` support ordinary development packaging. `package:bundled-dir` builds an auditable unpacked app; `package:bundled-win` creates the release x64 NSIS installer only after `BUNDLED_RUNTIME_DIR` supplies an audited private Python, FFmpeg, FFprobe, and package payload. Whisper models and yt-dlp remain outside that payload.
 
 The Windows package wrapper cleans incomplete generated staging directories and retries Electron Builder's transient `EPERM` rename failure up to three times. If cleanup remains locked, close any packaged Expletive Deleted process and Explorer window open to `frontend/release`, then run the command again.
 
-Both package commands audit `win-unpacked` and fail if it contains `ffmpeg.exe`, `ffprobe.exe`, Whisper model payloads, or Python binary packages. Electron's single root `ffmpeg.dll` is framework-owned Chromium codec support and is the only allowed FFmpeg-named binary in the installer.
+The ordinary package audits reject external processing binaries. The bundled-release audit instead requires the audited runtime beneath `resources/app-runtime`, rejects Whisper model and yt-dlp payloads, and verifies the runtime manifest, SBOM, notices, source archive, and approved FFmpeg configuration. Electron's single root `ffmpeg.dll` remains framework-owned Chromium codec support.
 
 ## Renderer architecture
 
