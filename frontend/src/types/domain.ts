@@ -93,6 +93,15 @@ export type WhisperModel = 'tiny' | 'base' | 'small' | 'medium' | 'large-v3'
 
 export type Capabilities = {
   ready: boolean
+  processing_ready?: boolean
+  app_runtime?: 'ready' | 'missing' | 'invalid'
+  app_runtime_source?: 'bundled' | 'development'
+  app_runtime_detail?: string
+  speech_model?: 'ready' | 'missing' | 'invalid'
+  speech_model_name?: WhisperModel
+  speech_model_detail?: string
+  h264_conversion?: 'available' | 'unavailable' | 'not_requested'
+  optional_ytdlp?: 'ready' | 'missing' | 'invalid'
   ffmpeg: boolean
   ffprobe: boolean
   whisper: boolean
