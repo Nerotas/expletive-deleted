@@ -49,7 +49,6 @@ function App() {
     && capabilities.installState.install_id !== dismissedInstallId,
   )
   const backendDetail = settings.error instanceof Error ? settings.error.message : settings.error ? String(settings.error) : undefined
-  const pythonRequired = Boolean(backendDetail && /Python 3\.9 or later is required/i.test(backendDetail))
 
   const queue = useQueue({
     enabled: (location.pathname === '/' && settings.persisted?.onboarding.completed === true)
@@ -86,7 +85,7 @@ function App() {
           />
         )}
 
-        {settings.error ? <BackendSetupPage detail={backendDetail} pythonRequired={pythonRequired} /> : <Routes>
+        {settings.error ? <BackendSetupPage detail={backendDetail} /> : <Routes>
           <Route
             path="/onboarding"
             element={

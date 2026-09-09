@@ -10,58 +10,33 @@ type SetupBandProps = {
 }
 
 export function SetupBand({ capabilities, reviewInstall, locateExisting, checkAgain, busy }: SetupBandProps) {
-  const requiredComponents = [
-    !(capabilities.ffmpeg && capabilities.ffprobe) && 'ffmpeg',
-    !capabilities.whisper && 'python',
-    !(capabilities.whisper_model_ready && capabilities.whisper_model === 'large-v3') && 'whisper_model',
-  ].filter((component): component is string => Boolean(component))
+  const bundledRuntime = capabilities.app_runtime_source === 'bundled'
+  const appRuntimeReady = capabilities.app_runtime === 'ready'
+  const modelReady = capabilities.speech_model === 'ready' || capabilities.whisper_model_ready
+  const processingReady = capabilities.processing_ready ?? capabilities.ready
 
   return (
     <section className="setup-band">
       <div>
-        <span className="eyebrow">System requirements</span>
-        <h2>Local components</h2>
-        <p>
-          Processing stays on this computer. Install missing components here, then the app
-          verifies them automatically.
+        <span className="eyebrow">System check</span>
+        <h2>{bundledRuntime ? 'Local processing status' : 'Local components'}</h2>
+        <p>{bundledRuntime
+          ? 'The app checks its included tools automatically. The speech model is a separate choice that stays on this computer.'
+          : 'Processing stays on this computer. Install missing components here, then the app verifies them automatically.'}
         </p>
       </div>
       <div className="setup-items">
-        <SetupItem
-          label="FFmpeg + FFprobe"
-          ready={capabilities.ffmpeg && capabilities.ffprobe}
-          busy={busy}
-          locate={() => locateExisting('ffmpeg')}
-          action={
-            !(capabilities.ffmpeg && capabilities.ffprobe)
-              ? () => reviewInstall(['ffmpeg'])
-              : undefined
-          }
-        />
-        <SetupItem
-          label="faster-whisper"
-          ready={capabilities.whisper}
-          busy={busy}
-          action={!capabilities.whisper ? () => reviewInstall(['python']) : undefined}
-        />
-        <SetupItem
-          label={`Whisper ${capabilities.whisper_model}`}
-          ready={capabilities.whisper_model_ready}
-          busy={busy}
-          locate={() => locateExisting('whisper_model')}
-          action={
-            !capabilities.whisper_model_ready
-              ? () => reviewInstall(['whisper_model'])
-              : undefined
-          }
-        />
+        {bundledRuntime ? <SetupItem label="Expletive Deleted components" detail={capabilities.app_runtime_detail} ready={appRuntimeReady} busy={busy} /> : <>
+          <SetupItem label="FFmpeg + FFprobe" ready={capabilities.ffmpeg && capabilities.ffprobe} busy={busy} locate={() => locateExisting('ffmpeg')} action={!(capabilities.ffmpeg && capabilities.ffprobe) ? () => reviewInstall(['ffmpeg']) : undefined} />
+          <SetupItem label="faster-whisper" ready={capabilities.whisper} busy={busy} action={!capabilities.whisper ? () => reviewInstall(['python']) : undefined} />
+        </>}
+        <SetupItem label={`Whisper ${capabilities.whisper_model}`} ready={modelReady} busy={busy} locate={() => locateExisting('whisper_model')} action={!modelReady ? () => reviewInstall(['whisper_model']) : undefined} />
         <SetupItem label="yt-dlp (YouTube downloads, optional)" ready={Boolean(capabilities.ytdlp)} busy={busy} locate={() => locateExisting('ytdlp')} action={!capabilities.ytdlp ? () => reviewInstall(['ytdlp']) : undefined} />
       </div>
       <div className="setup-band-controls">
-        {requiredComponents.length > 1 && <button className="setup-get-all" disabled={busy} onClick={() => reviewInstall(requiredComponents)}>Get required components</button>}
-        <button className="setup-check" disabled={busy} onClick={checkAgain}>
-          <RefreshCw className={busy ? 'spin' : undefined} size={15} /> Check again
-        </button>
+        {bundledRuntime && !modelReady && appRuntimeReady ? <button className="setup-get-all" disabled={busy} onClick={() => reviewInstall(['whisper_model'])}>Download large-v3 model</button> : null}
+        {!bundledRuntime && !processingReady ? <button className="setup-get-all" disabled={busy} onClick={() => reviewInstall(['ffmpeg', 'python', 'whisper_model'])}>Get required components</button> : null}
+        <button className="setup-check" disabled={busy} onClick={checkAgain}><RefreshCw className={busy ? 'spin' : undefined} size={15} /> Check again</button>
       </div>
     </section>
   )
@@ -69,24 +44,21 @@ export function SetupBand({ capabilities, reviewInstall, locateExisting, checkAg
 
 type SetupItemProps = {
   label: string
+  detail?: string
   ready: boolean
   busy: boolean
   action?: () => void
   locate?: () => void
 }
 
-function SetupItem({ label, ready, busy, action, locate }: SetupItemProps) {
-  return (
-    <div className="setup-item">
-      {ready ? <Check size={17} /> : <AlertCircle size={17} />}
-      <span>{label}</span>
-      <strong>{ready ? 'Ready' : 'Missing'}</strong>
-      {!ready && (locate || action) && (
-        <div className="setup-item-actions">
-          {locate && <button className="secondary" disabled={busy} onClick={locate}>Locate existing</button>}
-          {action && <button disabled={busy} onClick={action}>Get Components</button>}
-        </div>
-      )}
-    </div>
-  )
+function SetupItem({ label, detail, ready, busy, action, locate }: SetupItemProps) {
+  return <div className="setup-item">
+    {ready ? <Check size={17} /> : <AlertCircle size={17} />}
+    <span>{label}{detail ? <small>{detail}</small> : null}</span>
+    <strong>{ready ? 'Ready' : 'Needs attention'}</strong>
+    {!ready && (locate || action) && <div className="setup-item-actions">
+      {locate && <button className="secondary" disabled={busy} onClick={locate}>Locate existing</button>}
+      {action && <button disabled={busy} onClick={action}>Get Components</button>}
+    </div>}
+  </div>
 }

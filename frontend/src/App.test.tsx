@@ -233,23 +233,22 @@ describe('desktop application renderer', () => {
     ))
   })
 
-  it('shows Electron-owned recovery guidance when the local processing service cannot load settings', async () => {
+  it('shows app-repair guidance when the local processing service cannot load settings', async () => {
     vi.mocked(desktopClient.getSettings).mockRejectedValueOnce(new Error('Python was not found'))
     renderApp('/onboarding')
 
-    expect(await screen.findByRole('heading', { name: 'Finish preparing this computer' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Repair Expletive Deleted' })).toBeInTheDocument()
     expect(screen.getAllByText('Python was not found')).not.toHaveLength(0)
-    expect(screen.getByRole('button', { name: 'Get Python' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Get Python' })).not.toBeInTheDocument()
   })
 
-  it('makes a missing Python runtime an explicit first-run step', async () => {
-    vi.mocked(desktopClient.getSettings).mockRejectedValueOnce(new Error('Python 3.9 or later is required. Install Python, then restart Expletive Deleted.'))
-    const user = userEvent.setup()
+  it('treats a missing private Python runtime as an app repair issue', async () => {
+    vi.mocked(desktopClient.getSettings).mockRejectedValueOnce(new Error('Python 3.9 or later is required.'))
     renderApp('/onboarding')
 
-    expect(await screen.findByRole('heading', { name: 'Install Python to continue' })).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Get Python' }))
-    expect(desktopClient.openExternal).toHaveBeenCalledWith('https://www.python.org/downloads/windows/')
+    expect(await screen.findByRole('heading', { name: 'Repair Expletive Deleted' })).toBeInTheDocument()
+    expect(screen.queryByText(/Install Python/i)).not.toBeInTheDocument()
   })
 
   it('keeps a Karaoke draft without running Queue polling off the Queue route', async () => {
@@ -347,6 +346,7 @@ describe('desktop application renderer', () => {
     expect(screen.getByText(/they do not add FFmpeg command-line flags/i)).toBeInTheDocument()
     expect(screen.getByText('All required components are verified.')).toBeInTheDocument()
   })
+
 
   it('opens optional Ko-fi support only after an explicit Settings action', async () => {
     const user = userEvent.setup()

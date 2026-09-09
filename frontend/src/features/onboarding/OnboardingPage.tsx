@@ -57,7 +57,7 @@ export function OnboardingPage({
 
   if (!draft) return <div className="loading-row">Loading setup</div>
   const currentDraft = draft
-  const requiredComponentsReady = Boolean(
+  const requiredComponentsReady = capabilities?.processing_ready ?? Boolean(
     capabilities?.ffmpeg
     && capabilities.ffprobe
     && capabilities.whisper

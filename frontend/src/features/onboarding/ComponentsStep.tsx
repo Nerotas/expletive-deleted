@@ -12,21 +12,35 @@ type ComponentsStepProps = {
 }
 
 export function ComponentsStep({ capabilities, checking, busy, onReviewInstall, onLocateExisting, onCheckAgain }: ComponentsStepProps) {
-  const requiredComponents = [
-    !(capabilities?.ffmpeg && capabilities?.ffprobe) && 'ffmpeg',
-    !capabilities?.whisper && 'python',
-    !(capabilities?.whisper_model_ready && capabilities.whisper_model === 'large-v3') && 'whisper_model',
-  ].filter((component): component is string => Boolean(component))
+  const bundledRuntime = capabilities?.app_runtime_source === 'bundled'
+  const appRuntimeReady = capabilities?.app_runtime === 'ready'
+  const modelReady = Boolean(capabilities?.speech_model === 'ready' || capabilities?.whisper_model_ready)
+  const requiredComponents = bundledRuntime
+    ? (!modelReady ? ['whisper_model'] : [])
+    : [
+        !(capabilities?.ffmpeg && capabilities?.ffprobe) && 'ffmpeg',
+        !capabilities?.whisper && 'python',
+        !modelReady && 'whisper_model',
+      ].filter((component): component is string => Boolean(component))
 
   return <>
-    <OnboardingStepHeading title="Prepare this computer" subtitle="Each part is checked separately. The app explains what it needs before retrieving anything, and you stay in control." />
+    <OnboardingStepHeading title="Prepare this computer" subtitle="The app checks its included tools automatically. You choose whether to download the speech model, and your media stays on this computer." />
     <div className="component-list">
-      <ComponentRow title="FFmpeg and FFprobe" detail="Reads media and creates the censored copy." ready={Boolean(capabilities?.ffmpeg && capabilities?.ffprobe)} checking={checking} busy={busy} onLocate={() => onLocateExisting('ffmpeg')} onGet={() => onReviewInstall(['ffmpeg'])} />
-      <ComponentRow title="Speech recognition" detail="faster-whisper turns spoken language into a private, local transcript." ready={Boolean(capabilities?.whisper)} checking={checking} busy={busy} onGet={() => onReviewInstall(['python'])} />
-      <ComponentRow title="Whisper large-v3 model" detail="The supported model for recognizing words and their timing. It is a separate download." ready={Boolean(capabilities?.whisper_model_ready && capabilities.whisper_model === 'large-v3')} checking={checking} busy={busy} onLocate={() => onLocateExisting('whisper_model')} onGet={capabilities?.whisper ? () => onReviewInstall(['whisper_model']) : undefined} />
+      {bundledRuntime ? (
+        <ComponentRow title="Expletive Deleted components" detail={capabilities?.app_runtime_detail ?? 'The app includes the tools it needs to process media.'} ready={appRuntimeReady} checking={checking} busy={busy} />
+      ) : (
+        <>
+          <ComponentRow title="FFmpeg and FFprobe" detail="Reads media and creates the censored copy." ready={Boolean(capabilities?.ffmpeg && capabilities?.ffprobe)} checking={checking} busy={busy} onLocate={() => onLocateExisting('ffmpeg')} onGet={() => onReviewInstall(['ffmpeg'])} />
+          <ComponentRow title="Speech recognition" detail="faster-whisper turns spoken language into a private, local transcript." ready={Boolean(capabilities?.whisper)} checking={checking} busy={busy} onGet={() => onReviewInstall(['python'])} />
+        </>
+      )}
+      <ComponentRow title="Whisper large-v3 model" detail="The supported speech model for recognizing words and their timing. It is a separate download." ready={modelReady} checking={checking} busy={busy} onLocate={() => onLocateExisting('whisper_model')} onGet={bundledRuntime ? () => onReviewInstall(['whisper_model']) : capabilities?.whisper ? () => onReviewInstall(['whisper_model']) : undefined} />
       <ComponentRow title="yt-dlp for YouTube downloads (optional)" detail="Needed only when you choose to download an individual YouTube video. Local files do not need it." ready={Boolean(capabilities?.ytdlp)} checking={checking} busy={busy} onLocate={() => onLocateExisting('ytdlp')} onGet={() => onReviewInstall(['ytdlp'])} optional />
     </div>
-    {requiredComponents.length > 1 && <div className="onboarding-get-all">
+    {bundledRuntime && !modelReady ? <div className="onboarding-get-all">
+      <div><strong>Choose speech recognition</strong><span>Download the supported model only when you are ready. It stays on this computer.</span></div>
+      <button className="button primary" disabled={busy || !appRuntimeReady} onClick={() => onReviewInstall(['whisper_model'])}>Download large-v3 model</button>
+    </div> : requiredComponents.length > 1 && <div className="onboarding-get-all">
       <div><strong>Set up everything required</strong><span>Review one combined plan for the missing processing components before anything is retrieved.</span></div>
       <button className="button primary" disabled={busy} onClick={() => onReviewInstall(requiredComponents)}>Get required components</button>
     </div>}
