@@ -32,7 +32,15 @@
       "rule": "Build from source against the approved FFmpeg shared libraries. Do not accept the public Windows wheel or the ordinary pyav-ffmpeg output because they enable x264/x265."
     }
   },
-  "excluded_payloads": ["Whisper model files", "Hugging Face model cache", "yt-dlp"],
+  "ytdlp": {
+    "version": "2026.08.19",
+    "source": "https://github.com/yt-dlp/yt-dlp/releases/download/2026.08.19/yt-dlp.exe",
+    "license": "Unlicense",
+    "path": "yt-dlp/yt-dlp.exe",
+    "distribution": "official Windows x64 executable",
+    "rule": "Bundle the pinned official executable and record its release hash in the runtime manifest and SBOM."
+  },
+  "excluded_payloads": ["Whisper model files", "Hugging Face model cache"],
   "release_outputs": [
     "runtime-manifest.json",
     "ffmpeg-build.json",

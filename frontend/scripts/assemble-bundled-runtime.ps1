@@ -10,6 +10,10 @@ param(
 
     [Parameter(Mandatory)]
     [ValidateNotNullOrEmpty()]
+    [string]$YtdlpDirectory,
+
+    [Parameter(Mandatory)]
+    [ValidateNotNullOrEmpty()]
     [string]$ReleaseMetadataDirectory,
 
     [Parameter(Mandatory)]
@@ -29,6 +33,7 @@ function Require-Path([string]$Path, [string]$Description) {
 $frontendRoot = Split-Path -Parent $PSScriptRoot
 $pythonRuntime = [IO.Path]::GetFullPath($PythonRuntimeDirectory)
 $ffmpegRuntime = [IO.Path]::GetFullPath($FfmpegDirectory)
+$ytdlpRuntime = [IO.Path]::GetFullPath($YtdlpDirectory)
 $metadataRoot = [IO.Path]::GetFullPath($ReleaseMetadataDirectory)
 $outputRoot = [IO.Path]::GetFullPath($OutputDirectory)
 $temporaryRoot = "$outputRoot.partial"
@@ -36,6 +41,7 @@ $temporaryRoot = "$outputRoot.partial"
 Require-Path (Join-Path $pythonRuntime 'python.exe') 'Private Python executable'
 Require-Path (Join-Path $ffmpegRuntime 'ffmpeg.exe') 'Approved FFmpeg executable'
 Require-Path (Join-Path $ffmpegRuntime 'ffprobe.exe') 'Approved FFprobe executable'
+Require-Path (Join-Path $ytdlpRuntime 'yt-dlp.exe') 'Approved yt-dlp executable'
 foreach ($name in @('THIRD_PARTY_NOTICES.md', 'LICENSES', 'sbom.cdx.json', 'ffmpeg-source.zip', 'ffmpeg-build.json', 'runtime-manifest.json')) {
     Require-Path (Join-Path $metadataRoot $name) "Release metadata $name"
 }
@@ -50,6 +56,8 @@ New-Item -ItemType Directory -Path $temporaryRoot | Out-Null
 try {
     Copy-Item -LiteralPath $pythonRuntime -Destination (Join-Path $temporaryRoot 'python') -Recurse
     Copy-Item -LiteralPath $ffmpegRuntime -Destination (Join-Path $temporaryRoot 'ffmpeg') -Recurse
+    New-Item -ItemType Directory -Path (Join-Path $temporaryRoot 'yt-dlp') | Out-Null
+    Copy-Item -LiteralPath (Join-Path $ytdlpRuntime 'yt-dlp.exe') -Destination (Join-Path $temporaryRoot 'yt-dlp' 'yt-dlp.exe')
     foreach ($name in @('THIRD_PARTY_NOTICES.md', 'LICENSES', 'sbom.cdx.json', 'ffmpeg-source.zip', 'ffmpeg-build.json', 'runtime-manifest.json')) {
         Copy-Item -LiteralPath (Join-Path $metadataRoot $name) -Destination (Join-Path $temporaryRoot $name) -Recurse
     }

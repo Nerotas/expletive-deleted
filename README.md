@@ -48,29 +48,26 @@ Found a video you are allowed to download and want to share with fewer surprises
 2. Watch its download and compatibility preparation progress. The finished H.264/AAC MP4 appears in **Ready** automatically.
 3. Choose **Transcribe**, review any detected words, then choose **Censor** to create the family-friendly copy in **Finished**.
 
-YouTube import is local and optional. The app uses the separately approved `yt-dlp` component, gives the imported video its real title, and keeps the original downloaded file in Ready. If YouTube asks for sign-in or verification, Expletive Deleted pauses and asks before doing anything with a browser. Choose a visible browser session to retry, or explicitly choose **Open YouTube** to sign in; the app never opens a browser or uses browser cookies automatically, and never sees your password.
+YouTube import is local and user-initiated. The app includes the approved `yt-dlp` component, gives the imported video its real title, and keeps the original downloaded file in Ready. If YouTube asks for sign-in or verification, Expletive Deleted pauses and asks before doing anything with a browser. Choose a visible browser session to retry, or explicitly choose **Open YouTube** to sign in; the app never opens a browser or uses browser cookies automatically, and never sees your password.
 
 ## Install on Windows
 
 1. Download `Expletive-Deleted-Setup-1.0.1-x64.exe` from the [latest release](https://github.com/Nerotas/expletive-deleted/releases/latest).
 2. Run the installer, then open **Expletive Deleted** from the Start menu or desktop shortcut.
-3. If Python is not available, the app opens a first-run screen with **Get Python**, which opens the official Python download page. Install Python 3.9 or later, then choose **Try again** in the app.
+3. If an application component cannot be verified, the app opens repair guidance. A packaged installation does not require a separate Python installation.
 4. Complete the first-run walkthrough: Welcome, Get ready, Your settings, Add a file, Process safely, and Finish. It checks required components, prepares your dictionary, confirms folders and censoring preferences, and lets you choose the automatic local and YouTube workflows. It saves progress only when you choose **Save & Continue**.
 
-The installer contains the Electron application and first-party Python backend. It does **not** bundle Python, Python processing packages, the external `ffmpeg.exe`/`ffprobe.exe` runtime, or Whisper models.
+The installer contains the Electron application, private Python processing runtime, yt-dlp, FFmpeg/FFprobe, and Python packages. It does not bundle Whisper models.
 
-When two or more required components are missing, **Get required components** prepares one combined, inspectable setup plan for FFmpeg/FFprobe, Python packages, and the Whisper model. Nothing is retrieved until you review every source and destination and approve the plan. Valid existing installations can be selected instead.
+In a packaged build, application components are verified automatically and the walkthrough requests only the Whisper model. Development checkouts can use **Get required components** to prepare an inspectable setup plan for external tools. Nothing is retrieved until you review every source and destination and approve the plan.
 
 ## Requirements
 
 - Windows x64
-- Python 3.9 or later
-- FFmpeg and FFprobe
-- `faster-whisper` and its Python dependencies
 - Whisper `large-v3`, the supported accuracy baseline
 - Disk space for the model, source media, transcripts, and finished copies
 
-YouTube importing is optional and requires a separately obtained, verified `yt-dlp` installation. The app supports individual YouTube videos only and prepares them locally as H.264/AAC MP4 files in the Ready folder.
+YouTube importing supports individual videos and uses the included, verified `yt-dlp` executable. It prepares them locally as H.264/AAC MP4 files in the Ready folder.
 
 The first-run walkthrough verifies readiness. A network connection is needed only when you choose to retrieve a missing third-party component.
 

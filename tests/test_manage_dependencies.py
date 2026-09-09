@@ -26,6 +26,7 @@ class ManageDependenciesTests(unittest.TestCase):
             ffmpeg=status("ffmpeg"),
             ffprobe=status("ffprobe"),
             python=(status("python:faster-whisper"),),
+            ytdlp=status("ytdlp"),
             whisper_model=status("whisper:large-v3"),
         )
         output = io.StringIO()

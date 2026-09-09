@@ -79,7 +79,6 @@ function App() {
           <SetupBand
             capabilities={capabilities.capabilities}
             reviewInstall={(components) => void capabilities.reviewInstall(components)}
-            locateExisting={(component) => void capabilities.locateExisting(component)}
             checkAgain={() => void capabilities.refresh()}
             busy={capabilities.busy}
           />

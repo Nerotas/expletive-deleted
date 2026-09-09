@@ -119,12 +119,13 @@ describe('desktop application renderer', () => {
       app_runtime_source: 'bundled',
       app_runtime_detail: 'Application components are verified.',
       speech_model: 'missing',
+      whisper_model_ready: false,
     })
     renderApp('/')
 
     expect(await screen.findByText('Download speech model')).toBeInTheDocument()
     expect(screen.getByText('Local processing status')).toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: 'Download model' })).not.toHaveLength(0)
+    expect(screen.getByRole('button', { name: 'Download large-v3 model' })).toBeInTheDocument()
   })
 
   it('explains that app repair is needed before queue processing', async () => {
@@ -173,8 +174,10 @@ describe('desktop application renderer', () => {
     await user.click(screen.getByRole('button', { name: /Continue/ }))
 
     expect(await screen.findByRole('heading', { name: 'Prepare this computer' })).toBeInTheDocument()
-    expect(screen.getByText('FFmpeg and FFprobe')).toBeInTheDocument()
-    expect(screen.getByText('Speech recognition')).toBeInTheDocument()
+    expect(screen.queryByText('Expletive Deleted components')).not.toBeInTheDocument()
+    expect(screen.queryByText('FFmpeg and FFprobe')).not.toBeInTheDocument()
+    expect(screen.queryByText('Speech recognition')).not.toBeInTheDocument()
+    expect(screen.queryByText('yt-dlp for YouTube downloads')).not.toBeInTheDocument()
     expect(screen.getByText('Whisper large-v3 model')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Continue/ })).toBeDisabled()
     expect(desktopClient.installDependencies).not.toHaveBeenCalled()
@@ -431,6 +434,8 @@ describe('desktop application renderer', () => {
     vi.mocked(desktopClient.getCapabilities).mockImplementation(async () => ({
       ...readyCapabilities,
       ready: persisted.runtime.whisper_cache !== null,
+      app_runtime: 'ready',
+      app_runtime_source: 'development',
       whisper_model_ready: persisted.runtime.whisper_cache !== null,
     }))
     vi.mocked(desktopClient.installDependencies).mockImplementationOnce(async () => {
@@ -452,8 +457,7 @@ describe('desktop application renderer', () => {
     const user = userEvent.setup()
     renderApp('/')
 
-    const whisperModel = await screen.findByText('Whisper large-v3')
-    await user.click(within(whisperModel.closest('.setup-item')!).getByRole('button', { name: 'Get Components' }))
+    await user.click(screen.getByRole('button', { name: 'Download large-v3 model' }))
     await user.click(screen.getByRole('button', { name: 'Continue' }))
     await screen.findByText('Installation complete and verified')
     await user.click(screen.getByRole('link', { name: 'Settings' }))
@@ -943,58 +947,6 @@ describe('desktop application renderer', () => {
     expect((await screen.findAllByText('movie.mkv')).length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: 'Return to Queue' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Delete permanently' })).toBeInTheDocument()
-  })
-
-  it('shows source, destination, and size before an external retrieval can begin', async () => {
-    vi.mocked(desktopClient.getCapabilities).mockResolvedValue({
-      ...readyCapabilities,
-      ready: false,
-      ffmpeg: false,
-      ffprobe: false,
-    })
-    vi.mocked(desktopClient.planDependencies).mockResolvedValueOnce({
-      plan_id: 'ffmpeg-plan',
-      actions: [{
-        id: 'download-managed-ffmpeg-runtime',
-        dependencies: ['ffmpeg', 'ffprobe'],
-        description: 'Download and verify FFmpeg and FFprobe',
-        source_name: 'static-ffmpeg platform binaries',
-        source_url: 'https://pypi.org/project/static-ffmpeg/',
-        estimated_download_bytes: 1073741824,
-        destination: 'C:\\Users\\Parent\\AppData\\Local\\ExpletiveDeleted\\dependencies\\ffmpeg',
-      }],
-    })
-    const user = userEvent.setup()
-    renderApp('/')
-
-    await user.click((await screen.findAllByRole('button', { name: 'Get Components' }))[0])
-
-    expect(await screen.findByRole('dialog', { name: 'Retrieve required components?' })).toBeInTheDocument()
-    expect(screen.getByText('static-ffmpeg platform binaries')).toBeInTheDocument()
-    expect(screen.getByText(/ExpletiveDeleted/)).toBeInTheDocument()
-    expect(screen.getByText('1.0 GB (approximately)')).toBeInTheDocument()
-    expect(desktopClient.installDependencies).not.toHaveBeenCalled()
-
-    await user.click(screen.getByRole('button', { name: 'Cancel' }))
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(desktopClient.installDependencies).not.toHaveBeenCalled()
-  })
-
-  it('combines every missing required component into one reviewed plan', async () => {
-    vi.mocked(desktopClient.getCapabilities).mockResolvedValue({
-      ...readyCapabilities,
-      ready: false,
-      ffmpeg: false,
-      ffprobe: false,
-      whisper: false,
-      whisper_model_ready: false,
-    })
-    const user = userEvent.setup()
-    renderApp('/')
-
-    await user.click(await screen.findByRole('button', { name: 'Get required components' }))
-
-    expect(desktopClient.planDependencies).toHaveBeenCalledWith(['ffmpeg', 'python', 'whisper_model'])
   })
 
   it('returns an archived original to Ready', async () => {

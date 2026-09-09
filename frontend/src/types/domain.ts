@@ -101,7 +101,6 @@ export type Capabilities = {
   speech_model_name?: WhisperModel
   speech_model_detail?: string
   h264_conversion?: 'available' | 'unavailable' | 'not_requested'
-  optional_ytdlp?: 'ready' | 'missing' | 'invalid'
   ffmpeg: boolean
   ffprobe: boolean
   whisper: boolean
@@ -114,7 +113,7 @@ export type Capabilities = {
   ffmpeg_path?: string | null
   ffprobe_path?: string | null
   model_path?: string | null
-  ytdlp?: boolean
+  ytdlp: boolean
   ytdlp_version?: string | null
   ytdlp_path?: string | null
   ytdlp_detail?: string

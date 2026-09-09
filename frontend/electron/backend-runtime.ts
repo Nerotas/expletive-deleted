@@ -12,6 +12,7 @@ export type BundledRuntimePaths = {
   python?: string
   ffmpeg?: string
   ffprobe?: string
+  ytdlp?: string
 }
 
 export function findBundledRuntime(
@@ -22,13 +23,15 @@ export function findBundledRuntime(
   const executableName = platform === 'win32' ? 'python.exe' : 'python'
   const ffmpegName = platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg'
   const ffprobeName = platform === 'win32' ? 'ffprobe.exe' : 'ffprobe'
+  const ytdlpName = platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp'
   const runtimeRoot = path.join(resourcesPath, 'app-runtime')
   const python = path.join(runtimeRoot, 'python', executableName)
   const ffmpeg = path.join(runtimeRoot, 'ffmpeg', ffmpegName)
   const ffprobe = path.join(runtimeRoot, 'ffmpeg', ffprobeName)
+  const ytdlp = path.join(runtimeRoot, 'yt-dlp', ytdlpName)
 
-  if (!exists(python) || !exists(ffmpeg) || !exists(ffprobe)) return {}
-  return { python, ffmpeg, ffprobe }
+  if (!exists(python) || !exists(ffmpeg) || !exists(ffprobe) || !exists(ytdlp)) return {}
+  return { python, ffmpeg, ffprobe, ytdlp }
 }
 
 export function requireBundledRuntime(
@@ -39,7 +42,7 @@ export function requireBundledRuntime(
   const manifest = path.join(resourcesPath, 'app-runtime', 'runtime-manifest.json')
   if (!exists(manifest)) return {}
   const runtime = findBundledRuntime(resourcesPath, platform, exists)
-  if (runtime.python && runtime.ffmpeg && runtime.ffprobe) return runtime
+  if (runtime.python && runtime.ffmpeg && runtime.ffprobe && runtime.ytdlp) return runtime
   throw new Error('The installed local processing runtime is incomplete. Reinstall Expletive Deleted.')
 }
 
@@ -52,7 +55,7 @@ export function backendEnvironment(
     ? path.dirname(bundledRuntime.ffmpeg)
     : undefined
   const completeBundledRuntime = Boolean(
-    bundledRuntime.python && bundledRuntime.ffmpeg && bundledRuntime.ffprobe,
+    bundledRuntime.python && bundledRuntime.ffmpeg && bundledRuntime.ffprobe && bundledRuntime.ytdlp,
   )
   const currentPath = environment.PATH ?? ''
 
@@ -63,6 +66,7 @@ export function backendEnvironment(
     ...(completeBundledRuntime ? { CENSOR_BUNDLED_RUNTIME: '1' } : {}),
     ...(bundledRuntime.ffmpeg ? { CENSOR_FFMPEG: bundledRuntime.ffmpeg } : {}),
     ...(bundledRuntime.ffprobe ? { CENSOR_FFPROBE: bundledRuntime.ffprobe } : {}),
+    ...(bundledRuntime.ytdlp ? { CENSOR_YTDLP: bundledRuntime.ytdlp } : {}),
     ...(bundledFfmpegDirectory
       ? { PATH: currentPath ? bundledFfmpegDirectory + path.delimiter + currentPath : bundledFfmpegDirectory }
       : {}),

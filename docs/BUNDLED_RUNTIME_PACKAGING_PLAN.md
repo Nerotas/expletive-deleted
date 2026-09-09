@@ -4,7 +4,7 @@
 
 Make the normal Windows installer usable on a clean computer without asking a parent to install Python, Python packages, FFmpeg, or FFprobe themselves.
 
-The installer will include the runtime required to run the application. The Whisper `large-v3` model remains a separate, user-selected download because it is large and users should decide whether and where to install it. Optional YouTube support remains separately selected.
+The installer will include the runtime required to run the application, including the pinned yt-dlp executable. The Whisper `large-v3` model remains a separate, user-selected download because it is large and users should decide whether and where to install it. YouTube importing remains user-initiated and requires network access.
 
 This is an implementation and release plan, not legal advice. The release owner must complete the license and artifact audit before changing the distribution policy.
 
@@ -18,7 +18,7 @@ This is an implementation and release plan, not legal advice. The release owner 
 | `faster-whisper`, CTranslate2, and PyAV | Include after binary audit | Required for local transcription and audio decoding. |
 | FFmpeg and FFprobe | Include after LGPL-only build audit | Required for censoring, remuxing, and media inspection. |
 | Whisper `large-v3` model | Do not include by default | Large download; the user chooses whether and where to obtain it. |
-| yt-dlp | Do not include | Optional YouTube feature with its own user-approved setup. |
+| yt-dlp | Include | Required application component; YouTube importing remains user-initiated. |
 
 The installed application continues to process media locally. It must not upload source media, transcripts, or censor settings as part of setup.
 
@@ -97,14 +97,14 @@ Existing settings are preserved: a user who already selected H.264 continues to 
 - Include the private Python runtime, backend, approved Python wheels/extensions, FFmpeg, and FFprobe in the Windows package.
 - Update `backend-runtime.ts` to prefer the bundled Python runtime and retain the local-development `.venv` path for source checkouts.
 - Remove system Python and `PATH` FFmpeg from the normal installed-app readiness requirement.
-- Keep model readiness and optional yt-dlp readiness as separate capabilities.
-- Change the package audit: allow only the approved bundled runtime artifacts and reject model payloads, yt-dlp, unapproved FFmpeg binaries, and unapproved native DLLs.
+- Keep model readiness separate from the bundled application-runtime readiness, which includes yt-dlp.
+- Change the package audit: allow only the approved bundled runtime artifacts and reject model payloads, unapproved FFmpeg binaries, and unapproved native DLLs.
 
 ### 4. Simplify first run
 
 - On a clean Windows computer, launch directly into the walkthrough without a Python-install page.
 - Display the user-selected Whisper model setup with source, destination, approximate size, disk requirement, progress, cancel/retry, and verification.
-- Keep **Get required components** for items not included in the installer; it must not include optional yt-dlp.
+- Keep **Get required components** for development-only components not included in the installer; packaged builds must not offer a separate yt-dlp installer.
 - Explain that no source media changes during setup.
 
 ### 5. Release qualification
@@ -116,4 +116,4 @@ Existing settings are preserved: a user who already selected H.264 continues to 
 
 ## Definition of done
 
-A Windows customer can install and run Expletive Deleted without installing Python or media tooling. They choose whether to download Whisper `large-v3`; yt-dlp remains optional. Standard censorship preserves video streams, and H.264 conversion happens only after an explicit user choice. The published installer and release page contain the verified license, notice, source, and artifact records for every bundled runtime component.
+A Windows customer can install and run Expletive Deleted without installing Python or media tooling. They choose whether to download Whisper `large-v3`; yt-dlp ships with the application and is used only when they choose YouTube importing. Standard censorship preserves video streams, and H.264 conversion happens only after an explicit user choice. The published installer and release page contain the verified license, notice, source, and artifact records for every bundled runtime component.

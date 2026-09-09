@@ -36,6 +36,7 @@ main { max-width: 1480px; margin: 0 auto; padding: 28px 34px 56px; }
 .setup-band p { margin: 0; color: #aebbbb; font-size: 12px; }
 .setup-items { display: flex; flex-direction: column; justify-content: center; }
 .setup-item { min-height: 39px; display: grid; grid-template-columns: 20px 1fr auto auto; align-items: center; gap: 10px; border-bottom: 1px solid rgba(255, 255, 255, .12); font-size: 12px; }
+.setup-item-info { width: 17px; height: 17px; display: grid; place-items: center; border: 1px solid var(--signal); border-radius: 50%; color: var(--signal); font-size: 11px; font-weight: 800; }
 .setup-item:last-child { border-bottom: 0; }
 .setup-item strong { color: #bcd1c4; }
 .setup-item button { border: 0; background: var(--signal); color: white; padding: 6px 9px; border-radius: 3px; font-weight: 700; font-size: 11px; }

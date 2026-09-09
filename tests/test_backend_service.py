@@ -103,7 +103,7 @@ class BackendServiceTests(unittest.TestCase):
         self.assertEqual(result["app_runtime"], "invalid")
         self.assertEqual(result["app_runtime_source"], "bundled")
         self.assertEqual(result["speech_model"], "missing")
-        self.assertEqual(result["optional_ytdlp"], "missing")
+        self.assertFalse(result["ytdlp"])
         self.assertIn("Reinstall", result["app_runtime_detail"])
 
     def test_capabilities_without_configured_cache_inspect_managed_cache(self):

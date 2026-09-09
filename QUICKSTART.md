@@ -52,7 +52,7 @@ The first launch checks the local system for:
 - Python speech-recognition dependencies
 - Whisper `large-v3`
 
-If two or more required components are missing, choose **Get required components** to prepare one combined plan. It includes FFmpeg/FFprobe, Python speech-recognition packages, and the Whisper model, but never optional yt-dlp. You can also choose **Locate existing** to verify an installation already on the computer, or **Get Components** for one item. The review shows each third-party source, local destination, and download size before continuing. Canceling the disclosure does not start retrieval. After an approved operation, the backend verifies the component and refreshes System Ready status.
+In a packaged build, the application components, including FFmpeg/FFprobe, Python speech-recognition packages, and yt-dlp, are verified automatically. The only required download is the Whisper model. Development checkouts may use **Get required components** or **Locate existing** for external tools. The review shows each third-party source, local destination, and download size before continuing. Canceling the disclosure does not start retrieval. After an approved operation, the backend verifies the component and refreshes System Ready status.
 
 Approved FFmpeg binaries and Whisper models are stored beneath `%LOCALAPPDATA%\ExpletiveDeleted\`, outside the application package and user-media folders. The app does not modify the global Windows `PATH`. Runtime locations remain inspectable and changeable under **Settings → Runtime components**.
 
@@ -61,7 +61,7 @@ Whisper `large-v3` is required for reliable word-level censor timing. Smaller mo
 ### Process media
 
 1. In **Your settings** during first-run setup, or later in **Settings**, confirm the working folders and processing preferences. **Automatically create a censored copy after transcription** queues a censored copy after every newly verified transcript; leave it off to review the transcript first. **Automatically process YouTube downloads** sends a completed YouTube import through Ready, transcription, and the censored-copy queue. Both are off by default and saving either choice never starts files already in Ready. The default input folder is `%USERPROFILE%\Documents\Expletive Deleted\Ready`.
-2. Add supported audio or video files to the configured Ready/Input folder, drag them into Queue, or use **Download from YouTube** for an individual video you are authorized to download. YouTube import requires the optional `yt-dlp` component.
+2. Add supported audio or video files to the configured Ready/Input folder, drag them into Queue, or use **Download from YouTube** for an individual video you are authorized to download. The included `yt-dlp` component is used only for YouTube import.
    If YouTube requires sign-in or verification, the app shows a browser-session dialog. Choose the visible browser session only when you are ready to retry. **Open YouTube** is optional, opens no browser until you press it, and does not retry the download. Your password is never requested or handled by Expletive Deleted; yt-dlp reads the selected browser's local cookies.
 3. Return to **Queue** and choose an action for one file:
    - **Transcribe only** creates and verifies a transcript without creating media output.

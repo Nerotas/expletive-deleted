@@ -11,13 +11,14 @@ const requiredFiles = [
   'python/python.exe',
   'ffmpeg/ffmpeg.exe',
   'ffmpeg/ffprobe.exe',
+  'yt-dlp/yt-dlp.exe',
   'THIRD_PARTY_NOTICES.md',
   'sbom.cdx.json',
   'ffmpeg-source.zip',
   'ffmpeg-build.json',
   'runtime-manifest.json',
 ]
-const forbiddenNames = new Set(['libx264.dll', 'libx265.dll', 'yt-dlp.exe', 'model.bin'])
+const forbiddenNames = new Set(['libx264.dll', 'libx265.dll', 'model.bin'])
 const forbiddenFragments = ['models--', 'whisper-cache']
 for (const relativePath of requiredFiles) await access(path.join(runtimeRoot, relativePath))
 await access(path.join(runtimeRoot, 'LICENSES'))
@@ -45,6 +46,7 @@ const requiredSbomComponents = [
   { label: 'NumPy', names: ['numpy'], version: requirements.get('numpy'), license: 'BSD-3-Clause' },
   { label: 'better-profanity', names: ['better-profanity'], version: requirements.get('better-profanity'), license: 'MIT' },
   { label: 'huggingface-hub', names: ['huggingface-hub', 'huggingface_hub'], version: requirements.get('huggingface-hub'), license: 'Apache-2.0' },
+  { label: 'yt-dlp', names: ['yt-dlp', 'yt_dlp'], version: manifest.ytdlp?.version, license: 'Unlicense' },
 ]
 const manifestErrors = []
 if (manifest.schema_version !== 1) manifestErrors.push('schema_version must be 1')
@@ -60,6 +62,12 @@ if (
 if (manifest.pyav?.license !== 'BSD-3-Clause' || manifest.pyav?.ffmpeg_library_origin !== 'bundled-lgpl-build') {
   manifestErrors.push('pyav must identify its BSD-3-Clause license and approved LGPL FFmpeg library origin')
 }
+if (
+  manifest.ytdlp?.path !== 'yt-dlp/yt-dlp.exe'
+  || typeof manifest.ytdlp?.version !== 'string'
+  || !/^https:\/\//.test(manifest.ytdlp?.source ?? '')
+  || manifest.ytdlp?.license !== 'Unlicense'
+) manifestErrors.push('yt-dlp must identify the approved executable path, HTTPS source, version, and Unlicense')
 const configure = manifest.ffmpeg?.configure
 if (!Array.isArray(configure) || configure.some((argument) => argument === '--enable-gpl' || argument === '--enable-nonfree')) {
   manifestErrors.push('ffmpeg configure arguments must be present and exclude --enable-gpl and --enable-nonfree')

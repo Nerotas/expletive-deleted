@@ -18,7 +18,7 @@ def _app_runtime_status(inventory) -> tuple[str, str, str]:
     """Describe app-owned runtime health separately from user-selected assets."""
     bundled = os.environ.get("CENSOR_BUNDLED_RUNTIME") == "1"
     runtime_ready = all(
-        status.ready for status in (inventory.ffmpeg, inventory.ffprobe, *inventory.python)
+        status.ready for status in (inventory.ffmpeg, inventory.ffprobe, *inventory.python, inventory.ytdlp)
     )
     if runtime_ready:
         return (
@@ -27,7 +27,7 @@ def _app_runtime_status(inventory) -> tuple[str, str, str]:
             "Application components are verified.",
         )
 
-    missing = [status.name for status in (inventory.ffmpeg, inventory.ffprobe, *inventory.python) if not status.ready]
+    missing = [status.name for status in (inventory.ffmpeg, inventory.ffprobe, *inventory.python, inventory.ytdlp) if not status.ready]
     detail = "Could not verify: " + ", ".join(missing) + "."
     if bundled:
         return (
@@ -92,9 +92,8 @@ def get_capabilities(settings: AppSettings) -> dict[str, object]:
         "whisper_compute_type": selected.compute_type,
         "cuda": requested_cuda.selected == "cuda",
         "video_encoders": encoders,
-        "ytdlp": bool(inventory.ytdlp and inventory.ytdlp.ready),
-        "optional_ytdlp": inventory.ytdlp.state if inventory.ytdlp else "missing",
-        "ytdlp_version": inventory.ytdlp.installed_version if inventory.ytdlp else None,
-        "ytdlp_path": str(inventory.ytdlp.path) if inventory.ytdlp and inventory.ytdlp.path else None,
-        "ytdlp_detail": inventory.ytdlp.detail if inventory.ytdlp else "yt-dlp was not found",
+        "ytdlp": inventory.ytdlp.ready,
+        "ytdlp_version": inventory.ytdlp.installed_version,
+        "ytdlp_path": str(inventory.ytdlp.path) if inventory.ytdlp.path else None,
+        "ytdlp_detail": inventory.ytdlp.detail,
     }

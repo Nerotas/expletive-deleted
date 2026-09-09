@@ -26,6 +26,7 @@ export const readyCapabilities: Capabilities = {
   ready: true,
   ffmpeg: true,
   ffprobe: true,
+  ytdlp: true,
   whisper: true,
   whisper_library: 'faster-whisper',
   whisper_model: 'large-v3',

@@ -27,6 +27,7 @@ const licenses = [
   ['numpy.txt', 'BSD-3-Clause'],
   ['better-profanity.txt', 'MIT'],
   ['huggingface-hub.txt', 'Apache-2.0'],
+  ['yt-dlp.txt', 'Unlicense'],
 ] as const
 
 async function createRuntime() {
@@ -34,6 +35,7 @@ async function createRuntime() {
   runtimeDirectories.push(runtimeRoot)
   await mkdir(path.join(runtimeRoot, 'python'), { recursive: true })
   await mkdir(path.join(runtimeRoot, 'ffmpeg'), { recursive: true })
+  await mkdir(path.join(runtimeRoot, 'yt-dlp'), { recursive: true })
   await mkdir(path.join(runtimeRoot, 'LICENSES'), { recursive: true })
 
   const files = new Map<string, string>()
@@ -46,6 +48,7 @@ async function createRuntime() {
   await addFile('python/python.exe', 'synthetic-python')
   await addFile('ffmpeg/ffmpeg.exe', 'synthetic-ffmpeg')
   await addFile('ffmpeg/ffprobe.exe', 'synthetic-ffprobe')
+  await addFile('yt-dlp/yt-dlp.exe', 'synthetic-yt-dlp')
   await addFile('ffmpeg-source.zip', 'synthetic-source')
   const configure = ['--disable-gpl', '--disable-nonfree', '--enable-shared']
   const build = {
@@ -63,7 +66,7 @@ async function createRuntime() {
   await addFile('ffmpeg-build.json', JSON.stringify(build))
   await addFile(
     'THIRD_PARTY_NOTICES.md',
-    ['Python', 'FFmpeg', 'PyAV', 'faster-whisper', 'CTranslate2', 'NumPy', 'better-profanity', 'huggingface-hub'].join('\n'),
+    ['Python', 'FFmpeg', 'PyAV', 'faster-whisper', 'CTranslate2', 'NumPy', 'better-profanity', 'huggingface-hub', 'yt-dlp'].join('\n'),
   )
   for (const [fileName, license] of licenses) await addFile(`LICENSES/${fileName}`, `${license}\n`)
 
@@ -79,6 +82,12 @@ async function createRuntime() {
       configure,
     },
     pyav: { version: componentVersions.av, license: 'BSD-3-Clause', ffmpeg_library_origin: 'bundled-lgpl-build' },
+    ytdlp: {
+      path: 'yt-dlp/yt-dlp.exe',
+      version: '2026.08.19',
+      source: 'https://github.com/yt-dlp/yt-dlp/releases/download/2026.08.19/yt-dlp.exe',
+      license: 'Unlicense',
+    },
     files: [...files].map(([filePath, sha256]) => ({ path: filePath, sha256 })),
     licenses: licenses.map(([fileName, spdx]) => ({ path: `LICENSES/${fileName}`, spdx })),
   }
@@ -88,6 +97,7 @@ async function createRuntime() {
     { name: 'Python', version: '3.13.7', license: 'PSF-2.0' },
     { name: 'FFmpeg', version: '8.1.2', license: 'LGPL-2.1-or-later' },
     { name: 'PyAV', version: componentVersions.av, license: 'BSD-3-Clause' },
+    { name: 'yt-dlp', version: '2026.08.19', license: 'Unlicense' },
     ...Object.entries(componentVersions)
       .filter(([name]) => name !== 'av')
       .map(([name, version]) => ({ name, version, license: licenses.find(([fileName]) => fileName.startsWith(name))?.[1] ?? 'MIT' })),

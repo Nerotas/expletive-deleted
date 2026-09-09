@@ -8,6 +8,7 @@ The staged payload must contain:
 python/python.exe
 ffmpeg/ffmpeg.exe
 ffmpeg/ffprobe.exe
+yt-dlp/yt-dlp.exe
 THIRD_PARTY_NOTICES.md
 LICENSES/
 sbom.cdx.json
@@ -16,9 +17,9 @@ ffmpeg-build.json
 runtime-manifest.json
 ```
 
-`runtime-manifest.json` must conform to `runtime-manifest.schema.json`. The validator rejects Whisper models, yt-dlp, `libx264`, `libx265`, GPL/nonfree FFmpeg configure flags, and an incomplete Python or FFmpeg runtime.
+`runtime-manifest.json` must conform to `runtime-manifest.schema.json`. The validator rejects Whisper models, `libx264`, `libx265`, GPL/nonfree FFmpeg configure flags, and an incomplete Python, FFmpeg, or yt-dlp runtime.
 
-Do not place a Whisper model in this directory. The model remains a user-selected download. Do not place yt-dlp here; it remains optional.
+Do not place a Whisper model in this directory. The model remains a user-selected download. The pinned official yt-dlp Windows executable is bundled with the application.
 
 
 ## Approved build inputs

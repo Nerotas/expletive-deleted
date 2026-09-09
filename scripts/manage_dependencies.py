@@ -37,6 +37,7 @@ def _inventory_dict(inventory) -> dict[str, object]:
         "ffmpeg": _status_dict(inventory.ffmpeg),
         "ffprobe": _status_dict(inventory.ffprobe),
         "python": [_status_dict(status) for status in inventory.python],
+        "ytdlp": _status_dict(inventory.ytdlp),
         "whisper_model": _status_dict(inventory.whisper_model),
     }
 
@@ -117,7 +118,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.json:
             print(json.dumps(_inventory_dict(inventory), indent=2))
         else:
-            for status in (inventory.ffmpeg, inventory.ffprobe, *inventory.python, inventory.whisper_model):
+            for status in (inventory.ffmpeg, inventory.ffprobe, *inventory.python, inventory.ytdlp, inventory.whisper_model):
                 print(f"[{status.state.upper()}] {status.name}: {status.detail}")
         return 0 if inventory.ready else 1
 
