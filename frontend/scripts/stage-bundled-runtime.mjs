@@ -18,6 +18,11 @@ if (sourceDirectory) {
     env: process.env,
   })
   if (audit.status !== 0) process.exit(audit.status ?? 1)
+  const verification = spawnSync(process.execPath, ['scripts/verify-bundled-runtime.mjs', sourceDirectory], {
+    stdio: 'inherit',
+    env: process.env,
+  })
+  if (verification.status !== 0) process.exit(verification.status ?? 1)
 }
 
 for (const entry of await readdir(stagingDirectory, { withFileTypes: true })) {
