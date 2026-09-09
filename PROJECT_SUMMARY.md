@@ -6,6 +6,8 @@ This repository contains the Python profanity-censor pipeline, local application
 
 The master product and architecture direction is recorded in [docs/Profanity Censor Desktop App - Master Project Handoff.md](docs/Profanity%20Censor%20Desktop%20App%20%E2%80%94%20Master%20Project%20Handoff.md).
 
+The proposed Windows runtime distribution change is recorded in [docs/BUNDLED_RUNTIME_PACKAGING_PLAN.md](docs/BUNDLED_RUNTIME_PACKAGING_PLAN.md). It is a plan, not current release behavior.
+
 ## Working Pipeline
 
 ```text
@@ -31,7 +33,7 @@ The current desktop and backend application supports:
 - Report-only transcription and detection
 - Stereo muting or karaoke cancellation
 - Discrete center-channel handling for recognized surround layouts
-- H.264 stream copy or detected encoder selection
+- Source-video preservation by default and explicit H.264 encoder selection
 - Reusable transcript caches
 - A mandatory persisted-transcript gate before any censor/transcode work
 - FFmpeg and Whisper progress reporting
