@@ -344,9 +344,25 @@ describe('desktop application renderer', () => {
       'Using automatic detection',
     )
     expect(screen.getByText(/they do not add FFmpeg command-line flags/i)).toBeInTheDocument()
-    expect(screen.getByText('All required components are verified.')).toBeInTheDocument()
+    expect(screen.getByText('Application components and speech model are verified.')).toBeInTheDocument()
   })
 
+  it('hides FFmpeg path overrides for the bundled application runtime', async () => {
+    vi.mocked(desktopClient.getCapabilities).mockResolvedValueOnce({
+      ...readyCapabilities,
+      processing_ready: true,
+      app_runtime: 'ready',
+      app_runtime_source: 'bundled',
+      app_runtime_detail: 'Application components are verified.',
+      speech_model: 'ready',
+    })
+    renderApp('/settings')
+
+    expect(await screen.findByText(/came with Expletive Deleted/i)).toBeInTheDocument()
+    expect(screen.queryByLabelText('FFmpeg path override')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('FFprobe path override')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Whisper model location')).toBeInTheDocument()
+  })
 
   it('opens optional Ko-fi support only after an explicit Settings action', async () => {
     const user = userEvent.setup()

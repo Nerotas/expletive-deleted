@@ -28,6 +28,7 @@ const DIRECTORY_LABELS: Record<keyof Settings['directories'], string> = {
 
 export function SettingsPage({ controller, capabilities, checkingSystem, onCheckSystem, onOpenOnboarding }: SettingsPageProps) {
   const settings = controller.draft
+  const bundledRuntime = capabilities?.app_runtime_source === 'bundled'
   if (!settings) return <div className="loading-row">Loading settings</div>
 
   const setGroup = <K extends keyof Settings>(group: K, value: Settings[K]) => {
@@ -252,62 +253,33 @@ export function SettingsPage({ controller, capabilities, checkingSystem, onCheck
           </small>
         </SettingsSection>
 
-        <SettingsSection title="Runtime components" description="Automatic discovery and optional path overrides">
+        <SettingsSection title="Runtime components" description={bundledRuntime ? 'Included application tools and your speech-model location' : 'Automatic discovery and optional path overrides'}>
+          {bundledRuntime ? <p className="whisper-library-note">FFmpeg, FFprobe, Python, and speech recognition came with Expletive Deleted. If they need repair, reinstall the app; do not install or choose separate executables.</p> : <>
+            <label className="path-field">
+              <span>FFmpeg path override</span>
+              <div>
+                <input value={settings.runtime.ffmpeg_path ?? ''} placeholder="Using automatic detection" onChange={(event) => setGroup('runtime', { ...settings.runtime, ffmpeg_path: event.target.value || null })} />
+                <button className="icon-button" title="Choose and verify FFmpeg" onClick={() => void controller.chooseFfmpeg()}><FileSearch size={17} /></button>
+              </div>
+            </label>
+            <label className="path-field">
+              <span>FFprobe path override</span>
+              <input value={settings.runtime.ffprobe_path ?? ''} placeholder="Using automatic detection" onChange={(event) => setGroup('runtime', { ...settings.runtime, ffprobe_path: event.target.value || null })} />
+            </label>
+          </>}
           <label className="path-field">
-            <span>FFmpeg path override</span>
+            <span>Whisper model location</span>
             <div>
-              <input
-                value={settings.runtime.ffmpeg_path ?? ''}
-                placeholder="Using automatic detection"
-                onChange={(event) => setGroup('runtime', {
-                  ...settings.runtime,
-                  ffmpeg_path: event.target.value || null,
-                })}
-              />
-              <button className="icon-button" title="Choose and verify FFmpeg" onClick={() => void controller.chooseFfmpeg()}>
-                <FileSearch size={17} />
-              </button>
+              <input value={settings.runtime.whisper_cache ?? ''} placeholder="Using application-managed model location" onChange={(event) => setGroup('runtime', { ...settings.runtime, whisper_cache: event.target.value || null })} />
+              <button className="icon-button" title="Choose Whisper model cache" onClick={() => void controller.chooseWhisperCache()}><FolderOpen size={17} /></button>
             </div>
           </label>
-          <label className="path-field">
-            <span>FFprobe path override</span>
-            <input
-              value={settings.runtime.ffprobe_path ?? ''}
-              placeholder="Using automatic detection"
-              onChange={(event) => setGroup('runtime', {
-                ...settings.runtime,
-                ffprobe_path: event.target.value || null,
-              })}
-            />
-          </label>
-          <label className="path-field">
-            <span>Whisper cache override</span>
-            <div>
-              <input
-                value={settings.runtime.whisper_cache ?? ''}
-                placeholder="Using application-managed cache"
-                onChange={(event) => setGroup('runtime', {
-                  ...settings.runtime,
-                  whisper_cache: event.target.value || null,
-                })}
-              />
-              <button className="icon-button" title="Choose Whisper model cache" onClick={() => void controller.chooseWhisperCache()}>
-                <FolderOpen size={17} />
-              </button>
-            </div>
-          </label>
-          <div className={`runtime-status ${capabilities?.ready ? 'ready' : 'attention'}`}>
-            {capabilities?.ready ? <CheckCircle2 size={17} /> : <AlertCircle size={17} />}
-            <span>{capabilities?.ready ? 'All required components are verified.' : 'One or more required components need attention.'}</span>
-            <button className="button secondary" disabled={checkingSystem} onClick={onCheckSystem}>
-              <RefreshCw className={checkingSystem ? 'spin' : undefined} size={15} />Check system
-            </button>
+          <div className={`runtime-status ${(capabilities?.processing_ready ?? capabilities?.ready) ? 'ready' : 'attention'}`}>
+            {(capabilities?.processing_ready ?? capabilities?.ready) ? <CheckCircle2 size={17} /> : <AlertCircle size={17} />}
+            <span>{(capabilities?.processing_ready ?? capabilities?.ready) ? 'Application components and speech model are verified.' : capabilities?.app_runtime === 'invalid' ? 'The installed app needs repair.' : 'A speech model or development component needs attention.'}</span>
+            <button className="button secondary" disabled={checkingSystem} onClick={onCheckSystem}><RefreshCw className={checkingSystem ? 'spin' : undefined} size={15} />Check system</button>
           </div>
-          <small className="whisper-library-note">
-            Leave overrides blank to use automatically detected components. These fields select
-            executable or cache locations; they do not add FFmpeg command-line flags. Save changed
-            paths before checking again.
-          </small>
+          {!bundledRuntime && <small className="whisper-library-note">Leave overrides blank to use automatically detected components. These fields select executable or cache locations; they do not add FFmpeg command-line flags. Save changed paths before checking again.</small>}
         </SettingsSection>
 
         <SettingsSection title="About" description="Desktop application identity">
