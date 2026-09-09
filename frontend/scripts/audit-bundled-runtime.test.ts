@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -131,8 +131,8 @@ describe('bundled runtime audit', () => {
     manifest.files.find((file: { path: string }) => file.path === 'sbom.cdx.json').sha256 = sbomHash
     await writeFile(manifestPath, JSON.stringify(manifest))
 
-    expect(() => execFileSync(process.execPath, [auditScript, runtimeRoot], { encoding: 'utf8' })).toThrow(
-      /SBOM must identify faster-whisper 1\.2\.1 under MIT/,
-    )
+    const result = spawnSync(process.execPath, [auditScript, runtimeRoot], { encoding: 'utf8' })
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toMatch(/SBOM must identify faster-whisper 1\.2\.1 under MIT/)
   })
 })

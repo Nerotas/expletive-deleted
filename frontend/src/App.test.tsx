@@ -434,8 +434,10 @@ describe('desktop application renderer', () => {
     vi.mocked(desktopClient.getCapabilities).mockImplementation(async () => ({
       ...readyCapabilities,
       ready: persisted.runtime.whisper_cache !== null,
+      processing_ready: false,
       app_runtime: 'ready',
       app_runtime_source: 'development',
+      speech_model: persisted.runtime.whisper_cache !== null ? 'ready' : 'missing',
       whisper_model_ready: persisted.runtime.whisper_cache !== null,
     }))
     vi.mocked(desktopClient.installDependencies).mockImplementationOnce(async () => {
@@ -457,6 +459,7 @@ describe('desktop application renderer', () => {
     const user = userEvent.setup()
     renderApp('/')
 
+    expect(await screen.findByText('Whisper large-v3')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Download large-v3 model' }))
     await user.click(screen.getByRole('button', { name: 'Continue' }))
     await screen.findByText('Installation complete and verified')

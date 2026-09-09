@@ -21,7 +21,6 @@ runtime-manifest.json
 
 Do not place a Whisper model in this directory. The model remains a user-selected download. The pinned official yt-dlp Windows executable is bundled with the application.
 
-
 ## Approved build inputs
 
 [`build-inputs.json`](build-inputs.json) locks the component versions and the FFmpeg configuration that a release builder must start from. It deliberately does not contain binaries or wheels. The normal PyAV Windows wheel and PyAV's ordinary `pyav-ffmpeg` output are disallowed because they include GPL x264/x265 libraries.
