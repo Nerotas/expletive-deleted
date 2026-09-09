@@ -25,6 +25,7 @@
     "audit:package": "node scripts/audit-package.mjs",
     "audit:bundled-runtime": "node scripts/audit-bundled-runtime.mjs",
     "verify:bundled-runtime": "node scripts/verify-bundled-runtime.mjs",
+    "generate:bundled-manifest": "node scripts/generate-bundled-runtime-manifest.mjs",
     "stage:bundled-runtime": "node scripts/stage-bundled-runtime.mjs",
     "package:dir": "npm run build && npm run stage:bundled-runtime && node scripts/package-windows.mjs dir && npm run audit:package",
     "package:win": "npm run build && npm run stage:bundled-runtime && node scripts/package-windows.mjs nsis && npm run audit:package",
