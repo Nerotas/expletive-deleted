@@ -29,8 +29,10 @@ except ImportError:
 
 CONFIG_FILE = PROJECT_ROOT / "config.ini"
 ENCODER_PREFERENCE = (
+    "h264_mf",
     "h264_nvenc",
     "h264_qsv",
+    "h264_amf",
     "h264_videotoolbox",
     "libx264",
 )

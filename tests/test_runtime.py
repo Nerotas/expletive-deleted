@@ -229,6 +229,30 @@ class RuntimeTests(unittest.TestCase):
         command = run.call_args.args[0]
         self.assertEqual(command[command.index("-c:v") + 1], "libx264")
 
+    def test_explicit_h264_conversion_does_not_fall_back_to_libx264(self):
+        censor = object.__new__(ProfanityCensor)
+        censor.input_file = "input.mkv"
+        censor.output_file = "output.mp4"
+        censor.ffmpeg_bin = "ffmpeg"
+        censor.censor_method = "mute"
+        censor.video_mode = "h264"
+        censor.video_encoder = "h264_mf"
+        censor.encoders = {"h264_mf", "libx264"}
+        censor.has_discrete_center_audio = MagicMock(return_value=False)
+        censor.get_media_duration_seconds = MagicMock(return_value=90.0)
+        censor.is_audio_only = MagicMock(return_value=False)
+        censor.get_video_codec = MagicMock(return_value="hevc")
+        failed = MagicMock(returncode=1, stderr="Media Foundation encoder unavailable")
+
+        with patch("backend.censor.engine.run_ffmpeg_with_progress", return_value=failed) as run:
+            success = censor.censor_video([{ "start": 1.0, "end": 2.0 }])
+
+        self.assertFalse(success)
+        self.assertEqual(run.call_count, 1)
+        command = run.call_args.args[0]
+        self.assertEqual(command[command.index("-c:v") + 1], "h264_mf")
+        self.assertIn("Media Foundation encoder unavailable", censor.last_error)
+
     def test_5_1_layout_detection_requires_six_channels(self):
         censor = object.__new__(ProfanityCensor)
         censor.get_audio_stream_info = MagicMock(return_value=(6, "5.1(side)"))
@@ -589,7 +613,7 @@ class RuntimeTests(unittest.TestCase):
         censor.censor_video.assert_not_called()
 
     def test_encoder_preference(self):
-        self.assertEqual(select_video_encoder({"libx264", "h264_nvenc"}), "h264_nvenc")
+        self.assertEqual(select_video_encoder({"h264_mf", "h264_nvenc"}), "h264_mf")
         self.assertEqual(select_video_encoder({"libx264", "h264_qsv"}), "h264_qsv")
         self.assertEqual(select_video_encoder({"libx264"}), "libx264")
 

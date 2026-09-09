@@ -180,7 +180,7 @@ export function SettingsPage({ controller, capabilities, checkingSystem, onCheck
             <SegmentedControl
               label="Video output"
               value={settings.video.mode}
-              options={[["h264", 'H.264'], ['preserve_source', 'Preserve source']]}
+              options={[["preserve_source", 'Preserve source (recommended)'], ["h264", 'Convert to H.264']]}
               onChange={(mode) => setGroup('video', { mode })}
             />
           </Field>

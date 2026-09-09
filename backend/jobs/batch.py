@@ -83,7 +83,7 @@ def process_file(
     padding_before_ms: int = 150,
     padding_after_ms: int = 150,
     surround_output: str = "preserve_5_1",
-    video_mode: str = "h264",
+    video_mode: str = "preserve_source",
     ffmpeg_bin: str | None = None,
     ffprobe_bin: str | None = None,
     whisper_cache_dir: Path | None = None,

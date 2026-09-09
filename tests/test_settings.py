@@ -39,6 +39,7 @@ class SettingsModelTests(unittest.TestCase):
         self.assertEqual(settings.directories.output, root / "Finished")
         self.assertEqual(settings.directories.archive, root / "Processed")
         self.assertEqual(settings.directories.transcripts, root / "Transcripts")
+        self.assertEqual(settings.video.mode, "preserve_source")
         settings.validate()
 
     def test_independent_directories_convert_to_runtime_paths(self):

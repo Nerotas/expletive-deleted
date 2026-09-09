@@ -15,7 +15,7 @@ export const defaultSettings: Settings = {
     padding_after_ms: 100,
   },
   audio: { surround_output: 'preserve_5_1' },
-  video: { mode: 'h264' },
+  video: { mode: 'preserve_source' },
   whisper: { library: 'faster-whisper', model: 'large-v3' },
   source: { archive_after_success: false, scan_subdirectories: true },
   onboarding: { completed: true, last_step: 'finish' },

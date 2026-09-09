@@ -112,7 +112,7 @@ class AudioSettings:
 
 @dataclass(frozen=True)
 class VideoSettings:
-    mode: VideoMode = "h264"
+    mode: VideoMode = "preserve_source"
 
 
 @dataclass(frozen=True)
