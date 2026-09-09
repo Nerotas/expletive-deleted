@@ -28,7 +28,7 @@ export function AddMediaStep({ queue, settings, onAdded }: AddMediaStepProps) {
     <div className="onboarding-lead"><FilePlus2 size={34} /><div><strong>Adding a file copies it to Ready</strong><p>Your original stays where it is. The app checks supported types and destination collisions before the copy; selecting a file does not start processing.</p></div></div>
     <section className="onboarding-import" aria-labelledby="onboarding-import-title" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); setFiles(Array.from(event.dataTransfer.files)); setResults(null) }}>
       <Upload size={28} /><h3 id="onboarding-import-title">Choose a file or drop it here</h3><p>Files will be copied to <code>{settings.directories.input}</code>.</p>
-      <input ref={inputRef} className="visually-hidden" type="file" multiple accept="audio/*,video/*" onChange={(event) => { setFiles(Array.from(event.target.files ?? [])); setResults(null) }} />
+      <input ref={inputRef} className="visually-hidden" type="file" multiple accept="audio/*,video/*" aria-label="Choose media files to copy to Ready" onChange={(event) => { setFiles(Array.from(event.target.files ?? [])); setResults(null) }} />
       <button className="button secondary" type="button" onClick={() => inputRef.current?.click()}>Choose files</button>
     </section>
     {files.length > 0 && <section className="onboarding-import-confirmation" aria-live="polite"><strong>{files.length} {files.length === 1 ? 'file is' : 'files are'} ready to copy</strong><span>{files.map((file) => file.name).join(', ')}</span><button className="button primary" disabled={queue.busy} onClick={() => void importFiles()}>Copy to Ready</button></section>}
