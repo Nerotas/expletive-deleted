@@ -1,0 +1,28 @@
+# Windows x64 bundled runtime staging directory
+
+This directory is the local staging root for the audited Windows x64 processing runtime. Its generated payload is intentionally ignored by Git. The release build supplies it through `BUNDLED_RUNTIME_DIR` and validates it with `npm run audit:bundled-runtime` before Electron Builder includes it as `resources/app-runtime`.
+
+The staged payload must contain:
+
+```text
+python/python.exe
+ffmpeg/ffmpeg.exe
+ffmpeg/ffprobe.exe
+THIRD_PARTY_NOTICES.md
+LICENSES/
+sbom.cdx.json
+ffmpeg-source.zip
+ffmpeg-build.json
+runtime-manifest.json
+```
+
+`runtime-manifest.json` must conform to `runtime-manifest.schema.json`. The validator rejects Whisper models, yt-dlp, `libx264`, `libx265`, GPL/nonfree FFmpeg configure flags, and an incomplete Python or FFmpeg runtime.
+
+Do not place a Whisper model in this directory. The model remains a user-selected download. Do not place yt-dlp here; it remains optional.
+
+
+## Approved build inputs
+
+[`build-inputs.json`](build-inputs.json) locks the component versions and the FFmpeg configuration that a release builder must start from. It deliberately does not contain binaries or wheels. The normal PyAV Windows wheel and PyAV's ordinary `pyav-ffmpeg` output are disallowed because they include GPL x264/x265 libraries.
+
+The release builder creates a private Python runtime, builds FFmpeg as LGPL-only shared libraries, builds PyAV against those same libraries, generates the notices/SBOM/manifests, and then runs `npm run audit:bundled-runtime` before setting `BUNDLED_RUNTIME_DIR` for packaging. Set `REQUIRE_BUNDLED_RUNTIME=1` in the release build to make a missing runtime a hard error.

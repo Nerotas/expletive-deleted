@@ -23,8 +23,10 @@
     "preview": "electron-vite preview",
     "smoke": "npm run build && node scripts/smoke.mjs",
     "audit:package": "node scripts/audit-package.mjs",
-    "package:dir": "npm run build && node scripts/package-windows.mjs dir && npm run audit:package",
-    "package:win": "npm run build && node scripts/package-windows.mjs nsis && npm run audit:package",
+    "audit:bundled-runtime": "node scripts/audit-bundled-runtime.mjs",
+    "stage:bundled-runtime": "node scripts/stage-bundled-runtime.mjs",
+    "package:dir": "npm run build && npm run stage:bundled-runtime && node scripts/package-windows.mjs dir && npm run audit:package",
+    "package:win": "npm run build && npm run stage:bundled-runtime && node scripts/package-windows.mjs nsis && npm run audit:package",
     "smoke:package": "node scripts/smoke-packaged.mjs"
   },
   "dependencies": {

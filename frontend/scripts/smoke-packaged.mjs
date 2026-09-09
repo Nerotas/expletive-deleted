@@ -4,6 +4,7 @@ import path from 'node:path'
 const executable = process.env.PACKAGED_EXECUTABLE
   ? path.resolve(process.env.PACKAGED_EXECUTABLE)
   : path.resolve('release', 'win-unpacked', 'Expletive Deleted.exe')
+const requireBundledRuntime = process.env.REQUIRE_BUNDLED_RUNTIME === '1'
 await access(executable)
 
 const temporaryDirectory = path.resolve('node_modules', '.tmp', 'playwright-packaged')
@@ -48,11 +49,28 @@ try {
   await access(path.join(backendRoot, 'scripts', 'desktop_bridge.py'))
   await access(path.join(backendRoot, 'resources', 'profanity_censor_words.txt'))
 
-  const { settings, legacyBridgePresent } = await window.evaluate(async () => ({
+  const runtimeRoot = path.join(resourcesPath, 'app-runtime')
+  if (requireBundledRuntime) {
+    await Promise.all([
+      access(path.join(runtimeRoot, 'runtime-manifest.json')),
+      access(path.join(runtimeRoot, 'python', 'python.exe')),
+      access(path.join(runtimeRoot, 'ffmpeg', 'ffmpeg.exe')),
+      access(path.join(runtimeRoot, 'ffmpeg', 'ffprobe.exe')),
+    ])
+  }
+
+  const { settings, capabilities, legacyBridgePresent } = await window.evaluate(async () => ({
     settings: await window.expletiveDeleted.invoke('settings.get'),
+    capabilities: await window.expletiveDeleted.invoke('capabilities.get'),
     legacyBridgePresent: 'profanityCensor' in window,
   }))
   if (legacyBridgePresent) throw new Error('Obsolete preload bridge is still exposed')
+  if (requireBundledRuntime) {
+    const expectedFfmpeg = path.join(runtimeRoot, 'ffmpeg', 'ffmpeg.exe').toLowerCase()
+    if (String(capabilities.ffmpeg_path ?? '').toLowerCase() !== expectedFfmpeg) {
+      throw new Error('Packaged bridge did not use the bundled FFmpeg runtime.')
+    }
+  }
   const installedResources = path.resolve(resourcesPath).toLowerCase()
   for (const [name, directory] of Object.entries(settings.directories)) {
     if (path.resolve(directory).toLowerCase().startsWith(installedResources)) {
