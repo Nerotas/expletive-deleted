@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { backendEnvironment, findBackendRoot, findBundledRuntime } from './backend-runtime.js'
+import { backendEnvironment, findBackendRoot, findBundledRuntime, requireBundledRuntime } from './backend-runtime.js'
 
 describe('backend runtime resolution', () => {
   it('uses first-party backend resources in a packaged application', () => {
@@ -46,6 +46,18 @@ describe('backend runtime resolution', () => {
       .toEqual({ python, ffmpeg, ffprobe })
     expect(findBundledRuntime(resourcesPath, 'win32', (candidate) => candidate !== ffprobe))
       .toEqual({})
+  })
+
+  it('fails closed when a runtime manifest is present but its private tools are incomplete', () => {
+    const resourcesPath = path.resolve('installed', 'resources')
+    const runtimeRoot = path.join(resourcesPath, 'app-runtime')
+    const manifest = path.join(runtimeRoot, 'runtime-manifest.json')
+    const python = path.join(runtimeRoot, 'python', 'python.exe')
+    const ffmpeg = path.join(runtimeRoot, 'ffmpeg', 'ffmpeg.exe')
+
+    expect(() => requireBundledRuntime(resourcesPath, 'win32', (candidate) => [manifest, python, ffmpeg].includes(candidate)))
+      .toThrow('runtime is incomplete')
+    expect(requireBundledRuntime(resourcesPath, 'win32', () => false)).toEqual({})
   })
 
   it('passes Electron\'s app-data root to the Python bridge', () => {

@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, shell, type IpcMainInvokeEve
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { existsSync, statSync } from 'node:fs'
 import path from 'node:path'
-import { backendEnvironment, findBackendRoot, findBundledRuntime, findPythonRuntime } from './backend-runtime.js'
+import { backendEnvironment, findBackendRoot, findPythonRuntime, requireBundledRuntime } from './backend-runtime.js'
 
 type BridgeResponse = { id: number; ok: true; result: unknown } | { id: number; ok: false; error: { message?: string; code?: string } }
 
@@ -38,7 +38,7 @@ function startBridge(): void {
   let root: string
   let runtime: ReturnType<typeof findPythonRuntime>
   const bundledRuntime = app.isPackaged
-    ? findBundledRuntime(process.resourcesPath, process.platform)
+    ? requireBundledRuntime(process.resourcesPath, process.platform)
     : {}
   try {
     root = findBackendRoot({

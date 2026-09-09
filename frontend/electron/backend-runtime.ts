@@ -31,6 +31,18 @@ export function findBundledRuntime(
   return { python, ffmpeg, ffprobe }
 }
 
+export function requireBundledRuntime(
+  resourcesPath: string,
+  platform: NodeJS.Platform,
+  exists: (candidate: string) => boolean = existsSync,
+): BundledRuntimePaths {
+  const manifest = path.join(resourcesPath, 'app-runtime', 'runtime-manifest.json')
+  if (!exists(manifest)) return {}
+  const runtime = findBundledRuntime(resourcesPath, platform, exists)
+  if (runtime.python && runtime.ffmpeg && runtime.ffprobe) return runtime
+  throw new Error('The installed local processing runtime is incomplete. Reinstall Expletive Deleted.')
+}
+
 export function backendEnvironment(
   environment: NodeJS.ProcessEnv = process.env,
   bundledRuntime: BundledRuntimePaths = {},
