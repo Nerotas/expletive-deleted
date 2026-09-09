@@ -110,6 +110,43 @@ describe('desktop application renderer', () => {
     expect(await screen.findByText('System ready')).toBeInTheDocument()
   })
 
+  it('identifies a missing bundled speech model in the header and setup band', async () => {
+    vi.mocked(desktopClient.getCapabilities).mockResolvedValueOnce({
+      ...readyCapabilities,
+      ready: false,
+      processing_ready: false,
+      app_runtime: 'ready',
+      app_runtime_source: 'bundled',
+      app_runtime_detail: 'Application components are verified.',
+      speech_model: 'missing',
+    })
+    renderApp('/')
+
+    expect(await screen.findByText('Download speech model')).toBeInTheDocument()
+    expect(screen.getByText('Local processing status')).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'Download model' })).not.toHaveLength(0)
+  })
+
+  it('explains that app repair is needed before queue processing', async () => {
+    vi.mocked(desktopClient.getCapabilities).mockResolvedValueOnce({
+      ...readyCapabilities,
+      ready: false,
+      processing_ready: false,
+      app_runtime: 'invalid',
+      app_runtime_source: 'bundled',
+      speech_model: 'ready',
+    })
+    vi.mocked(desktopClient.listLibrary).mockResolvedValueOnce([{
+      source: 'C:\\Media\\Ready\\movie.mp4', status: 'ready', date_added: '', transcript: null, output: null,
+    }])
+    renderApp('/')
+
+    const transcribe = await screen.findByRole('button', { name: 'Transcribe only' })
+    expect(transcribe).toBeDisabled()
+    expect(transcribe).toHaveAttribute('title', 'Repair Expletive Deleted before processing files')
+    expect(await screen.findByText('App repair needed')).toBeInTheDocument()
+  })
+
   it('reopens onboarding from Settings without resetting saved preferences', async () => {
     const user = userEvent.setup()
     renderApp('/settings')

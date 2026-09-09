@@ -30,8 +30,8 @@ export function SetupBand({ capabilities, reviewInstall, locateExisting, checkAg
           <SetupItem label="FFmpeg + FFprobe" ready={capabilities.ffmpeg && capabilities.ffprobe} busy={busy} locate={() => locateExisting('ffmpeg')} action={!(capabilities.ffmpeg && capabilities.ffprobe) ? () => reviewInstall(['ffmpeg']) : undefined} />
           <SetupItem label="faster-whisper" ready={capabilities.whisper} busy={busy} action={!capabilities.whisper ? () => reviewInstall(['python']) : undefined} />
         </>}
-        <SetupItem label={`Whisper ${capabilities.whisper_model}`} ready={modelReady} busy={busy} locate={() => locateExisting('whisper_model')} action={!modelReady ? () => reviewInstall(['whisper_model']) : undefined} />
-        <SetupItem label="yt-dlp (YouTube downloads, optional)" ready={Boolean(capabilities.ytdlp)} busy={busy} locate={() => locateExisting('ytdlp')} action={!capabilities.ytdlp ? () => reviewInstall(['ytdlp']) : undefined} />
+        <SetupItem label={`Whisper ${capabilities.whisper_model}`} ready={modelReady} busy={busy} actionLabel="Download model" locate={() => locateExisting('whisper_model')} action={!modelReady ? () => reviewInstall(['whisper_model']) : undefined} />
+        <SetupItem label="yt-dlp (YouTube downloads, optional)" ready={Boolean(capabilities.ytdlp)} busy={busy} actionLabel="Get yt-dlp" locate={() => locateExisting('ytdlp')} action={!capabilities.ytdlp ? () => reviewInstall(['ytdlp']) : undefined} />
       </div>
       <div className="setup-band-controls">
         {bundledRuntime && !modelReady && appRuntimeReady ? <button className="setup-get-all" disabled={busy} onClick={() => reviewInstall(['whisper_model'])}>Download large-v3 model</button> : null}
@@ -48,17 +48,18 @@ type SetupItemProps = {
   ready: boolean
   busy: boolean
   action?: () => void
+  actionLabel?: string
   locate?: () => void
 }
 
-function SetupItem({ label, detail, ready, busy, action, locate }: SetupItemProps) {
+function SetupItem({ label, detail, ready, busy, action, actionLabel = 'Get Components', locate }: SetupItemProps) {
   return <div className="setup-item">
     {ready ? <Check size={17} /> : <AlertCircle size={17} />}
     <span>{label}{detail ? <small>{detail}</small> : null}</span>
     <strong>{ready ? 'Ready' : 'Needs attention'}</strong>
     {!ready && (locate || action) && <div className="setup-item-actions">
       {locate && <button className="secondary" disabled={busy} onClick={locate}>Locate existing</button>}
-      {action && <button disabled={busy} onClick={action}>Get Components</button>}
+      {action && <button disabled={busy} onClick={action}>{actionLabel}</button>}
     </div>}
   </div>
 }

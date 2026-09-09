@@ -11,13 +11,18 @@ type ProcessMediaStepProps = {
 }
 
 export function ProcessMediaStep({ source, queue, settings, capabilities }: ProcessMediaStepProps) {
-  const ready = Boolean(capabilities?.ready)
+  const ready = capabilities?.processing_ready ?? capabilities?.ready ?? false
+  const setupDetail = capabilities?.app_runtime === 'invalid'
+    ? 'Repair Expletive Deleted before processing this file.'
+    : capabilities?.speech_model && capabilities.speech_model !== 'ready'
+      ? 'Download the speech model before processing this file.'
+      : 'Finish setup before processing this file.'
   const automaticCensoring = settings.processing.auto_censor_after_transcription
   return <>
     <OnboardingStepHeading title="Process safely" subtitle="Create a transcript first, review what was found, then create and review a censored copy." />
     {source ? <section className="onboarding-first-file" aria-labelledby="first-file-title">
       <h3 id="first-file-title">Your first file is ready</h3><p>{source}</p>
-      {!ready && <p className="onboarding-caution">Finish the required component setup before processing this file.</p>}
+      {!ready && <p className="onboarding-caution">{setupDetail}</p>}
       <button className="button primary" disabled={!ready || queue.busy} onClick={() => void queue.submitFile(source, 'report_only')}><FileText size={16} />Create transcript</button>
       <p className="onboarding-helper">{automaticCensoring ? 'After a verified transcript, your chosen workflow queues a censored copy automatically.' : 'After the transcript is ready, open Dictionary to review detected words, then select Create censored copy in Queue.'}</p>
     </section> : <section className="instruction-flow two-column"><article><span>1</span><h3>Create a transcript</h3><p>In Queue, select a file and choose Transcribe only. This creates a transcript without changing the media.</p></article><article><span>2</span><h3>Review the words</h3><p>Open Dictionary to mark detected words as Censor or Ignore before making a copy.</p></article></section>}
