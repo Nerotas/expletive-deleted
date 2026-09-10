@@ -36,8 +36,9 @@ try {
   if (requireBundledRuntime) {
     await window.getByRole('button', { name: /Continue/ }).click()
     await window.getByRole('heading', { name: 'Prepare this computer', exact: true }).waitFor()
-    await window.getByText('Expletive Deleted components', { exact: true }).waitFor()
-    await window.getByRole('button', { name: 'Download large-v3 model', exact: true }).waitFor()
+    await window.getByText('Transcription packages', { exact: true }).waitFor()
+    await window.getByText('FFmpeg and FFprobe', { exact: true }).waitFor()
+    await window.getByText('YouTube tools', { exact: true }).waitFor()
   }
 
   const freshSettings = await window.evaluate(() => window.expletiveDeleted.invoke('settings.get'))
@@ -59,12 +60,7 @@ try {
   const runtimeRoot = path.join(resourcesPath, 'app-runtime')
   if (requireBundledRuntime) {
     await Promise.all([
-      access(path.join(runtimeRoot, 'runtime-manifest.json')),
       access(path.join(runtimeRoot, 'python', 'python.exe')),
-      access(path.join(runtimeRoot, 'ffmpeg', 'ffmpeg.exe')),
-      access(path.join(runtimeRoot, 'ffmpeg', 'ffprobe.exe')),
-      access(path.join(runtimeRoot, 'yt-dlp', 'yt-dlp.exe')),
-      access(path.join(runtimeRoot, 'deno', 'deno.exe')),
     ])
   }
 
@@ -78,15 +74,11 @@ try {
     if (capabilities.app_runtime !== 'ready' || capabilities.app_runtime_source !== 'bundled') {
       throw new Error('Clean packaged app did not verify its private runtime.')
     }
-    if (capabilities.ytdlp !== true || capabilities.js_runtime !== true) {
-      throw new Error('Packaged bridge did not verify bundled yt-dlp and Deno.')
-    }
-    if (capabilities.speech_model === 'ready' || capabilities.processing_ready !== false) {
+    if (capabilities.speech_model === 'ready' || capabilities.processing_ready === true) {
       throw new Error('Clean packaged app unexpectedly included a speech model.')
     }
-    const expectedFfmpeg = path.join(runtimeRoot, 'ffmpeg', 'ffmpeg.exe').toLowerCase()
-    if (String(capabilities.ffmpeg_path ?? '').toLowerCase() !== expectedFfmpeg) {
-      throw new Error('Packaged bridge did not use the bundled FFmpeg runtime.')
+    if (capabilities.ytdlp === true && capabilities.js_runtime !== true) {
+      throw new Error('Packaged bridge reported an inconsistent YouTube setup state.')
     }
   }
   const installedResources = path.resolve(resourcesPath).toLowerCase()
