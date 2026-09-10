@@ -4,7 +4,7 @@
 
 Make the normal Windows installer usable on a clean computer without asking a parent to install Python, Python packages, FFmpeg, or FFprobe themselves.
 
-The installer will include the runtime required to run the application, including the pinned yt-dlp executable. The Whisper `large-v3` model remains a separate, user-selected download because it is large and users should decide whether and where to install it. YouTube importing remains user-initiated and requires network access.
+The installer will include the runtime required to run the application, including the pinned yt-dlp executable and the pinned Deno JavaScript runtime yt-dlp needs to solve YouTube's signature challenge. The Whisper `large-v3` model remains a separate, user-selected download because it is large and users should decide whether and where to install it. YouTube importing remains user-initiated and requires network access.
 
 This is an implementation and release plan, not legal advice. The release owner must complete the license and artifact audit before changing the distribution policy.
 
@@ -19,6 +19,7 @@ This is an implementation and release plan, not legal advice. The release owner 
 | FFmpeg and FFprobe | Include after LGPL-only build audit | Required for censoring, remuxing, and media inspection. |
 | Whisper `large-v3` model | Do not include by default | Large download; the user chooses whether and where to obtain it. |
 | yt-dlp | Include | Required application component; YouTube importing remains user-initiated. |
+| Deno | Include | Single portable executable yt-dlp uses to solve YouTube's JavaScript signature challenge; needed for reliable YouTube importing. |
 
 The installed application continues to process media locally. It must not upload source media, transcripts, or censor settings as part of setup.
 
@@ -57,6 +58,10 @@ For the selected FFmpeg build, retain and publish:
 
 Use the [FFmpeg licensing checklist](https://ffmpeg.org/legal.html) as the release checklist. The current Gyan runtime and PyAV wheel must remain excluded until replaced because they contain GPL-enabled FFmpeg components.
 
+### Deno
+
+Deno is MIT-licensed and distributed as a single portable executable with no native linking or GPL concerns, unlike FFmpeg/PyAV. Bundle only the pinned official Windows release asset (`deno-x86_64-pc-windows-msvc.zip`, extracting `deno.exe`), verified against the release's published SHA-256 checksum. Retain the MIT license text in `LICENSES/` and record the release URL, version, and hash in the runtime manifest and SBOM. Deno is used solely so yt-dlp can execute YouTube's external JavaScript challenge-solver scripts; it is not exposed to any other part of the application.
+
 ### Release inventory
 
 Before release, generate and review an SBOM and a shipped third-party-notices bundle from the exact installer contents. Update [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) with the final versions, licenses, source locations, and notices. The audit must reject unapproved GPL or nonfree FFmpeg options and binaries.
@@ -90,14 +95,15 @@ Existing settings are preserved: a user who already selected H.264 continues to 
 - Package the Python bridge and its pinned dependencies for Windows x64.
 - Build or obtain an auditable LGPL-only FFmpeg/FFprobe distribution.
 - Build PyAV against the corresponding approved FFmpeg libraries.
+- Download and checksum-verify the pinned official Deno Windows executable.
 - Record source revisions, hashes, build commands, and license artifacts in the release inputs.
 
 ### 3. Change Electron packaging
 
-- Include the private Python runtime, backend, approved Python wheels/extensions, FFmpeg, and FFprobe in the Windows package.
+- Include the private Python runtime, backend, approved Python wheels/extensions, FFmpeg, FFprobe, yt-dlp, and Deno in the Windows package.
 - Update `backend-runtime.ts` to prefer the bundled Python runtime and retain the local-development `.venv` path for source checkouts.
 - Remove system Python and `PATH` FFmpeg from the normal installed-app readiness requirement.
-- Keep model readiness separate from the bundled application-runtime readiness, which includes yt-dlp.
+- Keep model readiness separate from the bundled application-runtime readiness, which includes yt-dlp and Deno.
 - Change the package audit: allow only the approved bundled runtime artifacts and reject model payloads, unapproved FFmpeg binaries, and unapproved native DLLs.
 
 ### 4. Simplify first run
@@ -116,4 +122,4 @@ Existing settings are preserved: a user who already selected H.264 continues to 
 
 ## Definition of done
 
-A Windows customer can install and run Expletive Deleted without installing Python or media tooling. They choose whether to download Whisper `large-v3`; yt-dlp ships with the application and is used only when they choose YouTube importing. Standard censorship preserves video streams, and H.264 conversion happens only after an explicit user choice. The published installer and release page contain the verified license, notice, source, and artifact records for every bundled runtime component.
+A Windows customer can install and run Expletive Deleted without installing Python or media tooling. They choose whether to download Whisper `large-v3`; yt-dlp and Deno ship with the application and Deno is used only when yt-dlp needs to solve YouTube's JavaScript challenge during YouTube importing. Standard censorship preserves video streams, and H.264 conversion happens only after an explicit user choice. The published installer and release page contain the verified license, notice, source, and artifact records for every bundled runtime component.

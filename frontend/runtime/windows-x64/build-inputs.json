@@ -40,6 +40,14 @@
     "distribution": "official Windows x64 executable",
     "rule": "Bundle the pinned official executable and record its release hash in the runtime manifest and SBOM."
   },
+  "deno": {
+    "version": "2.9.6",
+    "source": "https://github.com/denoland/deno/releases/download/v2.9.6/deno-x86_64-pc-windows-msvc.zip",
+    "license": "MIT",
+    "path": "deno/deno.exe",
+    "distribution": "official Windows x64 executable, extracted from the release zip",
+    "rule": "Bundle only the pinned official deno.exe, verified against the release's published SHA-256 checksum, and record its release hash in the runtime manifest and SBOM. Used solely so yt-dlp can solve YouTube's JavaScript signature challenge."
+  },
   "excluded_payloads": ["Whisper model files", "Hugging Face model cache"],
   "release_outputs": [
     "runtime-manifest.json",

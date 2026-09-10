@@ -37,17 +37,19 @@ When priorities compete, use this order:
 
 ## Required dependencies and first-run setup
 
-The processing workflow requires Python, required Python packages, the external FFmpeg/FFprobe processing runtime, and the supported Whisper model. These processing components are not distributed with the application. The customer is responsible for obtaining and installing them on their system.
+The processing workflow requires Python, required Python packages, the external FFmpeg/FFprobe processing runtime, yt-dlp, the Deno JavaScript runtime yt-dlp uses to solve YouTube's signature challenge, and the supported Whisper model.
 
-Electron itself requires and distributes its framework-owned root `ffmpeg.dll` for Chromium codec support. That DLL is allowed as part of Electron, is not the external processing runtime, and must never satisfy FFmpeg/FFprobe readiness checks. The installer must contain no `ffmpeg.exe`, `ffprobe.exe`, Whisper model payload, or Python processing package.
+Per the audited plan in [docs/BUNDLED_RUNTIME_PACKAGING_PLAN.md](docs/BUNDLED_RUNTIME_PACKAGING_PLAN.md), the packaged Windows installer bundles a private Python runtime, the required Python packages, an LGPL-only FFmpeg/FFprobe build, yt-dlp, and Deno, each verified through the release audit (SBOM, license notices, checksum verification, `LICENSES/`) before packaging. This is a deliberate, explicit product decision, not a default assumption: do not add another bundled third-party component without updating that plan and its audit scripts, and do not change which components are bundled without an explicit product decision and a licensing review. The Whisper `large-v3` model is never bundled; it remains a separate, user-selected download because of its size.
 
-The desktop application must make this setup process as easy as practical without bundling or redistributing those processing components.
+A source checkout without the audited bundled runtime (the normal `npm run dev` developer workflow) falls back to the managed, prompted-download flow described below for FFmpeg, yt-dlp, and Deno. Electron itself requires and distributes its framework-owned root `ffmpeg.dll` for Chromium codec support. That DLL is allowed as part of Electron, is not the external processing runtime, and must never satisfy FFmpeg/FFprobe readiness checks. The packaged installer must contain no unapproved FFmpeg/FFprobe build, Whisper model payload, or unaudited Python package; the package audit enforces this against the exact bundled-runtime manifest.
+
+The desktop application must make this setup process as easy as practical. Bundling covers the normal packaged install; the managed-download flow below remains the mechanism for anything not bundled (currently the Whisper model, and FFmpeg/yt-dlp/Deno in development builds).
 
 - Detect missing, incompatible, or unverified components automatically.
 - Explain what each component does, why it is required, approximate download/disk impact when known, and what action the user needs to take.
 - Provide clear in-app guidance for obtaining supported versions from approved sources.
 - Where appropriate, the application may open an official download location or provide exact installation instructions, but the user must remain in control of the download and installation.
-- Do not silently download, install, bundle, redistribute, or modify third-party components.
+- Do not silently download, install, bundle, redistribute, or modify third-party components outside the audited bundled-runtime release process.
 - Verify components after installation and clearly show what remains missing or incompatible.
 - Make failures retryable and actionable. Preserve valid existing installations and completed model downloads whenever possible.
 - Do not report the system as ready until Python, required Python packages, FFmpeg, FFprobe, and the supported Whisper model have been verified.

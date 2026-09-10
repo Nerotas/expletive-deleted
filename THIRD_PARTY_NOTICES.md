@@ -84,6 +84,13 @@ Windows executable at `yt-dlp/yt-dlp.exe`. yt-dlp is released under the
 Unlicense. Each generated runtime must retain its license text in `LICENSES/`
 and record the release URL, SHA-256, and SBOM entry for the exact executable.
 
+The audited Windows runtime also includes the pinned Deno `2.9.6` official
+Windows executable at `deno/deno.exe`, used only so yt-dlp can solve
+YouTube's JavaScript signature challenge during YouTube imports. Deno is
+released under the MIT License. Each generated runtime must retain its
+license text in `LICENSES/` and record the release URL, SHA-256, and SBOM
+entry for the exact executable.
+
 ## 2. Not bundled; installed or retrieved separately after user approval
 
 The application can prepare an inspectable setup plan and, after the user

@@ -42,9 +42,10 @@ describe('backend runtime resolution', () => {
     const ffmpeg = path.join(runtimeRoot, 'ffmpeg', 'ffmpeg.exe')
     const ffprobe = path.join(runtimeRoot, 'ffmpeg', 'ffprobe.exe')
     const ytdlp = path.join(runtimeRoot, 'yt-dlp', 'yt-dlp.exe')
+    const deno = path.join(runtimeRoot, 'deno', 'deno.exe')
 
-    expect(findBundledRuntime(resourcesPath, 'win32', (candidate) => [python, ffmpeg, ffprobe, ytdlp].includes(candidate)))
-      .toEqual({ python, ffmpeg, ffprobe, ytdlp })
+    expect(findBundledRuntime(resourcesPath, 'win32', (candidate) => [python, ffmpeg, ffprobe, ytdlp, deno].includes(candidate)))
+      .toEqual({ python, ffmpeg, ffprobe, ytdlp, deno })
     expect(findBundledRuntime(resourcesPath, 'win32', (candidate) => candidate !== ffprobe))
       .toEqual({})
   })
@@ -69,6 +70,7 @@ describe('backend runtime resolution', () => {
     const bundledFfmpeg = path.join(bundledRoot, 'ffmpeg', 'ffmpeg.exe')
     const bundledFfprobe = path.join(bundledRoot, 'ffmpeg', 'ffprobe.exe')
     const bundledYtdlp = path.join(bundledRoot, 'yt-dlp', 'yt-dlp.exe')
+    const bundledDeno = path.join(bundledRoot, 'deno', 'deno.exe')
 
     expect(backendEnvironment(
       { LOCALAPPDATA: localAppData },
@@ -77,12 +79,14 @@ describe('backend runtime resolution', () => {
         ffmpeg: bundledFfmpeg,
         ffprobe: bundledFfprobe,
         ytdlp: bundledYtdlp,
+        deno: bundledDeno,
       },
     )).toMatchObject({
       CENSOR_APP_DATA_DIR: path.join(localAppData, 'ExpletiveDeleted'),
       CENSOR_FFMPEG: bundledFfmpeg,
       CENSOR_FFPROBE: bundledFfprobe,
       CENSOR_YTDLP: bundledYtdlp,
+      CENSOR_DENO: bundledDeno,
       CENSOR_BUNDLED_RUNTIME: '1',
       PATH: expect.stringContaining(path.join('app-runtime', 'ffmpeg')),
     })
