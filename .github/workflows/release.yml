@@ -149,10 +149,10 @@ jobs:
         if: steps.version.outputs.published != 'true'
         shell: pwsh
         env:
-          BUNDLED_RUNTIME_DIR: ${{ vars.BUNDLED_RUNTIME_DIR || secrets.BUNDLED_RUNTIME_DIR }}
-          BUNDLED_RUNTIME_ARCHIVE_URL: ${{ vars.BUNDLED_RUNTIME_ARCHIVE_URL || secrets.BUNDLED_RUNTIME_ARCHIVE_URL }}
-          BUNDLED_RUNTIME_ARCHIVE_SHA256: ${{ vars.BUNDLED_RUNTIME_ARCHIVE_SHA256 || secrets.BUNDLED_RUNTIME_ARCHIVE_SHA256 }}
-          BUNDLED_PYTHON_DIR: ${{ vars.BUNDLED_PYTHON_DIR || secrets.BUNDLED_PYTHON_DIR }}
+          BUNDLED_RUNTIME_DIR: ${{ vars.BUNDLED_RUNTIME_DIR }}
+          BUNDLED_RUNTIME_ARCHIVE_URL: ${{ vars.BUNDLED_RUNTIME_ARCHIVE_URL }}
+          BUNDLED_RUNTIME_ARCHIVE_SHA256: ${{ vars.BUNDLED_RUNTIME_ARCHIVE_SHA256 }}
+          BUNDLED_PYTHON_DIR: ${{ vars.BUNDLED_PYTHON_DIR }}
         run: |
           Set-StrictMode -Version Latest
           $ErrorActionPreference = 'Stop'
