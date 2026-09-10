@@ -12,7 +12,8 @@ const runtimeRoot = path.resolve(suppliedDirectory)
 const python = path.join(runtimeRoot, 'python', 'python.exe')
 const ffmpeg = path.join(runtimeRoot, 'ffmpeg', 'ffmpeg.exe')
 const ffprobe = path.join(runtimeRoot, 'ffmpeg', 'ffprobe.exe')
-await Promise.all([access(python), access(ffmpeg), access(ffprobe)])
+const deno = path.join(runtimeRoot, 'deno', 'deno.exe')
+await Promise.all([access(python), access(ffmpeg), access(ffprobe), access(deno)])
 
 const environment = {
   ...process.env,
@@ -57,5 +58,7 @@ const encoders = run('FFmpeg encoder check', ffmpeg, ['-hide_banner', '-encoders
 if (/\blibx26[45]\b/i.test(encoders)) {
   throw new Error('Bundled FFmpeg exposes libx264 or libx265, which is not approved for distribution.')
 }
+
+run('Deno version check', deno, ['--version'])
 
 console.log(`Bundled Windows runtime executable verification passed: ${runtimeRoot}`)

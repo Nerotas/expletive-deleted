@@ -96,4 +96,9 @@ def get_capabilities(settings: AppSettings) -> dict[str, object]:
         "ytdlp_version": inventory.ytdlp.installed_version,
         "ytdlp_path": str(inventory.ytdlp.path) if inventory.ytdlp.path else None,
         "ytdlp_detail": inventory.ytdlp.detail,
+        # Only needed for some YouTube downloads; deliberately not part of app_runtime/processing_ready.
+        "js_runtime": inventory.js_runtime.ready,
+        "js_runtime_version": inventory.js_runtime.installed_version,
+        "js_runtime_path": str(inventory.js_runtime.path) if inventory.js_runtime.path else None,
+        "js_runtime_detail": inventory.js_runtime.detail,
     }

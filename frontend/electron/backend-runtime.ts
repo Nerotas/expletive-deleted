@@ -13,6 +13,7 @@ export type BundledRuntimePaths = {
   ffmpeg?: string
   ffprobe?: string
   ytdlp?: string
+  deno?: string
 }
 
 export function findBundledRuntime(
@@ -24,14 +25,16 @@ export function findBundledRuntime(
   const ffmpegName = platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg'
   const ffprobeName = platform === 'win32' ? 'ffprobe.exe' : 'ffprobe'
   const ytdlpName = platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp'
+  const denoName = platform === 'win32' ? 'deno.exe' : 'deno'
   const runtimeRoot = path.join(resourcesPath, 'app-runtime')
   const python = path.join(runtimeRoot, 'python', executableName)
   const ffmpeg = path.join(runtimeRoot, 'ffmpeg', ffmpegName)
   const ffprobe = path.join(runtimeRoot, 'ffmpeg', ffprobeName)
   const ytdlp = path.join(runtimeRoot, 'yt-dlp', ytdlpName)
+  const deno = path.join(runtimeRoot, 'deno', denoName)
 
-  if (!exists(python) || !exists(ffmpeg) || !exists(ffprobe) || !exists(ytdlp)) return {}
-  return { python, ffmpeg, ffprobe, ytdlp }
+  if (!exists(python) || !exists(ffmpeg) || !exists(ffprobe) || !exists(ytdlp) || !exists(deno)) return {}
+  return { python, ffmpeg, ffprobe, ytdlp, deno }
 }
 
 export function requireBundledRuntime(
@@ -42,7 +45,7 @@ export function requireBundledRuntime(
   const manifest = path.join(resourcesPath, 'app-runtime', 'runtime-manifest.json')
   if (!exists(manifest)) return {}
   const runtime = findBundledRuntime(resourcesPath, platform, exists)
-  if (runtime.python && runtime.ffmpeg && runtime.ffprobe && runtime.ytdlp) return runtime
+  if (runtime.python && runtime.ffmpeg && runtime.ffprobe && runtime.ytdlp && runtime.deno) return runtime
   throw new Error('The installed local processing runtime is incomplete. Reinstall Expletive Deleted.')
 }
 
@@ -55,7 +58,7 @@ export function backendEnvironment(
     ? path.dirname(bundledRuntime.ffmpeg)
     : undefined
   const completeBundledRuntime = Boolean(
-    bundledRuntime.python && bundledRuntime.ffmpeg && bundledRuntime.ffprobe && bundledRuntime.ytdlp,
+    bundledRuntime.python && bundledRuntime.ffmpeg && bundledRuntime.ffprobe && bundledRuntime.ytdlp && bundledRuntime.deno,
   )
   const currentPath = environment.PATH ?? ''
 
@@ -67,6 +70,7 @@ export function backendEnvironment(
     ...(bundledRuntime.ffmpeg ? { CENSOR_FFMPEG: bundledRuntime.ffmpeg } : {}),
     ...(bundledRuntime.ffprobe ? { CENSOR_FFPROBE: bundledRuntime.ffprobe } : {}),
     ...(bundledRuntime.ytdlp ? { CENSOR_YTDLP: bundledRuntime.ytdlp } : {}),
+    ...(bundledRuntime.deno ? { CENSOR_DENO: bundledRuntime.deno } : {}),
     ...(bundledFfmpegDirectory
       ? { PATH: currentPath ? bundledFfmpegDirectory + path.delimiter + currentPath : bundledFfmpegDirectory }
       : {}),

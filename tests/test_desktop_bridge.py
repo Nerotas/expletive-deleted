@@ -317,6 +317,22 @@ class DesktopBridgeTests(unittest.TestCase):
         self.assertEqual(response["error"]["type"], "ValueError")
         self.assertIn("Unknown desktop bridge method", response["error"]["message"])
 
+    def test_protocol_preserves_diagnostic_detail_from_classified_errors(self):
+        error = RuntimeError("The selected browser session could not be read")
+        error.code = "browser_cookies_unavailable"
+        error.diagnostic = "ERROR: Could not copy Chrome cookie database"
+        service = MagicMock()
+        service.submit_youtube_download.side_effect = error
+        request = io.StringIO('{"id":9,"method":"downloads.submit","params":{"url":"https://youtu.be/dQw4w9WgXcQ","cookie_browser":"brave"}}\n')
+        output = io.StringIO()
+
+        serve(DesktopBridge(service), request, output)
+
+        response = json.loads(output.getvalue())
+        self.assertFalse(response["ok"])
+        self.assertEqual(response["error"]["code"], "browser_cookies_unavailable")
+        self.assertEqual(response["error"]["diagnostic"], "ERROR: Could not copy Chrome cookie database")
+
     def test_ffmpeg_location_validates_companion_and_persists_both_paths(self):
         service = MagicMock()
         service.get_settings.return_value = {

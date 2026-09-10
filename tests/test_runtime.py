@@ -28,6 +28,7 @@ from backend.runtime.environment import (
     get_profanity_censor_words_file,
     get_profanity_exclusions_file,
     get_calibrated_transcription_factor,
+    get_application_runtime_root,
     get_whisper_cache_dir,
     get_whisper_device_status,
     get_whisper_timing_history_path,
@@ -43,6 +44,37 @@ from backend.runtime.environment import (
 
 
 class RuntimeTests(unittest.TestCase):
+    def test_store_python_virtualized_local_app_data_uses_stable_runtime_root(self):
+        with (
+            patch("backend.runtime.environment.platform.system", return_value="Windows"),
+            patch.dict(
+                "os.environ",
+                {
+                    "LOCALAPPDATA": r"C:\Users\User\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\Local",
+                },
+                clear=False,
+            ),
+        ):
+            root = get_application_runtime_root()
+
+        self.assertEqual(root, (Path.home() / ".expletive-deleted" / "runtime").resolve())
+
+    def test_store_python_venv_origin_uses_stable_runtime_root(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            prefix = Path(temporary_directory)
+            (prefix / "pyvenv.cfg").write_text(
+                "home = C:\\Users\\User\\AppData\\Local\\Microsoft\\WindowsApps\\Python.exe\n",
+                encoding="utf-8",
+            )
+            with (
+                patch("backend.runtime.environment.platform.system", return_value="Windows"),
+                patch("backend.runtime.environment.sys.prefix", str(prefix)),
+                patch.dict("os.environ", {"LOCALAPPDATA": r"C:\Users\User\AppData\Local"}, clear=False),
+            ):
+                root = get_application_runtime_root()
+
+        self.assertEqual(root, (Path.home() / ".expletive-deleted" / "runtime").resolve())
+
     def test_censor_requires_ffmpeg_and_ffprobe_before_processing(self):
         with (
             patch("backend.censor.engine.find_ffmpeg", return_value=None),

@@ -22,7 +22,7 @@ from backend.runtime import (
 )
 
 
-COMPONENTS = ("ffmpeg", "python", "whisper_model")
+COMPONENTS = ("ffmpeg", "python", "whisper_model", "ytdlp", "js_runtime")
 
 
 def _status_dict(status) -> dict[str, object]:
@@ -38,6 +38,7 @@ def _inventory_dict(inventory) -> dict[str, object]:
         "ffprobe": _status_dict(inventory.ffprobe),
         "python": [_status_dict(status) for status in inventory.python],
         "ytdlp": _status_dict(inventory.ytdlp),
+        "js_runtime": _status_dict(inventory.js_runtime),
         "whisper_model": _status_dict(inventory.whisper_model),
     }
 
@@ -67,6 +68,10 @@ def _default_components() -> list[str]:
         components.append("ffmpeg")
     if any(not status.ready for status in inventory.python):
         components.append("python")
+    if not inventory.ytdlp.ready:
+        components.append("ytdlp")
+    if not inventory.js_runtime.ready:
+        components.append("js_runtime")
     if not inventory.whisper_model.ready:
         components.append("whisper_model")
     return components
@@ -118,7 +123,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.json:
             print(json.dumps(_inventory_dict(inventory), indent=2))
         else:
-            for status in (inventory.ffmpeg, inventory.ffprobe, *inventory.python, inventory.ytdlp, inventory.whisper_model):
+            for status in (inventory.ffmpeg, inventory.ffprobe, *inventory.python, inventory.ytdlp, inventory.js_runtime, inventory.whisper_model):
                 print(f"[{status.state.upper()}] {status.name}: {status.detail}")
         return 0 if inventory.ready else 1
 

@@ -9,6 +9,7 @@ python/python.exe
 ffmpeg/ffmpeg.exe
 ffmpeg/ffprobe.exe
 yt-dlp/yt-dlp.exe
+deno/deno.exe
 THIRD_PARTY_NOTICES.md
 LICENSES/
 sbom.cdx.json
@@ -17,9 +18,9 @@ ffmpeg-build.json
 runtime-manifest.json
 ```
 
-`runtime-manifest.json` must conform to `runtime-manifest.schema.json`. The validator rejects Whisper models, `libx264`, `libx265`, GPL/nonfree FFmpeg configure flags, and an incomplete Python, FFmpeg, or yt-dlp runtime.
+`runtime-manifest.json` must conform to `runtime-manifest.schema.json`. The validator rejects Whisper models, `libx264`, `libx265`, GPL/nonfree FFmpeg configure flags, and an incomplete Python, FFmpeg, yt-dlp, or Deno runtime.
 
-Do not place a Whisper model in this directory. The model remains a user-selected download. The pinned official yt-dlp Windows executable is bundled with the application.
+Do not place a Whisper model in this directory. The model remains a user-selected download. The pinned official yt-dlp Windows executable and the pinned official Deno executable (used only to solve YouTube's JavaScript signature challenge) are bundled with the application.
 
 ## Approved build inputs
 

@@ -51,6 +51,10 @@ main { max-width: 1480px; margin: 0 auto; padding: 28px 34px 56px; }
 .modal h2 { font: 700 24px var(--display); margin: 5px 0 9px; }
 .modal > p { color: var(--muted); font-size: 12px; line-height: 1.6; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.youtube-form-row { display: grid; gap: 6px; margin: 12px 0; }
+.youtube-form-row input:not([type="checkbox"]), .youtube-form-row select { width: 100%; box-sizing: border-box; }
+.youtube-checkbox { display: inline-flex; align-items: center; gap: 7px; width: fit-content; }
+.youtube-checkbox input { margin: 0; }
 .setup-consent { width: min(680px, 100%); max-height: calc(100vh - 48px); overflow: auto; color: var(--ink); }
 .setup-consent-actions-list { display: grid; gap: 10px; margin: 18px 0; }
 .setup-consent article { border: 1px solid var(--line); background: var(--soft); padding: 13px; }
@@ -61,6 +65,9 @@ main { max-width: 1480px; margin: 0 auto; padding: 28px 34px 56px; }
 .setup-consent dd { margin: 0; overflow-wrap: anywhere; }
 .setup-consent .setup-source-link { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; padding: 0; color: var(--signal-strong); font: 700 11px var(--sans); text-decoration: underline; }
 .setup-third-party-note { border-top: 1px solid var(--line); padding-top: 12px; }
+.setup-progress-metrics { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 8px; font-size: 13px; }
+.setup-progress-meta { display: grid; gap: 4px; margin-top: 14px; color: var(--muted); font-size: 12px; line-height: 1.4; }
+.setup-progress-meta span { display: block; }
 .spin { animation: spin .9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes page-in { from { opacity: 0; transform: translateY(4px); } }

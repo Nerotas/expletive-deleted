@@ -491,6 +491,8 @@ class DesktopBridge:
             return str(get_managed_ffmpeg_directory(runtime_root))
         if "ytdlp" in action_id:
             return str(runtime_root / "dependencies" / "yt-dlp")
+        if "deno" in action_id:
+            return str(runtime_root / "dependencies" / "deno")
         if action_id.startswith("download-"):
             return str(cache_dir)
         return "The repository-local Python environment"
@@ -537,7 +539,12 @@ def serve(
             response = {
                 "id": request_id,
                 "ok": False,
-                "error": {"type": type(exc).__name__, "message": str(exc), "code": getattr(exc, "code", None)},
+                "error": {
+                    "type": type(exc).__name__,
+                    "message": str(exc),
+                    "code": getattr(exc, "code", None),
+                    "diagnostic": getattr(exc, "diagnostic", None),
+                },
             }
         with output_lock:
             output_stream.write(json.dumps(response, separators=(",", ":")) + "\n")

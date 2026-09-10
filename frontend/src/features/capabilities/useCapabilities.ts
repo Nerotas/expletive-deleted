@@ -21,6 +21,8 @@ export function useCapabilities({
   const query = useQuery({
     queryKey: ['capabilities'],
     queryFn: () => client.getCapabilities(),
+    refetchOnMount: 'always',
+    refetchInterval: (currentQuery) => currentQuery.state.data?.app_runtime === 'ready' ? false : 3000,
   })
   const settledInstallRef = useRef<string | null>(null)
 

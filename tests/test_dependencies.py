@@ -8,6 +8,8 @@ from threading import Event
 from unittest.mock import MagicMock, patch
 
 from backend.runtime.dependencies import (
+    DENO_MINIMUM_VERSION,
+    DENO_VERSION,
     DependencyConsentError,
     DependencyInstallError,
     DependencyNotReadyError,
@@ -23,6 +25,7 @@ from backend.runtime.dependencies import (
     build_install_plan,
     execute_install_plan,
     inspect_executable,
+    inspect_js_runtime,
     inspect_ytdlp,
     inspect_python_dependencies,
     inspect_whisper_model,
@@ -49,6 +52,32 @@ class DependencyInventoryTests(unittest.TestCase):
 
         self.assertEqual(status.state, "invalid")
         self.assertIn("did not respond", status.detail)
+
+    def test_js_runtime_is_ready_without_affecting_core_readiness(self):
+        completed = MagicMock(returncode=0, stdout=f"deno {DENO_VERSION} (stable, release, x86_64-pc-windows-msvc)\n", stderr="")
+        with (
+            patch("backend.runtime.dependencies.subprocess.run", return_value=completed),
+            patch("backend.runtime.dependencies.Path.is_file", return_value=True),
+        ):
+            status = inspect_js_runtime("C:\\Tools\\deno.exe")
+        self.assertTrue(status.ready)
+        self.assertEqual(status.installed_version, DENO_VERSION)
+
+    def test_older_js_runtime_below_minimum_version_is_invalid(self):
+        old_version = ".".join(str(part) for part in (DENO_MINIMUM_VERSION[0], DENO_MINIMUM_VERSION[1] - 1, 0))
+        completed = MagicMock(returncode=0, stdout=f"deno {old_version} (stable, release, x86_64-pc-windows-msvc)\n", stderr="")
+        with (
+            patch("backend.runtime.dependencies.subprocess.run", return_value=completed),
+            patch("backend.runtime.dependencies.Path.is_file", return_value=True),
+        ):
+            status = inspect_js_runtime("C:\\Tools\\deno.exe")
+        self.assertEqual(status.state, "invalid")
+        self.assertIn("requires", status.detail)
+
+    def test_missing_js_runtime_is_reported_without_running_a_command(self):
+        status = inspect_js_runtime(None)
+        self.assertEqual(status.state, "missing")
+        self.assertEqual(status.id, "js_runtime")
 
     def test_managed_ffmpeg_manifest_paths_are_canonicalized(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -186,6 +215,13 @@ class DependencyPlanTests(unittest.TestCase):
         self.assertIn("scripts.download_ytdlp", plan.actions[0].command)
         with self.assertRaisesRegex(DependencyPlanError, "Windows only"):
             build_install_plan(["ytdlp"], platform_name="Linux")
+
+    def test_js_runtime_plan_is_explicit_and_windows_only(self):
+        plan = build_install_plan(["js_runtime"], python_executable=Path("C:\\Python\\python.exe"), platform_name="Windows")
+        self.assertEqual(plan.actions[0].dependency_ids, ("js_runtime",))
+        self.assertIn("scripts.download_deno_runtime", plan.actions[0].command)
+        with self.assertRaisesRegex(DependencyPlanError, "Windows only"):
+            build_install_plan(["js_runtime"], platform_name="Linux")
     def test_plan_is_stable_inspectable_and_version_pinned(self):
         kwargs = {
             "python_executable": Path("C:\\Python\\python.exe"),

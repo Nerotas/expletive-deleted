@@ -118,6 +118,8 @@ Prepare the Python environment from the repository root:
 python setup.py
 ```
 
+This checks the repo-local `.venv`, initializes the app settings and directories, and reports any missing approved development runtime components with their reviewed install plan. It never silently downloads the Whisper model. If the machine is running Microsoft Store Python, runtime assets are written to a stable per-user development root instead of a virtualized Windows Store path.
+
 Start the complete Electron application from one terminal:
 
 ```powershell

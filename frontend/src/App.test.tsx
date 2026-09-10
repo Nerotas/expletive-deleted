@@ -158,14 +158,20 @@ describe('desktop application renderer', () => {
     expect(desktopClient.updateSettings).not.toHaveBeenCalled()
   })
 
-  it('opens onboarding for fresh settings and gates components on live readiness', async () => {
+  it('opens onboarding for fresh settings and shows the missing development runtime instead of a blank step', async () => {
     persisted.onboarding.completed = false
     persisted.onboarding.last_step = 'welcome'
     vi.mocked(desktopClient.getCapabilities).mockResolvedValue({
       ...readyCapabilities,
       ready: false,
+      processing_ready: false,
+      app_runtime: 'missing',
+      app_runtime_source: 'development',
+      app_runtime_detail: 'Development processing components are unavailable. Could not verify: yt-dlp.',
       ffmpeg: false,
       ffprobe: false,
+      ytdlp: false,
+      ytdlp_detail: 'yt-dlp was not found',
     })
     const user = userEvent.setup()
     renderApp('/')
@@ -174,10 +180,8 @@ describe('desktop application renderer', () => {
     await user.click(screen.getByRole('button', { name: /Continue/ }))
 
     expect(await screen.findByRole('heading', { name: 'Prepare this computer' })).toBeInTheDocument()
-    expect(screen.queryByText('Expletive Deleted components')).not.toBeInTheDocument()
-    expect(screen.queryByText('FFmpeg and FFprobe')).not.toBeInTheDocument()
-    expect(screen.queryByText('Speech recognition')).not.toBeInTheDocument()
-    expect(screen.queryByText('yt-dlp for YouTube downloads')).not.toBeInTheDocument()
+    expect(screen.getByText('Development runtime components')).toBeInTheDocument()
+    expect(screen.getByText(/Could not verify: yt-dlp\./)).toBeInTheDocument()
     expect(screen.getByText('Whisper large-v3 model')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Continue/ })).toBeDisabled()
     expect(desktopClient.installDependencies).not.toHaveBeenCalled()
@@ -613,6 +617,25 @@ describe('desktop application renderer', () => {
     await act(async () => resolveDownload())
   })
 
+  it('allows a signed-in browser session when adding a YouTube URL', async () => {
+    const url = 'https://youtu.be/dQw4w9WgXcQ'
+    vi.mocked(desktopClient.getCapabilities).mockResolvedValue({ ...readyCapabilities, ytdlp: true })
+    vi.mocked(desktopClient.submitYoutubeDownload).mockResolvedValue({
+      id: 'youtube-job', source: url, source_type: 'youtube', url, video_id: 'dQw4w9WgXcQ',
+      mode: 'copy', status: 'queued', progress_percent: null, error: null,
+    })
+    const user = userEvent.setup()
+    renderApp('/')
+
+    await user.click(await screen.findByRole('button', { name: 'Download from YouTube' }))
+    await user.type(screen.getByLabelText('YouTube URL'), url)
+    await user.click(screen.getByLabelText('Use my signed-in browser session'))
+    await user.selectOptions(screen.getByLabelText('Browser session'), 'edge')
+    await user.click(screen.getByRole('button', { name: 'Add to Queue' }))
+
+    await waitFor(() => expect(desktopClient.submitYoutubeDownload).toHaveBeenCalledWith(url, undefined, 'edge'))
+  })
+
   it('requires explicit browser choices after YouTube authentication fails', async () => {
     const url = 'https://youtu.be/dQw4w9WgXcQ'
     const authenticationError = Object.assign(new Error('YouTube requires authentication or verification'), {
@@ -642,6 +665,27 @@ describe('desktop application renderer', () => {
     await user.selectOptions(screen.getByLabelText('Browser session'), 'edge')
     await user.click(screen.getByRole('button', { name: 'Retry with Microsoft Edge' }))
     await waitFor(() => expect(desktopClient.submitYoutubeDownload).toHaveBeenLastCalledWith(url, undefined, 'edge'))
+  })
+
+  it('suggests another browser when Windows cannot read Chrome cookies', async () => {
+    const url = 'https://youtu.be/dQw4w9WgXcQ'
+    const cookieError = Object.assign(new Error('The selected browser session could not be read'), {
+      code: 'browser_cookies_unavailable',
+      diagnostic: 'ERROR: Could not copy Chrome cookie database',
+    })
+    vi.mocked(desktopClient.getCapabilities).mockResolvedValue({ ...readyCapabilities, ytdlp: true })
+    vi.mocked(desktopClient.submitYoutubeDownload).mockRejectedValueOnce(cookieError)
+    const user = userEvent.setup()
+    renderApp('/')
+
+    await user.click(await screen.findByRole('button', { name: 'Download from YouTube' }))
+    await user.type(screen.getByLabelText('YouTube URL'), url)
+    await user.click(screen.getByRole('button', { name: 'Add to Queue' }))
+
+    expect(await screen.findByText('Windows blocks yt-dlp from reading Chrome, Edge, and Brave cookie databases on many current versions of those browsers, even after fully closing them. This is a known limitation outside of this application\u2019s control.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Browser session')).toHaveValue('firefox')
+    await user.click(screen.getByText('Technical details'))
+    expect(screen.getByText('ERROR: Could not copy Chrome cookie database')).toBeInTheDocument()
   })
 
   it('offers finished files a fresh transcript and recensor action', async () => {
@@ -820,6 +864,30 @@ describe('desktop application renderer', () => {
     expect(screen.getByRole('button', { name: 'Cancel job' })).toBeInTheDocument()
     expect(screen.queryByRole('checkbox', { name: 'Select movie.mkv' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Transcribe only' })).not.toBeInTheDocument()
+  })
+
+  it('offers a managed JavaScript runtime download when yt-dlp cannot solve the YouTube challenge', async () => {
+    const source = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
+    vi.mocked(desktopClient.listDownloads).mockResolvedValue([{
+      id: 'youtube-job', source, source_type: 'youtube', url: source, video_id: 'dQw4w9WgXcQ',
+      mode: 'copy', status: 'failed', progress_percent: null,
+      error: {
+        code: 'javascript_runtime_required',
+        message: "YouTube requires a JavaScript runtime that yt-dlp could not find",
+        detail: 'n challenge solving failed',
+        retryable: true,
+        diagnostic: 'Install Deno to solve YouTube\u2019s JavaScript challenge.',
+      },
+    }])
+    const user = userEvent.setup()
+    renderApp('/')
+
+    const button = await screen.findByRole('button', { name: 'Download JavaScript runtime' })
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument()
+    await user.click(button)
+
+    await waitFor(() => expect(desktopClient.planDependencies).toHaveBeenCalledWith(['js_runtime']))
+    expect(await screen.findByRole('button', { name: /Continue/ })).toBeInTheDocument()
   })
 
   it('renders an active YouTube download as remote media', async () => {

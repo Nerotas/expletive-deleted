@@ -12,6 +12,7 @@ export function SetupBand({ capabilities, reviewInstall, checkAgain, busy }: Set
   const bundledRuntime = capabilities.app_runtime_source === 'bundled'
   const modelReady = capabilities.speech_model === 'ready' || capabilities.whisper_model_ready
   const bundledRuntimeInvalid = bundledRuntime && capabilities.app_runtime === 'invalid'
+  const developmentRuntimeMissing = capabilities.app_runtime_source === 'development' && capabilities.app_runtime !== 'ready'
 
   return (
     <section className="setup-band">
@@ -25,6 +26,7 @@ export function SetupBand({ capabilities, reviewInstall, checkAgain, busy }: Set
       </div>
       <div className="setup-items">
         {bundledRuntimeInvalid ? <SetupItem label="Expletive Deleted components" detail={capabilities.app_runtime_detail} ready={false} busy={busy} /> : null}
+        {developmentRuntimeMissing ? <SetupItem label="Development runtime components" detail={capabilities.app_runtime_detail} ready={false} busy={busy} /> : null}
         <SetupItem label={`Whisper ${capabilities.whisper_model}`} detail="Download the supported speech model when you are ready. It stays on this computer." ready={modelReady} busy={busy} optional />
       </div>
       <div className="setup-band-controls">

@@ -12,6 +12,7 @@ const requiredFiles = [
   'ffmpeg/ffmpeg.exe',
   'ffmpeg/ffprobe.exe',
   'yt-dlp/yt-dlp.exe',
+  'deno/deno.exe',
   'THIRD_PARTY_NOTICES.md',
   'sbom.cdx.json',
   'ffmpeg-source.zip',
@@ -47,6 +48,7 @@ const requiredSbomComponents = [
   { label: 'better-profanity', names: ['better-profanity'], version: requirements.get('better-profanity'), license: 'MIT' },
   { label: 'huggingface-hub', names: ['huggingface-hub', 'huggingface_hub'], version: requirements.get('huggingface-hub'), license: 'Apache-2.0' },
   { label: 'yt-dlp', names: ['yt-dlp', 'yt_dlp'], version: manifest.ytdlp?.version, license: 'Unlicense' },
+  { label: 'Deno', names: ['deno'], version: manifest.deno?.version, license: 'MIT' },
 ]
 const manifestErrors = []
 if (manifest.schema_version !== 1) manifestErrors.push('schema_version must be 1')
@@ -68,6 +70,12 @@ if (
   || !/^https:\/\//.test(manifest.ytdlp?.source ?? '')
   || manifest.ytdlp?.license !== 'Unlicense'
 ) manifestErrors.push('yt-dlp must identify the approved executable path, HTTPS source, version, and Unlicense')
+if (
+  manifest.deno?.path !== 'deno/deno.exe'
+  || typeof manifest.deno?.version !== 'string'
+  || !/^https:\/\//.test(manifest.deno?.source ?? '')
+  || manifest.deno?.license !== 'MIT'
+) manifestErrors.push('deno must identify the approved executable path, HTTPS source, version, and MIT license')
 const configure = manifest.ffmpeg?.configure
 if (!Array.isArray(configure) || configure.some((argument) => argument === '--enable-gpl' || argument === '--enable-nonfree')) {
   manifestErrors.push('ffmpeg configure arguments must be present and exclude --enable-gpl and --enable-nonfree')

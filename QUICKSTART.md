@@ -87,7 +87,7 @@ From the repository root:
 python setup.py
 ```
 
-This creates `.venv`, installs the Python requirements, persists validated settings, and creates the working directories. It does not silently download the Whisper model or install FFmpeg.
+This creates `.venv`, installs the Python requirements, persists validated settings, and creates the working directories. It also checks the managed development runtime and prints the exact reviewed install plan for any missing FFmpeg, yt-dlp, or Deno components before anything downloads. It does not silently download the Whisper model.
 
 ### Inspect or install backend dependencies
 
@@ -102,10 +102,11 @@ Review the exact plan first. To perform an approved installation, replace `PLAN_
 
 ```powershell
 .\.venv\Scripts\python.exe manage_dependencies.py install --component ffmpeg --approve PLAN_ID
+.\.venv\Scripts\python.exe manage_dependencies.py install --component ytdlp --component js_runtime --approve PLAN_ID
 .\.venv\Scripts\python.exe manage_dependencies.py install --component whisper_model --approve PLAN_ID
 ```
 
-The FFmpeg plan installs the pinned cross-platform `static-ffmpeg` runtime manager, then downloads its matching `ffmpeg` and `ffprobe` binaries only after approval. It does not require WinGet or modify the system `PATH`.
+The FFmpeg plan installs the pinned cross-platform `static-ffmpeg` runtime manager, then downloads its matching `ffmpeg` and `ffprobe` binaries only after approval. The yt-dlp and Deno plans use the same explicit approval flow and store their managed binaries beneath `%LOCALAPPDATA%\ExpletiveDeleted\dependencies\` (or the stable explicit `CENSOR_RUNTIME_ASSETS_DIR` override when configured) instead of a Microsoft Store virtualized path. They do not require WinGet or modify the system `PATH`.
 
 ### Diagnose and run backend jobs
 

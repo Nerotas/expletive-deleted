@@ -76,6 +76,20 @@ class ManageDependenciesTests(unittest.TestCase):
         self.assertEqual(exit_code, 1)
         self.assertIn("exact dependency install plan was not approved", output.getvalue())
 
+    def test_plan_accepts_ytdlp_and_js_runtime_components(self):
+        output = io.StringIO()
+
+        with (
+            patch("scripts.manage_dependencies.execute_install_plan") as execute,
+            patch("sys.stdout", output),
+        ):
+            exit_code = main(["plan", "--component", "ytdlp", "--component", "js_runtime"])
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("download-managed-ytdlp", output.getvalue())
+        self.assertIn("download-managed-deno-runtime", output.getvalue())
+        execute.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

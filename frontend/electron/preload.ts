@@ -1,8 +1,13 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
+import { unwrapInvokeResponse } from './ipc-response.js'
+
+async function invoke<T>(method: string, params?: Record<string, unknown>): Promise<T> {
+  return unwrapInvokeResponse(await ipcRenderer.invoke('expletive-deleted:invoke', method, params))
+}
 
 contextBridge.exposeInMainWorld('expletiveDeleted', {
   desktop: true,
-  invoke: <T>(method: string, params?: Record<string, unknown>) => ipcRenderer.invoke('expletive-deleted:invoke', method, params) as Promise<T>,
+  invoke,
   selectDirectory: (defaultPath?: string) => ipcRenderer.invoke('expletive-deleted:select-directory', defaultPath) as Promise<string | undefined>,
   selectFile: (defaultPath?: string) => ipcRenderer.invoke('expletive-deleted:select-file', defaultPath) as Promise<string | undefined>,
   selectDictionaryImport: () => ipcRenderer.invoke('expletive-deleted:select-dictionary-import') as Promise<string | undefined>,
