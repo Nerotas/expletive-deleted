@@ -4,7 +4,7 @@ from pathlib import Path
 from threading import Event
 from unittest.mock import MagicMock, patch
 
-from backend.jobs.downloads import DownloadManager, DownloadRecord, YtdlpAuthenticationRequired, validate_youtube_url
+from backend.jobs.downloads import BrowserCookiesUnavailable, DownloadManager, DownloadRecord, YtdlpAuthenticationRequired, validate_youtube_url
 from backend.settings import AppSettings, DirectorySettings, RuntimeSettings
 
 
@@ -45,6 +45,28 @@ class DownloadManagerTests(unittest.TestCase):
 
         self.assertIsInstance(error, YtdlpAuthenticationRequired)
         self.assertEqual(error.code, "authentication_required")
+
+    def test_dpapi_cookie_failure_offers_another_browser_session(self):
+        error = DownloadManager._download_error("ERROR: Failed to decrypt with DPAPI")
+
+        self.assertIsInstance(error, BrowserCookiesUnavailable)
+        self.assertEqual(error.code, "browser_cookies_unavailable")
+
+    def test_chromium_cookie_copy_failure_offers_another_browser_session(self):
+        error = DownloadManager._download_error("ERROR: Could not copy Chrome cookie database")
+
+        self.assertIsInstance(error, BrowserCookiesUnavailable)
+        self.assertEqual(error.code, "browser_cookies_unavailable")
+
+    def test_generic_download_failure_preserves_full_diagnostic_output(self):
+        output = (
+            "WARNING: [youtube] Some web client https formats have been skipped as they are missing a url\n"
+            "ERROR: [youtube] ohNTpnAs62E: Requested format is not available. Use --list-formats for a list of available formats"
+        )
+        error = DownloadManager._download_error(output)
+
+        self.assertEqual(str(error), "ERROR: [youtube] ohNTpnAs62E: Requested format is not available. Use --list-formats for a list of available formats")
+        self.assertEqual(error.diagnostic, output)
 
     def test_remote_job_keeps_url_out_of_filesystem_source_model(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -102,6 +124,61 @@ class DownloadManagerTests(unittest.TestCase):
 
         self.assertEqual(run.call_count, 1)
         select_encoder.assert_not_called()
+
+    def test_cookie_failure_during_download_is_classified_not_generic(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            ytdlp = root / "yt-dlp.exe"
+            ytdlp.touch()
+            settings = AppSettings(
+                directories=DirectorySettings(root / "Ready", root / "Finished", root / "Processed", root / "Transcripts"),
+                runtime=RuntimeSettings(ytdlp_path=ytdlp),
+            )
+            manager = DownloadManager(settings)
+            job_id = "download-job"
+            manager._records[job_id] = DownloadRecord(job_id, "https://youtu.be/dQw4w9WgXcQ", "dQw4w9WgXcQ", cookie_browser="brave")
+            manager._events[job_id] = []
+            manager._cancellations[job_id] = Event()
+            process = MagicMock(returncode=1)
+            process.stdout = iter(["ERROR: Could not copy Chrome cookie database\n"])
+
+            with (
+                patch.object(manager, "_runtime_media_tools", return_value=(Path("ffmpeg"), Path("ffprobe"))),
+                patch("backend.jobs.downloads.subprocess.Popen", return_value=process),
+            ):
+                manager._run(job_id)
+
+        failed = manager.list()[0]
+        self.assertEqual(failed.status, "failed")
+        self.assertEqual(failed.error.code, "browser_cookies_unavailable")
+
+    def test_download_format_selection_is_not_restricted_to_avc1_or_mp4a(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            ytdlp = root / "yt-dlp.exe"
+            ytdlp.touch()
+            settings = AppSettings(
+                directories=DirectorySettings(root / "Ready", root / "Finished", root / "Processed", root / "Transcripts"),
+                runtime=RuntimeSettings(ytdlp_path=ytdlp),
+            )
+            manager = DownloadManager(settings)
+            job_id = "download-job"
+            manager._records[job_id] = DownloadRecord(job_id, "https://youtu.be/dQw4w9WgXcQ", "dQw4w9WgXcQ")
+            manager._events[job_id] = []
+            manager._cancellations[job_id] = Event()
+            process = MagicMock(returncode=1)
+            process.stdout = iter([])
+
+            with (
+                patch.object(manager, "_runtime_media_tools", return_value=(Path("ffmpeg"), Path("ffprobe"))),
+                patch("backend.jobs.downloads.subprocess.Popen", return_value=process) as popen,
+            ):
+                manager._run(job_id)
+
+        command = popen.call_args.args[0]
+        format_selector = command[command.index("-f") + 1]
+        self.assertNotIn("avc1", format_selector)
+        self.assertNotIn("mp4a", format_selector)
 
     def test_ffmpeg_preparation_emits_media_time_progress(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

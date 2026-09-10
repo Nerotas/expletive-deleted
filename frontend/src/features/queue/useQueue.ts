@@ -16,11 +16,25 @@ type QueueOptions = {
   pollInterval?: number
 }
 
-export type YoutubeSubmitResult = 'success' | 'authentication_required' | 'failed'
+export type YoutubeSubmitResult = 'success' | 'authentication_required' | 'browser_cookies_unavailable' | 'failed'
+export type YoutubeSubmitOutcome = { status: YoutubeSubmitResult; diagnostic?: string }
 
 function isAuthenticationRequired(reason: unknown): boolean {
-  return typeof reason === 'object' && reason !== null && 'code' in reason
-    && (reason as { code?: unknown }).code === 'authentication_required'
+  if (typeof reason !== 'object' || reason === null) return false
+  const error = reason as { code?: unknown; message?: unknown }
+  return error.code === 'authentication_required'
+    || error.message === 'YouTube requires authentication or verification'
+}
+
+function isBrowserCookiesUnavailable(reason: unknown): boolean {
+  return typeof reason === 'object' && reason !== null
+    && (reason as { code?: unknown }).code === 'browser_cookies_unavailable'
+}
+
+function diagnosticOf(reason: unknown): string | undefined {
+  if (typeof reason !== 'object' || reason === null) return undefined
+  const diagnostic = (reason as { diagnostic?: unknown }).diagnostic
+  return typeof diagnostic === 'string' ? diagnostic : undefined
 }
 
 async function loadQueue(client: DesktopClient) {
@@ -68,7 +82,7 @@ export function useQueue({
     mutationFn: (action) => action(),
     onSuccess: async () => { await query.refetch() },
     onError: (reason) => {
-      if (!isAuthenticationRequired(reason)) onError(errorMessage(reason))
+      if (!isAuthenticationRequired(reason) && !isBrowserCookiesUnavailable(reason)) onError(errorMessage(reason))
     },
   })
   const library = query.data?.library ?? []
@@ -100,13 +114,15 @@ export function useQueue({
       else await client.submitJob(source, mode)
       onNotice(`${fileName(source)} queued`)
     }).then(() => undefined),
-    submitYoutubeDownload: async (url: string, retryId?: string, cookieBrowser?: string): Promise<YoutubeSubmitResult> => {
+    submitYoutubeDownload: async (url: string, retryId?: string, cookieBrowser?: string): Promise<YoutubeSubmitOutcome> => {
       try {
         await actionMutation.mutateAsync(() => client.submitYoutubeDownload(url, retryId, cookieBrowser))
         onNotice(retryId ? 'YouTube download queued again' : 'YouTube download queued')
-        return 'success'
+        return { status: 'success' }
       } catch (reason) {
-        return isAuthenticationRequired(reason) ? 'authentication_required' : 'failed'
+        const diagnostic = diagnosticOf(reason)
+        if (isBrowserCookiesUnavailable(reason)) return { status: 'browser_cookies_unavailable', diagnostic }
+        return { status: isAuthenticationRequired(reason) ? 'authentication_required' : 'failed', diagnostic }
       }
     },
     submitFiles: async (sources: string[], mode: Job['mode']): Promise<JobSubmissionResult[]> => {
@@ -140,7 +156,7 @@ export function useQueue({
     }).then(() => undefined),
     retryJob: (job: Job) => run(async () => {
             if (job.source_type === 'youtube') {
-              await client.submitYoutubeDownload(job.url ?? job.source, job.id)
+              await client.submitYoutubeDownload(job.url ?? job.source, job.id, job.cookie_browser ?? undefined)
               onNotice('YouTube download queued again')
               return
             }

@@ -4,7 +4,8 @@ import { existsSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { backendEnvironment, findBackendRoot, findPythonRuntime, requireBundledRuntime } from './backend-runtime.js'
 
-type BridgeResponse = { id: number; ok: true; result: unknown } | { id: number; ok: false; error: { message?: string; code?: string } }
+type BridgeResponse = { id: number; ok: true; result: unknown } | { id: number; ok: false; error: { message?: string; code?: string; diagnostic?: string } }
+type RendererResponse = { result: unknown } | { error: { message: string; code?: string; diagnostic?: string } }
 
 let window: BrowserWindow | undefined
 let bridge: ChildProcessWithoutNullStreams | undefined
@@ -80,9 +81,10 @@ function startBridge(): void {
         if (response.ok) request.resolve(response.result)
         else {
           const message = response.error.message ?? 'The local processing service rejected the request.'
-          logDevelopmentError('Python bridge request failed:', message)
-          const error = new Error(message) as Error & { code?: string }
+          logDevelopmentError('Python bridge request failed:', response.error.diagnostic ?? message)
+          const error = new Error(message) as Error & { code?: string; diagnostic?: string }
           if (typeof response.error.code === 'string') error.code = response.error.code
+          if (typeof response.error.diagnostic === 'string') error.diagnostic = response.error.diagnostic
           request.reject(error)
         }
       } catch { /* ignore malformed private protocol output */ }
@@ -148,7 +150,20 @@ if (process.platform === 'win32') app.setAppUserModelId(APPLICATION_ID)
 app.whenReady().then(() => {
   if (!process.env.ELECTRON_RENDERER_URL) Menu.setApplicationMenu(null)
   startBridge()
-  ipcMain.handle('expletive-deleted:invoke', (_event: IpcMainInvokeEvent, method: string, params?: Record<string, unknown>) => invoke(method, params))
+  ipcMain.handle('expletive-deleted:invoke', async (_event: IpcMainInvokeEvent, method: string, params?: Record<string, unknown>): Promise<RendererResponse> => {
+    try {
+      return { result: await invoke(method, params) }
+    } catch (reason) {
+      const error = reason as Error & { code?: unknown; diagnostic?: unknown }
+      return {
+        error: {
+          message: error instanceof Error ? error.message : 'The local processing service rejected the request.',
+          ...(typeof error.code === 'string' ? { code: error.code } : {}),
+          ...(typeof error.diagnostic === 'string' ? { diagnostic: error.diagnostic } : {}),
+        },
+      }
+    }
+  })
   ipcMain.handle('expletive-deleted:select-directory', async (_event: IpcMainInvokeEvent, defaultPath?: string) => {
     const result = await dialog.showOpenDialog(window!, { defaultPath, properties: ['openDirectory', 'createDirectory'] })
     return result.canceled ? undefined : result.filePaths[0]

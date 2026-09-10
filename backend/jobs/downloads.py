@@ -36,6 +36,14 @@ class YtdlpAuthenticationRequired(RuntimeError):
         self.diagnostic = diagnostic
 
 
+class BrowserCookiesUnavailable(RuntimeError):
+    code = "browser_cookies_unavailable"
+
+    def __init__(self, diagnostic: str):
+        super().__init__("The selected browser session could not be read")
+        self.diagnostic = diagnostic
+
+
 def validate_youtube_url(value: str) -> tuple[str, str]:
     parsed = urlparse(value.strip())
     host = (parsed.hostname or "").casefold()
@@ -145,7 +153,7 @@ class DownloadManager:
             command = [str(ytdlp), "--ignore-config"]
             if record.cookie_browser:
                 command.extend(["--cookies-from-browser", record.cookie_browser])
-            command.extend(["--ffmpeg-location", str(ffmpeg.parent), "--no-playlist", "--newline", "--progress-template", "ED:%(progress._percent_str)s|%(progress.eta)s", "--merge-output-format", "mp4", "-f", "bv*[vcodec^=avc1]+ba[acodec^=mp4a]/b[ext=mp4]/b", "--paths", str(staging), "--output", "source.%(ext)s", record.url])
+            command.extend(["--ffmpeg-location", str(ffmpeg.parent), "--no-playlist", "--newline", "--progress-template", "ED:%(progress._percent_str)s|%(progress.eta)s", "--merge-output-format", "mp4", "-f", "bv*+ba/b", "--paths", str(staging), "--output", "source.%(ext)s", record.url])
             process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
             with self._lock: self._processes[job_id] = process
             output: list[str] = []
@@ -174,14 +182,13 @@ class DownloadManager:
                 self._on_completed(destination)
         except InterruptedError: self._set(job_id, "cancelled", message="Download cancelled")
         except Exception as exc:
-            authentication_required = isinstance(exc, YtdlpAuthenticationRequired)
-            self._set(job_id, "failed", error=JobError(
-                "authentication_required" if authentication_required else "download_failed",
-                "YouTube needs your browser session" if authentication_required else "YouTube download failed",
-                str(exc),
-                True,
-                exc.diagnostic if authentication_required else traceback.format_exc(),
-            ), message="YouTube authentication required" if authentication_required else "YouTube download failed")
+            if isinstance(exc, YtdlpAuthenticationRequired):
+                code, summary, diagnostic = "authentication_required", "YouTube needs your browser session", exc.diagnostic
+            elif isinstance(exc, BrowserCookiesUnavailable):
+                code, summary, diagnostic = "browser_cookies_unavailable", "The selected browser session could not be read", exc.diagnostic
+            else:
+                code, summary, diagnostic = "download_failed", "YouTube download failed", getattr(exc, "diagnostic", None) or traceback.format_exc()
+            self._set(job_id, "failed", error=JobError(code, summary, str(exc), True, diagnostic), message=summary)
         finally:
             with self._lock: self._processes.pop(job_id, None)
             shutil.rmtree(staging, ignore_errors=True)
@@ -279,13 +286,20 @@ class DownloadManager:
     @staticmethod
     def _download_error(output: str) -> RuntimeError:
         detail = output.strip() or "yt-dlp could not download this video"
+        if any(marker in detail.casefold() for marker in (
+            "failed to decrypt with dpapi",
+            "could not copy chrome cookie database",
+        )):
+            return BrowserCookiesUnavailable(detail)
         authentication_markers = (
             "sign in to confirm", "authentication", "login required", "cookies-from-browser",
             "confirm your age", "verify that you are not a bot", "verify you're not a bot",
         )
         if any(marker in detail.casefold() for marker in authentication_markers):
             return YtdlpAuthenticationRequired(detail)
-        return RuntimeError(detail.splitlines()[-1])
+        error = RuntimeError(detail.splitlines()[-1])
+        error.diagnostic = detail
+        return error
 
     def _runtime_media_tools(self) -> tuple[Path | None, Path | None]:
         """Use configured tools first, then the verified managed FFmpeg pair."""

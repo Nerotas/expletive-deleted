@@ -41,7 +41,7 @@ type QueuePageProps = {
 }
 type View = 'queue' | 'archive'
 type PurgeRequest = { source: string; label: string } | 'all' | null
-type YoutubeAuthenticationRequest = { url: string; retryId?: string }
+type YoutubeAuthenticationRequest = { url: string; retryId?: string; cookiesUnavailable?: boolean; diagnostic?: string }
 type QueueRowModel = { item: LibraryItem; job?: Job; pendingJob?: Job }
 type QueueFilter = 'all' | 'ready' | 'queued' | 'transcribed' | 'finished'
 type QueueCategory = Exclude<QueueFilter, 'all'> | 'active' | 'other'
@@ -199,7 +199,7 @@ export function QueuePage({ queue, settings, capabilities, onChangeFolder, onRev
       onSubmitSelection={submitSelection}
       onChangeFolder={onChangeFolder}
       onReview={onReview}
-      onAuthenticationRequired={(job) => setYoutubeAuthentication({ url: job.url ?? job.source, retryId: job.id })}
+      onAuthenticationRequired={(job) => setYoutubeAuthentication({ url: job.url ?? job.source, retryId: job.id, cookiesUnavailable: job.error?.code === 'browser_cookies_unavailable' })}
     /> : <ArchiveView
       items={queue.archive}
       busy={queue.busy}
@@ -227,48 +227,59 @@ export function QueuePage({ queue, settings, capabilities, onChangeFolder, onRev
       onCancel={() => setPurgeRequest(null)}
       onConfirm={() => void confirmPurge()}
     />}
-    {youtubeDialogOpen && <YoutubeDialog available={Boolean(capabilities?.ytdlp)} busy={queue.busy} onCancel={() => setYoutubeDialogOpen(false)} onConfirm={async (url) => {
-      const result = await queue.submitYoutubeDownload(url)
-      if (result === 'success') setYoutubeDialogOpen(false)
-      if (result === 'authentication_required') {
+    {youtubeDialogOpen && <YoutubeDialog available={Boolean(capabilities?.ytdlp)} busy={queue.busy} onCancel={() => setYoutubeDialogOpen(false)} onConfirm={async (url, browser) => {
+      const outcome = await queue.submitYoutubeDownload(url, undefined, browser)
+      if (outcome.status === 'success') setYoutubeDialogOpen(false)
+      if (outcome.status === 'authentication_required' || outcome.status === 'browser_cookies_unavailable') {
         setYoutubeDialogOpen(false)
-        setYoutubeAuthentication({ url })
+        setYoutubeAuthentication({ url, cookiesUnavailable: outcome.status === 'browser_cookies_unavailable', diagnostic: outcome.diagnostic })
       }
     }} />}
     {youtubeAuthentication && <YoutubeAuthenticationDialog
       busy={queue.busy}
+      cookiesUnavailable={youtubeAuthentication.cookiesUnavailable}
+      diagnostic={youtubeAuthentication.diagnostic}
       onCancel={() => setYoutubeAuthentication(null)}
       onOpenYoutube={() => void queue.openExternal('https://www.youtube.com/')}
       onRetry={async (browser) => {
-        const result = await queue.submitYoutubeDownload(youtubeAuthentication.url, youtubeAuthentication.retryId, browser)
-        if (result === 'success') setYoutubeAuthentication(null)
-        return result
+        const outcome = await queue.submitYoutubeDownload(youtubeAuthentication.url, youtubeAuthentication.retryId, browser)
+        if (outcome.status === 'success') setYoutubeAuthentication(null)
+        else setYoutubeAuthentication({ ...youtubeAuthentication, cookiesUnavailable: outcome.status === 'browser_cookies_unavailable', diagnostic: outcome.diagnostic })
+        return outcome.status
       }}
     />}
   </section>
 }
 
-function YoutubeDialog({ available, busy, onCancel, onConfirm }: { available: boolean; busy: boolean; onCancel: () => void; onConfirm: (url: string) => Promise<void> }) {
+function YoutubeDialog({ available, busy, onCancel, onConfirm }: { available: boolean; busy: boolean; onCancel: () => void; onConfirm: (url: string, browser?: string) => Promise<void> }) {
   const [url, setUrl] = useState('')
+  const [useBrowserCookies, setUseBrowserCookies] = useState(false)
+  const [browser, setBrowser] = useState('firefox')
   const valid = /^https?:\/\/(www\.|m\.)?(youtube\.com\/watch\?[^\s]*\bv=|youtu\.be\/)[^\s]+/i.test(url)
-  return <div className="modal-backdrop" role="presentation"><section className="modal" role="dialog" aria-modal="true" aria-labelledby="youtube-dialog-title">
+  return <div className="modal-backdrop" role="presentation"><section className="modal youtube-dialog" role="dialog" aria-modal="true" aria-labelledby="youtube-dialog-title">
     <p className="eyebrow">YouTube import</p><h2 id="youtube-dialog-title">Download from YouTube</h2>
-    {available ? <><label htmlFor="youtube-url">YouTube URL</label><input id="youtube-url" type="url" value={url} placeholder="https://www.youtube.com/watch?v=..." onChange={(event) => setUrl(event.target.value)} autoFocus />
-      <p>Only download media you are authorized to download and process.</p><div className="modal-actions"><button className="button secondary" disabled={busy} onClick={onCancel}>Cancel</button><button className="button primary" disabled={busy || !valid} onClick={() => void onConfirm(url)}>{busy ? <><LoaderCircle className="spin" size={16} />Adding to Queue…</> : 'Add to Queue'}</button></div></>
+    {available ? <><div className="youtube-form-row"><label htmlFor="youtube-url">YouTube URL</label><input id="youtube-url" type="url" value={url} placeholder="https://www.youtube.com/watch?v=..." onChange={(event) => setUrl(event.target.value)} autoFocus /></div>
+      <div className="youtube-form-row"><label className="youtube-checkbox"><input type="checkbox" checked={useBrowserCookies} disabled={busy} onChange={(event) => setUseBrowserCookies(event.target.checked)} /> Use my signed-in browser session</label></div>
+      {useBrowserCookies && <div className="youtube-form-row"><label htmlFor="youtube-cookie-browser">Browser session</label><select id="youtube-cookie-browser" value={browser} disabled={busy} onChange={(event) => setBrowser(event.target.value)}><option value="firefox">Firefox</option><option value="chrome">Chrome</option><option value="edge">Microsoft Edge</option><option value="brave">Brave</option></select><small>Chrome, Edge, and Brave currently block yt-dlp on Windows; Firefox is recommended until that is fixed.</small></div>}
+      <p>Only download media you are authorized to download and process.</p><div className="modal-actions"><button className="button secondary" disabled={busy} onClick={onCancel}>Cancel</button><button className="button primary" disabled={busy || !valid} onClick={() => void onConfirm(url, useBrowserCookies ? browser : undefined)}>{busy ? <><LoaderCircle className="spin" size={16} />Adding to Queue…</> : 'Add to Queue'}</button></div></>
       : <><p>yt-dlp is required for YouTube downloads. Get it from System Requirements, then return here to add an individual video.</p><div className="modal-actions"><button className="button primary" onClick={onCancel}>Done</button></div></>}
   </section></div>
 }
 
-function YoutubeAuthenticationDialog({ busy, onCancel, onOpenYoutube, onRetry }: { busy: boolean; onCancel: () => void; onOpenYoutube: () => void; onRetry: (browser: string) => Promise<YoutubeSubmitResult> }) {
-  const [browser, setBrowser] = useState('chrome')
+function YoutubeAuthenticationDialog({ busy, cookiesUnavailable, diagnostic, onCancel, onOpenYoutube, onRetry }: { busy: boolean; cookiesUnavailable?: boolean; diagnostic?: string; onCancel: () => void; onOpenYoutube: () => void; onRetry: (browser: string) => Promise<YoutubeSubmitResult> }) {
+  const [browser, setBrowser] = useState(cookiesUnavailable ? 'firefox' : 'chrome')
   return <div className="modal-backdrop" role="presentation"><section className="modal" role="dialog" aria-modal="true" aria-labelledby="youtube-auth-dialog-title">
     <p className="eyebrow">YouTube authentication required</p>
     <h2 id="youtube-auth-dialog-title">YouTube needs your browser session</h2>
-    <p>YouTube would not allow this video to be downloaded without a signed-in or verified browser session.</p>
-    <p>Expletive Deleted can retry through yt-dlp using a browser where you are already signed into YouTube. It does not receive your YouTube password; cookies stay local on your computer.</p>
+    <p>{cookiesUnavailable ? 'Windows blocks yt-dlp from reading Chrome, Edge, and Brave cookie databases on many current versions of those browsers, even after fully closing them. This is a known limitation outside of this application\u2019s control.' : 'YouTube would not allow this video to be downloaded without a signed-in or verified browser session.'}</p>
+    <p>{cookiesUnavailable ? 'Firefox does not have this restriction. If you are signed into YouTube in Firefox, select it below and retry. Expletive Deleted does not receive your YouTube password; cookies stay local on your computer.' : 'Expletive Deleted can retry through yt-dlp using a browser where you are already signed into YouTube. It does not receive your YouTube password; cookies stay local on your computer.'}</p>
+    {diagnostic && <details className="job-diagnostic">
+      <summary>Technical details</summary>
+      <pre>{diagnostic}</pre>
+    </details>}
     <label htmlFor="youtube-cookie-browser">Browser session</label>
     <select id="youtube-cookie-browser" value={browser} disabled={busy} onChange={(event) => setBrowser(event.target.value)}>
-      <option value="chrome">Chrome</option><option value="edge">Microsoft Edge</option><option value="firefox">Firefox</option><option value="brave">Brave</option>
+      <option value="firefox">Firefox</option><option value="chrome">Chrome</option><option value="edge">Microsoft Edge</option><option value="brave">Brave</option>
     </select>
     <p>You may open YouTube to sign in or complete verification, then return here. Opening YouTube does not retry this download.</p>
     <div className="modal-actions">
@@ -741,8 +752,8 @@ function QueueRow({
           title={!['transcribed', 'finished'].includes(item.status) ? 'Archive is available after a verified transcript or output exists' : busy ? 'Wait for the current queue action to finish' : pendingJob ? 'This file is already queued or processing' : 'Move the verified source to Processed'}
           onClick={() => void onArchive(item.source)}
         ><ArchiveIcon size={13} />Archive</button>}
-        {job?.status === 'failed' && job.error?.code === 'authentication_required' && !pendingJob && <button disabled={busy} onClick={() => onAuthenticationRequired(job)}>Use browser session</button>}
-        {job?.status === 'failed' && job.error?.retryable && job.error.code !== 'authentication_required' && !pendingJob && <button disabled={busy} onClick={() => void onRetry(job)}>Retry</button>}
+        {job?.status === 'failed' && (job.error?.code === 'authentication_required' || job.error?.code === 'browser_cookies_unavailable') && !pendingJob && <button disabled={busy} onClick={() => onAuthenticationRequired(job)}>Use browser session</button>}
+        {job?.status === 'failed' && job.error?.retryable && job.error.code !== 'authentication_required' && job.error.code !== 'browser_cookies_unavailable' && !pendingJob && <button disabled={busy} onClick={() => void onRetry(job)}>Retry</button>}
       </div>
     </td>
   </tr>

@@ -537,7 +537,12 @@ def serve(
             response = {
                 "id": request_id,
                 "ok": False,
-                "error": {"type": type(exc).__name__, "message": str(exc), "code": getattr(exc, "code", None)},
+                "error": {
+                    "type": type(exc).__name__,
+                    "message": str(exc),
+                    "code": getattr(exc, "code", None),
+                    "diagnostic": getattr(exc, "diagnostic", None),
+                },
             }
         with output_lock:
             output_stream.write(json.dumps(response, separators=(",", ":")) + "\n")

@@ -613,6 +613,25 @@ describe('desktop application renderer', () => {
     await act(async () => resolveDownload())
   })
 
+  it('allows a signed-in browser session when adding a YouTube URL', async () => {
+    const url = 'https://youtu.be/dQw4w9WgXcQ'
+    vi.mocked(desktopClient.getCapabilities).mockResolvedValue({ ...readyCapabilities, ytdlp: true })
+    vi.mocked(desktopClient.submitYoutubeDownload).mockResolvedValue({
+      id: 'youtube-job', source: url, source_type: 'youtube', url, video_id: 'dQw4w9WgXcQ',
+      mode: 'copy', status: 'queued', progress_percent: null, error: null,
+    })
+    const user = userEvent.setup()
+    renderApp('/')
+
+    await user.click(await screen.findByRole('button', { name: 'Download from YouTube' }))
+    await user.type(screen.getByLabelText('YouTube URL'), url)
+    await user.click(screen.getByLabelText('Use my signed-in browser session'))
+    await user.selectOptions(screen.getByLabelText('Browser session'), 'edge')
+    await user.click(screen.getByRole('button', { name: 'Add to Queue' }))
+
+    await waitFor(() => expect(desktopClient.submitYoutubeDownload).toHaveBeenCalledWith(url, undefined, 'edge'))
+  })
+
   it('requires explicit browser choices after YouTube authentication fails', async () => {
     const url = 'https://youtu.be/dQw4w9WgXcQ'
     const authenticationError = Object.assign(new Error('YouTube requires authentication or verification'), {
@@ -642,6 +661,27 @@ describe('desktop application renderer', () => {
     await user.selectOptions(screen.getByLabelText('Browser session'), 'edge')
     await user.click(screen.getByRole('button', { name: 'Retry with Microsoft Edge' }))
     await waitFor(() => expect(desktopClient.submitYoutubeDownload).toHaveBeenLastCalledWith(url, undefined, 'edge'))
+  })
+
+  it('suggests another browser when Windows cannot read Chrome cookies', async () => {
+    const url = 'https://youtu.be/dQw4w9WgXcQ'
+    const cookieError = Object.assign(new Error('The selected browser session could not be read'), {
+      code: 'browser_cookies_unavailable',
+      diagnostic: 'ERROR: Could not copy Chrome cookie database',
+    })
+    vi.mocked(desktopClient.getCapabilities).mockResolvedValue({ ...readyCapabilities, ytdlp: true })
+    vi.mocked(desktopClient.submitYoutubeDownload).mockRejectedValueOnce(cookieError)
+    const user = userEvent.setup()
+    renderApp('/')
+
+    await user.click(await screen.findByRole('button', { name: 'Download from YouTube' }))
+    await user.type(screen.getByLabelText('YouTube URL'), url)
+    await user.click(screen.getByRole('button', { name: 'Add to Queue' }))
+
+    expect(await screen.findByText('Windows blocks yt-dlp from reading Chrome, Edge, and Brave cookie databases on many current versions of those browsers, even after fully closing them. This is a known limitation outside of this application\u2019s control.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Browser session')).toHaveValue('firefox')
+    await user.click(screen.getByText('Technical details'))
+    expect(screen.getByText('ERROR: Could not copy Chrome cookie database')).toBeInTheDocument()
   })
 
   it('offers finished files a fresh transcript and recensor action', async () => {
