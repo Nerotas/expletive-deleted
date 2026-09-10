@@ -63,6 +63,8 @@ try {
       access(path.join(runtimeRoot, 'python', 'python.exe')),
       access(path.join(runtimeRoot, 'ffmpeg', 'ffmpeg.exe')),
       access(path.join(runtimeRoot, 'ffmpeg', 'ffprobe.exe')),
+      access(path.join(runtimeRoot, 'yt-dlp', 'yt-dlp.exe')),
+      access(path.join(runtimeRoot, 'deno', 'deno.exe')),
     ])
   }
 
@@ -75,6 +77,9 @@ try {
   if (requireBundledRuntime) {
     if (capabilities.app_runtime !== 'ready' || capabilities.app_runtime_source !== 'bundled') {
       throw new Error('Clean packaged app did not verify its private runtime.')
+    }
+    if (capabilities.ytdlp !== true || capabilities.js_runtime !== true) {
+      throw new Error('Packaged bridge did not verify bundled yt-dlp and Deno.')
     }
     if (capabilities.speech_model === 'ready' || capabilities.processing_ready !== false) {
       throw new Error('Clean packaged app unexpectedly included a speech model.')

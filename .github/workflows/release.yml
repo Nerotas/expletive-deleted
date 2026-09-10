@@ -148,12 +148,14 @@ jobs:
       - name: Build and audit Windows installer
         if: steps.version.outputs.published != 'true'
         working-directory: frontend
-        run: npm run package:win
+        env:
+          BUNDLED_RUNTIME_DIR: ${{ vars.BUNDLED_RUNTIME_DIR }}
+        run: npm run package:bundled-win
 
       - name: Smoke-test packaged application
         if: steps.version.outputs.published != 'true'
         working-directory: frontend
-        run: npm run smoke:package
+        run: npm run smoke:bundled-package
 
       - name: Tag release
         if: steps.version.outputs.published != 'true'
