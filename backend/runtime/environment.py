@@ -113,8 +113,6 @@ def get_application_runtime_root(
         stable_root = (Path.home() / ".expletive-deleted" / "runtime").expanduser().resolve()
         return stable_root
 
-    if environment is None:
-        return prepare_app_data_root(home=home)
     return get_app_data_root(environment, home)
 
 
