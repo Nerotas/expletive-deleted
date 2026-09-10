@@ -1,8 +1,11 @@
-# Windows x64 bundled runtime staging directory
+# Windows x64 runtime contract
 
-This directory is the local staging root for the audited Windows x64 processing runtime. Its generated payload is intentionally ignored by Git. The release build supplies it through `BUNDLED_RUNTIME_DIR` and validates it with `npm run audit:bundled-runtime` before Electron Builder includes it as `resources/app-runtime`.
+This directory records the Windows x64 runtime contract. Development and
+setup-first production builds obtain processing components into the per-user
+application-data runtime root after explicit confirmation; generated binaries
+are intentionally ignored by Git.
 
-The staged payload must contain:
+When a private Python payload is supplied to a production build, it may contain:
 
 ```text
 python/python.exe
@@ -18,7 +21,11 @@ ffmpeg-build.json
 runtime-manifest.json
 ```
 
-`runtime-manifest.json` must conform to `runtime-manifest.schema.json`. The validator rejects Whisper models, `libx264`, `libx265`, GPL/nonfree FFmpeg configure flags, and an incomplete Python, FFmpeg, yt-dlp, or Deno runtime.
+`runtime-manifest.json` must conform to `runtime-manifest.schema.json` for any
+audited runtime artifact. The application does not require FFmpeg, yt-dlp, or
+Deno to be physically present at first launch; onboarding verifies or obtains
+them before enabling the workflows that need them. Whisper models are never
+part of the installer payload.
 
 Do not place a Whisper model in this directory. The model remains a user-selected download. The pinned official yt-dlp Windows executable and the pinned official Deno executable (used only to solve YouTube's JavaScript signature challenge) are bundled with the application.
 

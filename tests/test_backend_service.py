@@ -80,7 +80,7 @@ class BackendServiceTests(unittest.TestCase):
 
         submit.assert_called_once_with(source, "report_only", auto_censor_after_transcription=True)
 
-    def test_capabilities_classify_missing_bundled_tooling_as_app_repair(self):
+    def test_capabilities_classify_missing_bundled_tooling_as_setup_pending(self):
         def status(identifier: str, name: str, state: str = "ready") -> DependencyStatus:
             return DependencyStatus(identifier, name, state, "1", "1" if state == "ready" else None, None, f"{state} detail", False)
 
@@ -100,11 +100,11 @@ class BackendServiceTests(unittest.TestCase):
             result = get_capabilities(AppSettings.defaults(Path("C:/media")))
 
         self.assertFalse(result["processing_ready"])
-        self.assertEqual(result["app_runtime"], "invalid")
+        self.assertEqual(result["app_runtime"], "ready")
         self.assertEqual(result["app_runtime_source"], "bundled")
         self.assertEqual(result["speech_model"], "missing")
         self.assertFalse(result["ytdlp"])
-        self.assertIn("Reinstall", result["app_runtime_detail"])
+        self.assertIn("Additional media components", result["app_runtime_detail"])
 
     def test_capabilities_without_configured_cache_inspect_managed_cache(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

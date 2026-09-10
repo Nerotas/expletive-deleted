@@ -13,18 +13,9 @@ on:
           - minor
           - major
           - none
-      runtime_build_run_id:
-        description: GitHub Actions run ID that produced the audited runtime artifact
-        required: true
-        type: string
-      runtime_artifact_name:
-        description: Exact artifact name produced by the runtime-build workflow
-        required: true
-        type: string
 
 permissions:
   contents: write
-  actions: read
   pages: write
   id-token: write
 
@@ -154,47 +145,15 @@ jobs:
         working-directory: frontend
         run: npm run smoke
 
-      - name: Download audited runtime artifact
-        if: steps.version.outputs.published != 'true'
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ inputs.runtime_artifact_name }}
-          path: ${{ runner.temp }}\audited-runtime-artifact
-          repository: ${{ github.repository }}
-          run-id: ${{ inputs.runtime_build_run_id }}
-          github-token: ${{ github.token }}
-
-      - name: Build and audit Windows installer
+      - name: Build and audit setup-first Windows installer
         if: steps.version.outputs.published != 'true'
         working-directory: frontend
-        env:
-          RUNTIME_ARTIFACT_ROOT: ${{ runner.temp }}\audited-runtime-artifact
-        shell: pwsh
-        run: |
-          $metadataPath = Join-Path $env:RUNTIME_ARTIFACT_ROOT 'runtime-bundle.json'
-          $metadata = Get-Content -LiteralPath $metadataPath -Raw | ConvertFrom-Json
-          if ($metadata.runtime_version -eq $null -or $metadata.archive_sha256 -notmatch '^[0-9a-fA-F]{64}$') {
-            throw 'The runtime artifact metadata is missing a runtime version or valid archive SHA-256.'
-          }
-          $archive = Join-Path $env:RUNTIME_ARTIFACT_ROOT $metadata.archive_name
-          if (-not (Test-Path -LiteralPath $archive)) {
-            throw "The runtime artifact archive is missing: $($metadata.archive_name)"
-          }
-          $actualHash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash
-          if ($actualHash -ine $metadata.archive_sha256) {
-            throw "Audited runtime archive checksum mismatch. Expected $($metadata.archive_sha256), got $actualHash."
-          }
-          $runtimeDirectory = Join-Path $env:RUNNER_TEMP 'audited-runtime'
-          Expand-Archive -LiteralPath $archive -DestinationPath $runtimeDirectory -Force
-          $payload = Get-ChildItem -LiteralPath $runtimeDirectory -Directory | Select-Object -First 1
-          if (-not $payload) { $payload = Get-Item -LiteralPath $runtimeDirectory }
-          "BUNDLED_RUNTIME_DIR=$($payload.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
-          npm run package:bundled-win
+        run: npm run package:win
 
       - name: Smoke-test packaged application
         if: steps.version.outputs.published != 'true'
         working-directory: frontend
-        run: npm run smoke:bundled-package
+        run: npm run smoke:package
 
       - name: Tag release
         if: steps.version.outputs.published != 'true'

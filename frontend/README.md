@@ -22,22 +22,13 @@ npm run smoke
 npm run package:dir
 npm run smoke:package
 npm run package:win
-
-# Release-only: requires BUNDLED_RUNTIME_DIR to point to an audited Windows runtime.
-npm run package:bundled-dir
-npm run smoke:bundled-package
-npm run package:bundled-win
 ```
 
-`package:dir` and `package:win` support ordinary development packaging. `package:bundled-dir` builds an auditable unpacked app; `package:bundled-win` creates the release x64 NSIS installer only after `BUNDLED_RUNTIME_DIR` supplies an audited private Python, FFmpeg, FFprobe, yt-dlp, and package payload. Whisper models remain outside that payload.
-
-The release workflow uses `package:bundled-win` and `smoke:bundled-package`. A manual release requires the runtime-build workflow run ID and exact artifact name. The workflow downloads that immutable GitHub Actions artifact onto the Windows runner, verifies the archive checksum from its metadata, and then runs the normal runtime audit before packaging. The payload must contain private Python, FFmpeg, FFprobe, yt-dlp, Deno, the runtime manifest, SBOM, notices, and licenses. A release cannot proceed without that payload; this prevents shipping an installer that lacks yt-dlp or Deno for YouTube imports.
-
-The manual `Build audited Windows runtime` workflow accepts a reviewed payload ZIP, regenerates its final manifest, runs the structural audit and Windows executable/import verification, and uploads a 30-day audited artifact containing the final ZIP and checksum metadata. It does not compile or approve the private Python/PyAV/LGPL-FFmpeg inputs; those must come from the separately reviewed runtime build process described in `docs/BUNDLED_RUNTIME_PACKAGING_PLAN.md`. Use the resulting ZIP as the release workflow's `runtime_bundle_url` input, or publish it to controlled artifact storage first.
+`package:dir` and `package:win` build the setup-first installer. The installer contains the application and private Python payload; FFmpeg/FFprobe, yt-dlp, Deno, Python packages, and the selected Whisper model are verified or obtained through explicit onboarding setup. Whisper models remain user-selected and are never bundled.
 
 The Windows package wrapper cleans incomplete generated staging directories and retries Electron Builder's transient `EPERM` rename failure up to three times. If cleanup remains locked, close any packaged Expletive Deleted process and Explorer window open to `frontend/release`, then run the command again.
 
-The ordinary package audits reject external processing binaries. The bundled-release audit instead requires the audited runtime beneath `resources/app-runtime`, rejects Whisper model payloads, and verifies the runtime manifest, SBOM, notices, source archive, and approved FFmpeg configuration. Electron's single root `ffmpeg.dll` remains framework-owned Chromium codec support.
+The package audit rejects Whisper model payloads and accidental development binaries. Electron's single root `ffmpeg.dll` remains framework-owned Chromium codec support and must not satisfy the application's FFmpeg readiness check.
 
 ## Renderer architecture
 
