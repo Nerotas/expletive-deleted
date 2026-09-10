@@ -180,10 +180,11 @@ describe('desktop application renderer', () => {
     await user.click(screen.getByRole('button', { name: /Continue/ }))
 
     expect(await screen.findByRole('heading', { name: 'Prepare this computer' })).toBeInTheDocument()
-    expect(screen.getByText('Development runtime components')).toBeInTheDocument()
-    expect(screen.getByText(/Could not verify: yt-dlp\./)).toBeInTheDocument()
+    expect(screen.getByText('FFmpeg and FFprobe')).toBeInTheDocument()
+    expect(screen.getByText('YouTube tools')).toBeInTheDocument()
+    expect(screen.getByText('yt-dlp was not found')).toBeInTheDocument()
     expect(screen.getByText('Whisper large-v3 model')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Continue/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /Continue/ })).toBeEnabled()
     expect(desktopClient.installDependencies).not.toHaveBeenCalled()
   })
 
@@ -199,7 +200,7 @@ describe('desktop application renderer', () => {
 
     await user.click(await screen.findByRole('button', { name: /Continue/ }))
     expect(await screen.findByText('Whisper large-v3 model')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Continue/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /Continue/ })).toBeEnabled()
   })
 
   it('finishes a reopened walkthrough through the complete atomic settings update', async () => {

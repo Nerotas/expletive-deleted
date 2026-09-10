@@ -1,4 +1,5 @@
 import { Check, FileAudio, ListChecks, ShieldCheck } from 'lucide-react'
+import { WelcomeSummaryCard } from './WelcomeSummaryCard'
 import { OnboardingStepHeading } from './OnboardingStepHeading'
 
 export function WelcomeStep() {
@@ -12,14 +13,10 @@ export function WelcomeStep() {
       </div>
     </div>
     <div className="onboarding-summary">
-      <SummaryItem icon={<ListChecks />} title="Prepare" detail="Check the components this computer needs." />
-      <SummaryItem icon={<FileAudio />} title="Choose" detail="Pick your words, folders, and workflow." />
-      <SummaryItem icon={<Check />} title="Try" detail="Add and process a first file now or later." />
+      <WelcomeSummaryCard icon={<ListChecks />} title="Prepare" detail="Check the components this computer needs." />
+      <WelcomeSummaryCard icon={<FileAudio />} title="Choose" detail="Pick your words, folders, and workflow." />
+      <WelcomeSummaryCard icon={<Check />} title="Try" detail="Add and process a first file now or later." />
     </div>
     <p className="onboarding-caution">Automatic speech recognition and censoring can miss things. Review the transcript and the finished file before sharing it.</p>
   </>
-}
-
-function SummaryItem({ icon, title, detail }: { icon: React.ReactNode; title: string; detail: string }) {
-  return <article>{icon}<strong>{title}</strong><span>{detail}</span></article>
 }

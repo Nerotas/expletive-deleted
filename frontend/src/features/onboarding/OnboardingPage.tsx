@@ -57,13 +57,6 @@ export function OnboardingPage({
 
   if (!draft) return <div className="loading-row">Loading setup</div>
   const currentDraft = draft
-  const requiredComponentsReady = capabilities?.processing_ready ?? Boolean(
-    capabilities?.ffmpeg
-    && capabilities.ffprobe
-    && capabilities.whisper
-    && capabilities.whisper_model_ready
-    && capabilities.whisper_model === 'large-v3',
-  )
   const stepId = ONBOARDING_STEPS[step].id
 
   const updateDraft = <K extends keyof Settings>(group: K, value: Settings[K]) => {
@@ -71,7 +64,6 @@ export function OnboardingPage({
   }
 
   const saveAndAdvance = async () => {
-    if (stepId === 'components' && !requiredComponentsReady) return
     if (stepId === 'settings' && !dictionaryPrepared) return
     const next = nextOnboardingStep(step)
     const nextDraft: Settings = {
@@ -132,7 +124,7 @@ export function OnboardingPage({
         <span aria-live="polite">Step {step + 1} of {ONBOARDING_STEPS.length}: {ONBOARDING_STEPS[step].label}</span>
         {stepId === 'finish'
           ? <button className="button primary" disabled={saving} onClick={() => void finish()}><ShieldCheck size={16} />Finish setup</button>
-          : <button className="button primary" disabled={saving || (stepId === 'components' && !requiredComponentsReady) || (stepId === 'settings' && !dictionaryPrepared)} onClick={() => void saveAndAdvance()}>Save & Continue<ArrowRight size={16} /></button>}
+          : <button className="button primary" disabled={saving || (stepId === 'settings' && !dictionaryPrepared)} onClick={() => void saveAndAdvance()}>Save & Continue<ArrowRight size={16} /></button>}
       </footer>
     </div>
   </section>
