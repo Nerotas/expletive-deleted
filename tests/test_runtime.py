@@ -799,16 +799,20 @@ class RuntimeTests(unittest.TestCase):
                 factor = get_calibrated_transcription_factor(root=root)
             self.assertEqual(factor, 3.0)
 
-    def test_transcription_timing_defaults_to_stable_store_python_runtime(self):
+    def test_transcription_timing_defaults_to_writable_app_data_for_normal_python(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             local_app_data = Path(temporary_directory)
-            expected_path = Path.home() / ".expletive-deleted" / "runtime" / ".whisper-timing.json"
+            expected_path = local_app_data / "ExpletiveDeleted" / ".whisper-timing.json"
             with (
                 patch.dict(
                     os.environ,
                     {"LOCALAPPDATA": str(local_app_data), "CENSOR_RUNTIME_ASSETS_DIR": ""},
                     clear=False,
                 ),
+                patch("backend.runtime.environment.sys.executable", r"C:\Python\python.exe"),
+                patch("backend.runtime.environment.sys.prefix", temporary_directory),
+                patch("backend.runtime.environment.Path.home", return_value=Path("C:/Users/Test")),
+                patch("backend.runtime.environment.platform.system", return_value="Windows"),
                 patch(
                     "backend.runtime.environment.get_whisper_profile_key",
                     return_value="large:cpu:int8",
