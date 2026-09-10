@@ -172,7 +172,7 @@ class DownloadManagerTests(unittest.TestCase):
         self.assertEqual(failed.status, "failed")
         self.assertEqual(failed.error.code, "browser_cookies_unavailable")
 
-    def test_download_format_selection_is_not_restricted_to_avc1_or_mp4a(self):
+    def test_download_requests_highest_quality_video_and_audio(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             ytdlp = root / "yt-dlp.exe"
@@ -197,8 +197,8 @@ class DownloadManagerTests(unittest.TestCase):
 
         command = popen.call_args.args[0]
         format_selector = command[command.index("-f") + 1]
-        self.assertNotIn("avc1", format_selector)
-        self.assertNotIn("mp4a", format_selector)
+        self.assertEqual(format_selector, "bestvideo*+bestaudio/best")
+        self.assertEqual(command[command.index("--format-sort") + 1], "res,fps,quality")
 
     def test_download_falls_back_to_tv_client_when_web_only_serves_sabr(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

@@ -166,7 +166,15 @@ class DownloadManager:
             deno = get_managed_deno_path()
             if deno.is_file():
                 command.extend(["--js-runtimes", f"deno:{deno}"])
-            command.extend(["--ffmpeg-location", str(ffmpeg.parent), "--no-playlist", "--newline", "--progress-template", "ED:%(progress._percent_str)s|%(progress.eta)s", "--merge-output-format", "mp4", "-f", "bv*+ba/b", "--paths", str(staging), "--output", "source.%(ext)s", record.url])
+            command.extend([
+                "--ffmpeg-location", str(ffmpeg.parent),
+                "--no-playlist", "--newline",
+                "--progress-template", "ED:%(progress._percent_str)s|%(progress.eta)s",
+                "--merge-output-format", "mp4",
+                "--format-sort", "res,fps,quality",
+                "-f", "bestvideo*+bestaudio/best",
+                "--paths", str(staging), "--output", "source.%(ext)s", record.url,
+            ])
             process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
             with self._lock: self._processes[job_id] = process
             output: list[str] = []
