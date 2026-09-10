@@ -5,12 +5,23 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import re
 import urllib.request
 import zipfile
 from pathlib import Path
 
 from backend.runtime.dependencies import DENO_CHECKSUM_URL, DENO_RELEASE_URL, DENO_VERSION
 from backend.runtime.environment import get_managed_deno_path
+
+
+def _checksum_from_manifest(manifest: str) -> str:
+    standard_match = re.search(r"^([0-9a-f]{64})\s+\S+$", manifest, re.IGNORECASE | re.MULTILINE)
+    if standard_match:
+        return standard_match.group(1)
+    labeled_match = re.search(r"^Hash\s*:\s*([0-9a-f]{64})\s*$", manifest, re.IGNORECASE | re.MULTILINE)
+    if labeled_match:
+        return labeled_match.group(1)
+    raise RuntimeError("Deno checksum manifest did not contain a SHA-256 checksum")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -30,7 +41,7 @@ def main(argv: list[str] | None = None) -> int:
         if archive.stat().st_size == 0:
             raise RuntimeError("Deno download was empty")
         with urllib.request.urlopen(DENO_CHECKSUM_URL, timeout=60) as response:
-            expected = response.read().decode("utf-8").split()[0]
+            expected = _checksum_from_manifest(response.read().decode("utf-8"))
         actual = hashlib.sha256(archive.read_bytes()).hexdigest()
         if actual.casefold() != expected.casefold():
             raise RuntimeError("Deno download checksum did not match the official release")

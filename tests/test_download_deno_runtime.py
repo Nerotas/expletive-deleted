@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from backend.runtime.dependencies import DENO_CHECKSUM_URL, DENO_RELEASE_URL
-from scripts.download_deno_runtime import main
+from scripts.download_deno_runtime import _checksum_from_manifest, main
 
 
 def _build_zip(entry_bytes: bytes) -> bytes:
@@ -18,6 +18,16 @@ def _build_zip(entry_bytes: bytes) -> bytes:
 
 
 class DownloadDenoRuntimeTests(unittest.TestCase):
+    def test_checksum_parser_accepts_deno_labeled_manifest(self):
+        checksum = "a" * 64
+
+        self.assertEqual(
+            _checksum_from_manifest(
+                f"Algorithm : SHA256\nHash      : {checksum}\nPath      : deno.zip\n"
+            ),
+            checksum,
+        )
+
     def test_approved_runtime_is_verified_and_extracted_under_the_per_user_component_directory(self):
         entry_bytes = b"fake-deno-binary"
         zip_bytes = _build_zip(entry_bytes)

@@ -158,14 +158,20 @@ describe('desktop application renderer', () => {
     expect(desktopClient.updateSettings).not.toHaveBeenCalled()
   })
 
-  it('opens onboarding for fresh settings and gates components on live readiness', async () => {
+  it('opens onboarding for fresh settings and shows the missing development runtime instead of a blank step', async () => {
     persisted.onboarding.completed = false
     persisted.onboarding.last_step = 'welcome'
     vi.mocked(desktopClient.getCapabilities).mockResolvedValue({
       ...readyCapabilities,
       ready: false,
+      processing_ready: false,
+      app_runtime: 'missing',
+      app_runtime_source: 'development',
+      app_runtime_detail: 'Development processing components are unavailable. Could not verify: yt-dlp.',
       ffmpeg: false,
       ffprobe: false,
+      ytdlp: false,
+      ytdlp_detail: 'yt-dlp was not found',
     })
     const user = userEvent.setup()
     renderApp('/')
@@ -174,10 +180,8 @@ describe('desktop application renderer', () => {
     await user.click(screen.getByRole('button', { name: /Continue/ }))
 
     expect(await screen.findByRole('heading', { name: 'Prepare this computer' })).toBeInTheDocument()
-    expect(screen.queryByText('Expletive Deleted components')).not.toBeInTheDocument()
-    expect(screen.queryByText('FFmpeg and FFprobe')).not.toBeInTheDocument()
-    expect(screen.queryByText('Speech recognition')).not.toBeInTheDocument()
-    expect(screen.queryByText('yt-dlp for YouTube downloads')).not.toBeInTheDocument()
+    expect(screen.getByText('Development runtime components')).toBeInTheDocument()
+    expect(screen.getByText(/Could not verify: yt-dlp\./)).toBeInTheDocument()
     expect(screen.getByText('Whisper large-v3 model')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Continue/ })).toBeDisabled()
     expect(desktopClient.installDependencies).not.toHaveBeenCalled()

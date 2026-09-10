@@ -65,6 +65,9 @@ main { max-width: 1480px; margin: 0 auto; padding: 28px 34px 56px; }
 .setup-consent dd { margin: 0; overflow-wrap: anywhere; }
 .setup-consent .setup-source-link { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; padding: 0; color: var(--signal-strong); font: 700 11px var(--sans); text-decoration: underline; }
 .setup-third-party-note { border-top: 1px solid var(--line); padding-top: 12px; }
+.setup-progress-metrics { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 8px; font-size: 13px; }
+.setup-progress-meta { display: grid; gap: 4px; margin-top: 14px; color: var(--muted); font-size: 12px; line-height: 1.4; }
+.setup-progress-meta span { display: block; }
 .spin { animation: spin .9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes page-in { from { opacity: 0; transform: translateY(4px); } }

@@ -5,9 +5,11 @@ from __future__ import annotations
 import configparser
 import json
 import os
+import platform
 import shutil
 import statistics
 import subprocess
+import sys
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -94,6 +96,23 @@ def get_application_runtime_root(
     configured = environment.get("CENSOR_RUNTIME_ASSETS_DIR", "").strip()
     if configured:
         return Path(configured).expanduser().resolve()
+
+    local_app_data = environment.get("LOCALAPPDATA", "")
+    venv_configuration = Path(sys.prefix) / "pyvenv.cfg"
+    try:
+        venv_origin = venv_configuration.read_text(encoding="utf-8")
+    except OSError:
+        venv_origin = ""
+    windows_store_python = (
+        "WindowsApps" in str(sys.executable)
+        or "LocalCache" in str(Path.home())
+        or ("\\packages\\" in local_app_data.casefold() and "\\localcache" in local_app_data.casefold())
+        or "\\windowsapps\\" in venv_origin.casefold()
+    )
+    if windows_store_python and platform.system() == "Windows":
+        stable_root = (Path.home() / ".expletive-deleted" / "runtime").expanduser().resolve()
+        return stable_root
+
     if environment is None:
         return prepare_app_data_root(home=home)
     return get_app_data_root(environment, home)

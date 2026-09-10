@@ -22,7 +22,7 @@ from backend.runtime import (
 )
 
 
-COMPONENTS = ("ffmpeg", "python", "whisper_model")
+COMPONENTS = ("ffmpeg", "python", "whisper_model", "ytdlp", "js_runtime")
 
 
 def _status_dict(status) -> dict[str, object]:
@@ -68,6 +68,10 @@ def _default_components() -> list[str]:
         components.append("ffmpeg")
     if any(not status.ready for status in inventory.python):
         components.append("python")
+    if not inventory.ytdlp.ready:
+        components.append("ytdlp")
+    if not inventory.js_runtime.ready:
+        components.append("js_runtime")
     if not inventory.whisper_model.ready:
         components.append("whisper_model")
     return components

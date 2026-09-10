@@ -14,11 +14,13 @@ type ComponentsStepProps = {
 export function ComponentsStep({ capabilities, checking, busy, onReviewInstall, onCheckAgain }: ComponentsStepProps) {
   const modelReady = Boolean(capabilities?.speech_model === 'ready' || capabilities?.whisper_model_ready)
   const bundledRuntimeInvalid = capabilities?.app_runtime_source === 'bundled' && capabilities.app_runtime === 'invalid'
+  const developmentRuntimeMissing = capabilities?.app_runtime_source === 'development' && capabilities.app_runtime !== 'ready'
 
   return <>
     <OnboardingStepHeading title="Prepare this computer" subtitle="The app checks its included tools automatically. You choose whether to download the speech model, and your media stays on this computer." />
     <div className="component-list">
       {bundledRuntimeInvalid ? <ComponentRow title="Expletive Deleted components" detail={capabilities?.app_runtime_detail ?? 'An included application component needs repair.'} ready={false} checking={checking} busy={busy} /> : null}
+      {developmentRuntimeMissing ? <ComponentRow title="Development runtime components" detail={capabilities?.app_runtime_detail ?? 'A development runtime component needs attention.'} ready={false} checking={checking} busy={busy} /> : null}
       <ComponentRow title="Whisper large-v3 model" detail="Download the supported speech model when you are ready. It stays on this computer." ready={modelReady} checking={checking} busy={busy} optional />
     </div>
     {!bundledRuntimeInvalid && !modelReady ? <div className="onboarding-get-all">

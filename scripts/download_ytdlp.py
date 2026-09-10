@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import subprocess
 import urllib.request
 from pathlib import Path
 
@@ -34,6 +35,20 @@ def main(argv: list[str] | None = None) -> int:
         actual = hashlib.sha256(temporary.read_bytes()).hexdigest()
         if not expected or actual.casefold() != expected.casefold():
             raise RuntimeError("yt-dlp download checksum did not match the official release")
+        try:
+            result = subprocess.run(
+                [str(temporary), "--version"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise RuntimeError(f"yt-dlp download could not run its version check: {exc}") from exc
+        version = result.stdout.strip().splitlines()[0] if result.returncode == 0 and result.stdout.strip() else None
+        if version != args.version:
+            detail = result.stderr.strip() or result.stdout.strip() or f"exit code {result.returncode}"
+            raise RuntimeError(f"yt-dlp download failed its version check: {detail}")
         temporary.replace(destination)
     finally:
         temporary.unlink(missing_ok=True)
