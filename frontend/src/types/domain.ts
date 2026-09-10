@@ -212,6 +212,11 @@ export type InstallAction = {
   source_url: string
   estimated_download_bytes: number | null
   destination: string
+  component: string
+  version: string
+  purpose: string
+  license: string
+  requires_network: boolean
 }
 
 export type InstallPlan = {

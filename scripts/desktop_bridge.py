@@ -253,6 +253,11 @@ class DesktopBridge:
                         "source_url": action.source_url,
                         "command": action.command,
                         "estimated_download_bytes": action.estimated_download_bytes,
+                        "component": action.component,
+                        "version": action.version,
+                        "purpose": action.purpose,
+                        "license": action.license,
+                        "requires_network": action.requires_network,
                         "destination": self._install_destination(
                             action.id,
                             runtime_root,

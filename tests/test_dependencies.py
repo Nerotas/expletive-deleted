@@ -220,8 +220,13 @@ class DependencyPlanTests(unittest.TestCase):
         plan = build_install_plan(["js_runtime"], python_executable=Path("C:\\Python\\python.exe"), platform_name="Windows")
         self.assertEqual(plan.actions[0].dependency_ids, ("js_runtime",))
         self.assertIn("scripts.download_deno_runtime", plan.actions[0].command)
+        self.assertEqual(plan.actions[0].component, "js_runtime")
+        self.assertEqual(plan.actions[0].version, DENO_VERSION)
+        self.assertEqual(plan.actions[0].license, "MIT")
+        self.assertIn("JavaScript runtime", plan.actions[0].purpose)
         with self.assertRaisesRegex(DependencyPlanError, "Windows only"):
             build_install_plan(["js_runtime"], platform_name="Linux")
+
     def test_plan_is_stable_inspectable_and_version_pinned(self):
         kwargs = {
             "python_executable": Path("C:\\Python\\python.exe"),
@@ -239,6 +244,10 @@ class DependencyPlanTests(unittest.TestCase):
         self.assertIn("scripts.download_ffmpeg_runtime", first.actions[1].command)
         self.assertTrue(all(requirement in first.actions[2].command for requirement in PYTHON_REQUIREMENTS))
         self.assertIn(WHISPER_MODEL_REVISION, first.actions[3].source_url)
+        self.assertEqual(first.actions[0].license, "MIT")
+        self.assertEqual(first.actions[1].license, "GPL-3.0-or-later")
+        self.assertEqual(first.actions[2].component, "python")
+        self.assertEqual(first.actions[3].license, "MIT")
 
     def test_non_windows_ffmpeg_plan_is_supported(self):
         plan = build_install_plan(["ffmpeg"], platform_name="Linux")
