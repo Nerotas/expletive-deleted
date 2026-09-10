@@ -120,6 +120,15 @@ def get_managed_ytdlp_path(root: Path | None = None) -> Path:
     return runtime_root / "dependencies" / "yt-dlp" / "yt-dlp.exe"
 
 
+def get_managed_deno_path(root: Path | None = None) -> Path:
+    """Return the approved per-user Deno location without downloading it."""
+    bundled = os.environ.get("CENSOR_DENO", "").strip()
+    if bundled:
+        return Path(bundled).expanduser().resolve()
+    runtime_root = (root or get_application_runtime_root()).expanduser().resolve()
+    return runtime_root / "dependencies" / "deno" / "deno.exe"
+
+
 def get_managed_ffmpeg_manifest_path(root: Path | None = None) -> Path:
     """Return the local manifest written after an approved managed FFmpeg download."""
     runtime_root = (root or get_application_runtime_root()).expanduser().resolve()

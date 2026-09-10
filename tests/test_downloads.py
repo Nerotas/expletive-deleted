@@ -4,7 +4,14 @@ from pathlib import Path
 from threading import Event
 from unittest.mock import MagicMock, patch
 
-from backend.jobs.downloads import BrowserCookiesUnavailable, DownloadManager, DownloadRecord, YtdlpAuthenticationRequired, validate_youtube_url
+from backend.jobs.downloads import (
+    BrowserCookiesUnavailable,
+    DownloadManager,
+    DownloadRecord,
+    YtdlpAuthenticationRequired,
+    YtdlpJavaScriptChallengeUnsolved,
+    validate_youtube_url,
+)
 from backend.settings import AppSettings, DirectorySettings, RuntimeSettings
 
 
@@ -57,6 +64,19 @@ class DownloadManagerTests(unittest.TestCase):
 
         self.assertIsInstance(error, BrowserCookiesUnavailable)
         self.assertEqual(error.code, "browser_cookies_unavailable")
+
+    def test_unsolved_js_challenge_recommends_installing_a_runtime(self):
+        output = (
+            "WARNING: [youtube] ohNTpnAs62E: n challenge solving failed: Some formats may be missing\n"
+            "WARNING: Only images are available for download. use --list-formats to see them\n"
+            "ERROR: [youtube] ohNTpnAs62E: Requested format is not available. Use --list-formats for a list of available formats"
+        )
+        error = DownloadManager._download_error(output)
+
+        self.assertIsInstance(error, YtdlpJavaScriptChallengeUnsolved)
+        self.assertEqual(error.code, "javascript_runtime_required")
+        self.assertIn("Deno", error.diagnostic)
+        self.assertIn(output, error.diagnostic)
 
     def test_generic_download_failure_preserves_full_diagnostic_output(self):
         output = (
@@ -179,6 +199,32 @@ class DownloadManagerTests(unittest.TestCase):
         format_selector = command[command.index("-f") + 1]
         self.assertNotIn("avc1", format_selector)
         self.assertNotIn("mp4a", format_selector)
+
+    def test_download_falls_back_to_tv_client_when_web_only_serves_sabr(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            ytdlp = root / "yt-dlp.exe"
+            ytdlp.touch()
+            settings = AppSettings(
+                directories=DirectorySettings(root / "Ready", root / "Finished", root / "Processed", root / "Transcripts"),
+                runtime=RuntimeSettings(ytdlp_path=ytdlp),
+            )
+            manager = DownloadManager(settings)
+            job_id = "download-job"
+            manager._records[job_id] = DownloadRecord(job_id, "https://youtu.be/dQw4w9WgXcQ", "dQw4w9WgXcQ")
+            manager._events[job_id] = []
+            manager._cancellations[job_id] = Event()
+            process = MagicMock(returncode=1)
+            process.stdout = iter([])
+
+            with (
+                patch.object(manager, "_runtime_media_tools", return_value=(Path("ffmpeg"), Path("ffprobe"))),
+                patch("backend.jobs.downloads.subprocess.Popen", return_value=process) as popen,
+            ):
+                manager._run(job_id)
+
+        command = popen.call_args.args[0]
+        self.assertEqual(command[command.index("--extractor-args") + 1], "youtube:player_client=default,tv")
 
     def test_ffmpeg_preparation_emits_media_time_progress(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

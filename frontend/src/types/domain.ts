@@ -117,6 +117,10 @@ export type Capabilities = {
   ytdlp_version?: string | null
   ytdlp_path?: string | null
   ytdlp_detail?: string
+  js_runtime: boolean
+  js_runtime_version?: string | null
+  js_runtime_path?: string | null
+  js_runtime_detail?: string
 }
 
 export type DictionaryTarget = 'censor' | 'exclude'

@@ -17,7 +17,7 @@ from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
 
 from backend.runtime import available_encoders, find_ffmpeg, find_ffprobe, select_working_video_encoder
-from backend.runtime.environment import get_managed_ffmpeg_paths, get_managed_ytdlp_path
+from backend.runtime.environment import get_managed_deno_path, get_managed_ffmpeg_paths, get_managed_ytdlp_path
 from backend.settings import AppSettings
 
 from .events import JobEvent
@@ -41,6 +41,14 @@ class BrowserCookiesUnavailable(RuntimeError):
 
     def __init__(self, diagnostic: str):
         super().__init__("The selected browser session could not be read")
+        self.diagnostic = diagnostic
+
+
+class YtdlpJavaScriptChallengeUnsolved(RuntimeError):
+    code = "javascript_runtime_required"
+
+    def __init__(self, diagnostic: str):
+        super().__init__("YouTube requires a JavaScript runtime that yt-dlp could not find")
         self.diagnostic = diagnostic
 
 
@@ -153,6 +161,11 @@ class DownloadManager:
             command = [str(ytdlp), "--ignore-config"]
             if record.cookie_browser:
                 command.extend(["--cookies-from-browser", record.cookie_browser])
+            # YouTube's default web client often serves only SABR (undownloadable) formats; add tv as a fallback client.
+            command.extend(["--extractor-args", "youtube:player_client=default,tv"])
+            deno = get_managed_deno_path()
+            if deno.is_file():
+                command.extend(["--js-runtimes", f"deno:{deno}"])
             command.extend(["--ffmpeg-location", str(ffmpeg.parent), "--no-playlist", "--newline", "--progress-template", "ED:%(progress._percent_str)s|%(progress.eta)s", "--merge-output-format", "mp4", "-f", "bv*+ba/b", "--paths", str(staging), "--output", "source.%(ext)s", record.url])
             process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
             with self._lock: self._processes[job_id] = process
@@ -186,6 +199,8 @@ class DownloadManager:
                 code, summary, diagnostic = "authentication_required", "YouTube needs your browser session", exc.diagnostic
             elif isinstance(exc, BrowserCookiesUnavailable):
                 code, summary, diagnostic = "browser_cookies_unavailable", "The selected browser session could not be read", exc.diagnostic
+            elif isinstance(exc, YtdlpJavaScriptChallengeUnsolved):
+                code, summary, diagnostic = "javascript_runtime_required", "YouTube needs a JavaScript runtime installed", exc.diagnostic
             else:
                 code, summary, diagnostic = "download_failed", "YouTube download failed", getattr(exc, "diagnostic", None) or traceback.format_exc()
             self._set(job_id, "failed", error=JobError(code, summary, str(exc), True, diagnostic), message=summary)
@@ -291,6 +306,16 @@ class DownloadManager:
             "could not copy chrome cookie database",
         )):
             return BrowserCookiesUnavailable(detail)
+        challenge_markers = (
+            "n challenge solving failed",
+            "only images are available for download",
+        )
+        if any(marker in detail.casefold() for marker in challenge_markers):
+            return YtdlpJavaScriptChallengeUnsolved(
+                "YouTube's JavaScript challenge could not be solved, so only image formats were available. "
+                "Install a supported JavaScript runtime (Deno is recommended: https://docs.deno.com/runtime/getting_started/installation/) "
+                "so yt-dlp can download this video, then retry.\n\n" + detail
+            )
         authentication_markers = (
             "sign in to confirm", "authentication", "login required", "cookies-from-browser",
             "confirm your age", "verify that you are not a bot", "verify you're not a bot",

@@ -491,6 +491,8 @@ class DesktopBridge:
             return str(get_managed_ffmpeg_directory(runtime_root))
         if "ytdlp" in action_id:
             return str(runtime_root / "dependencies" / "yt-dlp")
+        if "deno" in action_id:
+            return str(runtime_root / "dependencies" / "deno")
         if action_id.startswith("download-"):
             return str(cache_dir)
         return "The repository-local Python environment"

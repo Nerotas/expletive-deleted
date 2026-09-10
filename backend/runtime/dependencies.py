@@ -22,6 +22,7 @@ from .environment import (
     find_ffprobe,
     get_application_runtime_root,
     get_directory_size,
+    get_managed_deno_path,
     get_managed_ytdlp_path,
     get_whisper_cache_dir,
 )
@@ -47,6 +48,12 @@ WHISPER_MODELS = ("tiny", "base", "small", "medium", "large-v3")
 WHISPER_LIBRARIES = ("faster-whisper",)
 YTDLP_VERSION = "2026.08.19"
 YTDLP_RELEASE_URL = f"https://github.com/yt-dlp/yt-dlp/releases/download/{YTDLP_VERSION}/yt-dlp.exe"
+# yt-dlp shells out to this to solve YouTube's JavaScript ("n") challenge; see https://github.com/yt-dlp/yt-dlp/wiki/EJS
+DENO_VERSION = "2.9.6"
+_DENO_ASSET = "deno-x86_64-pc-windows-msvc.zip"
+DENO_RELEASE_URL = f"https://github.com/denoland/deno/releases/download/v{DENO_VERSION}/{_DENO_ASSET}"
+DENO_CHECKSUM_URL = f"{DENO_RELEASE_URL}.sha256sum"
+
 PYTHON_DEPENDENCIES = (
     ("faster-whisper", "1.2.1"),
     ("better-profanity", "0.7.0"),
@@ -93,6 +100,10 @@ def _missing_ytdlp_status() -> DependencyStatus:
     return DependencyStatus("ytdlp", "yt-dlp", "missing", YTDLP_VERSION, None, None, "yt-dlp was not found", True)
 
 
+def _missing_js_runtime_status() -> DependencyStatus:
+    return DependencyStatus("js_runtime", "JavaScript runtime", "missing", DENO_VERSION, None, None, "A JavaScript runtime was not found", True)
+
+
 @dataclass(frozen=True)
 class DependencyInventory:
     ffmpeg: DependencyStatus
@@ -100,6 +111,8 @@ class DependencyInventory:
     python: tuple[DependencyStatus, ...]
     whisper_model: DependencyStatus
     ytdlp: DependencyStatus = field(default_factory=_missing_ytdlp_status)
+    # Only needed for some YouTube downloads; intentionally excluded from ready/missing so it never blocks local processing.
+    js_runtime: DependencyStatus = field(default_factory=_missing_js_runtime_status)
 
     @property
     def ready(self) -> bool:
@@ -204,7 +217,7 @@ def build_install_plan(
 ) -> InstallPlan:
     """Build an inspectable plan without running commands or using the network."""
     requested = tuple(dict.fromkeys(components))
-    unknown = sorted(set(requested) - {"ffmpeg", "python", "whisper_model", "ytdlp"})
+    unknown = sorted(set(requested) - {"ffmpeg", "python", "whisper_model", "ytdlp", "js_runtime"})
     if unknown:
         raise DependencyPlanError(f"Unknown dependency component(s): {', '.join(unknown)}")
     if whisper_library not in WHISPER_LIBRARIES:
@@ -271,6 +284,21 @@ def build_install_plan(
                 source_name="yt-dlp official GitHub release",
                 source_url=YTDLP_RELEASE_URL,
                 command=(str(python_executable), "-m", "scripts.download_ytdlp", "--root", str(runtime_root), "--version", YTDLP_VERSION),
+            )
+        )
+
+    if "js_runtime" in requested:
+        if platform_name != "Windows":
+            raise DependencyPlanError("Managed Deno download is currently supported on Windows only")
+        actions.append(
+            InstallAction(
+                id="download-managed-deno-runtime",
+                dependency_ids=("js_runtime",),
+                kind="command",
+                description="Download and verify the approved JavaScript runtime (Deno) that yt-dlp uses for YouTube downloads",
+                source_name="Deno official GitHub release",
+                source_url=DENO_RELEASE_URL,
+                command=(str(python_executable), "-m", "scripts.download_deno_runtime", "--root", str(runtime_root), "--version", DENO_VERSION),
             )
         )
 
@@ -419,6 +447,7 @@ def _status_by_id(inventory: DependencyInventory) -> dict[str, DependencyStatus]
         for status in (inventory.ffmpeg, inventory.ffprobe, *inventory.python, inventory.whisper_model)
     }
     statuses[inventory.ytdlp.id] = inventory.ytdlp
+    statuses[inventory.js_runtime.id] = inventory.js_runtime
     return statuses
 
 
@@ -540,6 +569,31 @@ def inspect_ytdlp(executable: str | None) -> DependencyStatus:
     return DependencyStatus("ytdlp", "yt-dlp", "ready" if version == YTDLP_VERSION else "invalid", YTDLP_VERSION, version, Path(executable), detail, True)
 
 
+# Deno's own EJS setup guide states 2.3.0 as the minimum version that can run yt-dlp's challenge-solver scripts.
+DENO_MINIMUM_VERSION = (2, 3, 0)
+
+
+def inspect_js_runtime(executable: str | None) -> DependencyStatus:
+    """Verify a Deno JavaScript runtime yt-dlp can use to solve YouTube's challenge."""
+    if not executable or not Path(executable).is_file():
+        return _missing_js_runtime_status()
+    try:
+        result = subprocess.run([executable, "--version"], capture_output=True, text=True, timeout=5, check=False)
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        return DependencyStatus("js_runtime", "JavaScript runtime", "invalid", DENO_VERSION, None, Path(executable), str(exc), True)
+    first_line = result.stdout.strip().splitlines()[0] if result.returncode == 0 and result.stdout.strip() else None
+    version = first_line.split()[1] if first_line and first_line.startswith("deno ") else None
+    try:
+        parsed = tuple(int(part) for part in version.split(".")[:3]) if version else None
+    except ValueError:
+        parsed = None
+    supported = bool(parsed and parsed >= DENO_MINIMUM_VERSION)
+    detail = f"installed {version}" if version else (result.stderr.strip() or "Deno did not report a version")
+    if version and not supported:
+        detail = f"installed {version}; requires {'.'.join(map(str, DENO_MINIMUM_VERSION))} or later"
+    return DependencyStatus("js_runtime", "JavaScript runtime", "ready" if supported else "invalid", DENO_VERSION, version, Path(executable), detail, True)
+
+
 def _version_is_supported(version: str, required_version: str | None) -> bool:
     """Accept every FFmpeg release at or newer than the supported baseline."""
     if required_version != FFMPEG_VERSION:
@@ -653,6 +707,7 @@ def inspect_dependencies(
     whisper_library: str = "faster-whisper",
     whisper_model: str = "large-v3",
     ytdlp_bin: str | Path | None = None,
+    js_runtime_bin: str | Path | None = None,
 ) -> DependencyInventory:
     """Return dependency state without installing or downloading anything."""
     return DependencyInventory(
@@ -675,7 +730,16 @@ def inspect_dependencies(
             model=whisper_model,
         ),
         ytdlp=inspect_ytdlp(str(ytdlp_bin or get_managed_ytdlp_path())),
+        js_runtime=inspect_js_runtime(str(js_runtime_bin) if js_runtime_bin else _default_js_runtime_executable()),
     )
+
+
+def _default_js_runtime_executable() -> str | None:
+    """Prefer the app-managed Deno download, falling back to one already on PATH."""
+    managed = get_managed_deno_path()
+    if managed.is_file():
+        return str(managed)
+    return shutil.which("deno")
 
 
 def require_whisper_model_path(
