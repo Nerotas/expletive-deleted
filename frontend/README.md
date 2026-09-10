@@ -31,7 +31,7 @@ npm run package:bundled-win
 
 `package:dir` and `package:win` support ordinary development packaging. `package:bundled-dir` builds an auditable unpacked app; `package:bundled-win` creates the release x64 NSIS installer only after `BUNDLED_RUNTIME_DIR` supplies an audited private Python, FFmpeg, FFprobe, yt-dlp, and package payload. Whisper models remain outside that payload.
 
-The release workflow uses `package:bundled-win` and `smoke:bundled-package`. Configure the repository variable `BUNDLED_RUNTIME_DIR` on the Windows release runner to point to the audited runtime payload produced by the packaging plan. A release cannot proceed without that payload; this prevents shipping an installer that lacks yt-dlp or Deno for YouTube imports.
+The release workflow uses `package:bundled-win` and `smoke:bundled-package`. Provision the audited runtime payload on the Windows release runner and set its `BUNDLED_RUNTIME_DIR` environment value to that directory. The release preflight checks Python, FFmpeg, FFprobe, yt-dlp, Deno, the runtime manifest, SBOM, and notices before packaging. A release cannot proceed without that payload; this prevents shipping an installer that lacks yt-dlp or Deno for YouTube imports.
 
 The Windows package wrapper cleans incomplete generated staging directories and retries Electron Builder's transient `EPERM` rename failure up to three times. If cleanup remains locked, close any packaged Expletive Deleted process and Explorer window open to `frontend/release`, then run the command again.
 

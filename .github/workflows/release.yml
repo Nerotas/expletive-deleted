@@ -150,7 +150,26 @@ jobs:
         working-directory: frontend
         env:
           BUNDLED_RUNTIME_DIR: ${{ vars.BUNDLED_RUNTIME_DIR }}
-        run: npm run package:bundled-win
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:BUNDLED_RUNTIME_DIR)) {
+            throw 'BUNDLED_RUNTIME_DIR is not configured. Provision the audited Windows runtime payload before packaging the release.'
+          }
+          $required = @(
+            'python\python.exe',
+            'ffmpeg\ffmpeg.exe',
+            'ffmpeg\ffprobe.exe',
+            'yt-dlp\yt-dlp.exe',
+            'deno\deno.exe',
+            'runtime-manifest.json',
+            'sbom.cdx.json',
+            'THIRD_PARTY_NOTICES.md'
+          )
+          $missing = @($required | Where-Object { -not (Test-Path (Join-Path $env:BUNDLED_RUNTIME_DIR $_)) })
+          if ($missing.Count -gt 0) {
+            throw "BUNDLED_RUNTIME_DIR is incomplete. Missing: $($missing -join ', ')"
+          }
+          npm run package:bundled-win
 
       - name: Smoke-test packaged application
         if: steps.version.outputs.published != 'true'
