@@ -13,6 +13,14 @@ on:
           - minor
           - major
           - none
+      runtime_bundle_url:
+        description: HTTPS URL of the audited Windows runtime archive
+        required: true
+        type: string
+      runtime_bundle_sha256:
+        description: SHA-256 of the audited Windows runtime archive
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -149,26 +157,27 @@ jobs:
         if: steps.version.outputs.published != 'true'
         working-directory: frontend
         env:
-          BUNDLED_RUNTIME_DIR: ${{ vars.BUNDLED_RUNTIME_DIR }}
+          RUNTIME_BUNDLE_URL: ${{ inputs.runtime_bundle_url }}
+          RUNTIME_BUNDLE_SHA256: ${{ inputs.runtime_bundle_sha256 }}
         shell: pwsh
         run: |
-          if ([string]::IsNullOrWhiteSpace($env:BUNDLED_RUNTIME_DIR)) {
-            throw 'BUNDLED_RUNTIME_DIR is not configured. Provision the audited Windows runtime payload before packaging the release.'
+          if ($env:RUNTIME_BUNDLE_URL -notmatch '^https://') {
+            throw 'runtime_bundle_url must be an HTTPS URL to the audited Windows runtime archive.'
           }
-          $required = @(
-            'python\python.exe',
-            'ffmpeg\ffmpeg.exe',
-            'ffmpeg\ffprobe.exe',
-            'yt-dlp\yt-dlp.exe',
-            'deno\deno.exe',
-            'runtime-manifest.json',
-            'sbom.cdx.json',
-            'THIRD_PARTY_NOTICES.md'
-          )
-          $missing = @($required | Where-Object { -not (Test-Path (Join-Path $env:BUNDLED_RUNTIME_DIR $_)) })
-          if ($missing.Count -gt 0) {
-            throw "BUNDLED_RUNTIME_DIR is incomplete. Missing: $($missing -join ', ')"
+          if ($env:RUNTIME_BUNDLE_SHA256 -notmatch '^[0-9a-fA-F]{64}$') {
+            throw 'runtime_bundle_sha256 must be a 64-character SHA-256 value.'
           }
+          $archive = Join-Path $env:RUNNER_TEMP 'audited-runtime.zip'
+          $runtimeDirectory = Join-Path $env:RUNNER_TEMP 'audited-runtime'
+          Invoke-WebRequest -Uri $env:RUNTIME_BUNDLE_URL -OutFile $archive
+          $actualHash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash
+          if ($actualHash -ne $env:RUNTIME_BUNDLE_SHA256) {
+            throw "Audited runtime archive checksum mismatch. Expected $($env:RUNTIME_BUNDLE_SHA256), got $actualHash."
+          }
+          Expand-Archive -LiteralPath $archive -DestinationPath $runtimeDirectory -Force
+          $payload = Get-ChildItem -LiteralPath $runtimeDirectory -Directory | Select-Object -First 1
+          if (-not $payload) { $payload = Get-Item -LiteralPath $runtimeDirectory }
+          "BUNDLED_RUNTIME_DIR=$($payload.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
           npm run package:bundled-win
 
       - name: Smoke-test packaged application

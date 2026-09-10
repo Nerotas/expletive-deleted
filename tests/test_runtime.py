@@ -75,6 +75,33 @@ class RuntimeTests(unittest.TestCase):
 
         self.assertEqual(root, (Path.home() / ".expletive-deleted" / "runtime").resolve())
 
+    def test_transcription_audio_rejects_empty_audio_stream(self):
+        censor = object.__new__(ProfanityCensor)
+        censor.ffprobe_bin = "ffprobe"
+        censor.input_file = "input.mp4"
+        completed = MagicMock(
+            returncode=0,
+            stdout='{"streams": [{"channels": 0, "sample_rate": "0", "duration": "0"}]}',
+        )
+
+        with (
+            patch("backend.censor.engine.subprocess.run", return_value=completed),
+            self.assertRaisesRegex(TranscriptValidationError, "empty or invalid"),
+        ):
+            censor.validate_transcription_audio()
+
+    def test_transcription_audio_accepts_a_decodable_audio_stream(self):
+        censor = object.__new__(ProfanityCensor)
+        censor.ffprobe_bin = "ffprobe"
+        censor.input_file = "input.mp4"
+        completed = MagicMock(
+            returncode=0,
+            stdout='{"streams": [{"channels": 2, "sample_rate": "48000", "duration": "12.5"}]}',
+        )
+
+        with patch("backend.censor.engine.subprocess.run", return_value=completed):
+            censor.validate_transcription_audio()
+
     def test_censor_requires_ffmpeg_and_ffprobe_before_processing(self):
         with (
             patch("backend.censor.engine.find_ffmpeg", return_value=None),
@@ -344,6 +371,7 @@ class RuntimeTests(unittest.TestCase):
             censor.get_media_duration_seconds = MagicMock(return_value=60.0)
             censor.has_discrete_center_audio = MagicMock(return_value=True)
             censor.extract_center_channel = MagicMock(return_value="center.wav")
+            censor.validate_transcription_audio = MagicMock()
 
             with patch("backend.censor.engine.record_transcription_timing"):
                 transcript = censor.transcribe_with_timestamps()
@@ -393,6 +421,7 @@ class RuntimeTests(unittest.TestCase):
             censor.used_cached_transcript = False
             censor.get_media_duration_seconds = MagicMock(return_value=60.0)
             censor.has_discrete_center_audio = MagicMock(return_value=False)
+            censor.validate_transcription_audio = MagicMock()
 
             output = io.StringIO()
             with (

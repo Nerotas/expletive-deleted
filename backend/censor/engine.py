@@ -543,6 +543,42 @@ class ProfanityCensor:
         """Return the channel count and layout of the first audio stream."""
         return probe_audio_stream(self.ffprobe_bin, self.input_file)
 
+    def validate_transcription_audio(self, input_file: str | None = None) -> None:
+        """Reject media whose selected audio stream cannot produce samples for Whisper."""
+        source = input_file or self.input_file
+        result = subprocess.run(
+            [
+                self.ffprobe_bin,
+                "-v", "error",
+                "-select_streams", "a:0",
+                "-show_entries", "stream=codec_name,channels,sample_rate,duration",
+                "-of", "json",
+                source,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+        if result.returncode != 0:
+            raise TranscriptValidationError(
+                "The media audio stream could not be inspected. Redownload the source or choose another file."
+            )
+        try:
+            streams = json.loads(result.stdout).get("streams", [])
+            stream = streams[0]
+            channels = int(stream.get("channels") or 0)
+            sample_rate = int(stream.get("sample_rate") or 0)
+            duration = float(stream.get("duration") or 0)
+        except (IndexError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise TranscriptValidationError(
+                "The media has no usable audio stream for transcription. Redownload the source or choose another file."
+            ) from exc
+        if channels <= 0 or sample_rate <= 0 or duration <= 0:
+            raise TranscriptValidationError(
+                "The media audio stream is empty or invalid for transcription. Redownload the source or choose another file."
+            )
+
     def get_audio_channels(self) -> int:
         """Return the channel count of the first audio stream (0 on failure)."""
         return self.get_audio_stream_info()[0]
@@ -627,6 +663,7 @@ class ProfanityCensor:
             if require_front_center:
                 temporary_audio = self.extract_center_channel()
                 transcription_input = temporary_audio
+            self.validate_transcription_audio(transcription_input)
             # hallucination_silence_threshold prevents drift from hallucinated content in silent sections
             segments_gen = transcribe_segments(model, self.whisper_library, transcription_input)
 
