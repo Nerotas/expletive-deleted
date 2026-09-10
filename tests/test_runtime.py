@@ -728,7 +728,7 @@ class RuntimeTests(unittest.TestCase):
         managed.assert_not_called()
         discover.assert_not_called()
 
-    def test_windows_winget_package_install_is_discoverable(self):
+    def test_windows_winget_package_install_is_discoverable_when_no_managed_runtime_exists(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             package_root = (
                 Path(temporary_directory)
@@ -743,7 +743,11 @@ class RuntimeTests(unittest.TestCase):
             (package_root / "ffmpeg.exe").write_text("")
             (package_root / "ffprobe.exe").write_text("")
 
-            with patch.dict(os.environ, {"LOCALAPPDATA": temporary_directory}, clear=False):
+            with patch.dict(
+                os.environ,
+                {"LOCALAPPDATA": temporary_directory, "CENSOR_RUNTIME_ASSETS_DIR": ""},
+                clear=False,
+            ), patch("backend.runtime.environment.get_managed_ffmpeg_paths", return_value=(None, None)):
                 with patch("backend.runtime.environment.shutil.which", return_value=None):
                     with patch(
                         "backend.runtime.environment.subprocess.run",
@@ -795,12 +799,16 @@ class RuntimeTests(unittest.TestCase):
                 factor = get_calibrated_transcription_factor(root=root)
             self.assertEqual(factor, 3.0)
 
-    def test_transcription_timing_defaults_to_writable_app_data(self):
+    def test_transcription_timing_defaults_to_stable_store_python_runtime(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             local_app_data = Path(temporary_directory)
-            expected_path = local_app_data / "ExpletiveDeleted" / ".whisper-timing.json"
+            expected_path = Path.home() / ".expletive-deleted" / "runtime" / ".whisper-timing.json"
             with (
-                patch.dict(os.environ, {"LOCALAPPDATA": str(local_app_data)}, clear=False),
+                patch.dict(
+                    os.environ,
+                    {"LOCALAPPDATA": str(local_app_data), "CENSOR_RUNTIME_ASSETS_DIR": ""},
+                    clear=False,
+                ),
                 patch(
                     "backend.runtime.environment.get_whisper_profile_key",
                     return_value="large:cpu:int8",
