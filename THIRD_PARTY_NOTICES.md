@@ -13,15 +13,13 @@ runtime binaries.
 This file is an informational inventory, not legal advice and not a warranty
 that every possible transitive or platform-supplied component is listed.
 
-## 1. Intended to be included in the Windows application
+## 1. Included in the Windows application
 
 The production release configuration includes the compiled Electron
 application, the compiled renderer and its fonts, the first-party Python
-source, resources, and an audited private processing runtime. That runtime is
-intended to include private Python, the pinned Python packages, approved
-LGPL-only FFmpeg/FFprobe, PyAV built against that FFmpeg build, yt-dlp, and
-Deno. The package audit rejects Whisper model payloads and unapproved native
-or Python artifacts.
+source, resources, and the private Python bridge. The package does not include
+the managed FFmpeg/FFprobe, Python package, yt-dlp, Deno, or Whisper model
+payloads; onboarding retrieves those only after explicit user approval.
 
 ### Electron runtime
 
@@ -78,19 +76,13 @@ the renderer. The locked Fontsource packages and upstream font notices are:
 
 The SIL Open Font License 1.1 is reproduced in Appendix C.
 
-### Bundled processing runtime
+### Managed processing components
 
-The audited Windows runtime includes the pinned yt-dlp `2026.08.19` official
-Windows executable at `yt-dlp/yt-dlp.exe`. yt-dlp is released under the
-Unlicense. Each generated runtime must retain its license text in `LICENSES/`
-and record the release URL, SHA-256, and SBOM entry for the exact executable.
-
-The audited Windows runtime also includes the pinned Deno `2.9.6` official
-Windows executable at `deno/deno.exe`, used only so yt-dlp can solve
-YouTube's JavaScript signature challenge during YouTube imports. Deno is
-released under the MIT License. Each generated runtime must retain its
-license text in `LICENSES/` and record the release URL, SHA-256, and SBOM
-entry for the exact executable.
+The setup flow retrieves pinned yt-dlp `2026.08.19` and Deno `2.9.6` only
+after grouped user approval. yt-dlp is released under the Unlicense and Deno
+under the MIT License. The setup metadata displays each source, version,
+license, destination, and checksum before installation; the exact downloaded
+files remain in the user's application-data runtime directory.
 
 ## 2. Development-only retrieval and user-selected data
 

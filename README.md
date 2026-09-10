@@ -48,18 +48,16 @@ Found a video you are allowed to download and want to share with fewer surprises
 2. Watch its download and compatibility preparation progress. The finished H.264/AAC MP4 appears in **Ready** automatically.
 3. Choose **Transcribe**, review any detected words, then choose **Censor** to create the family-friendly copy in **Finished**.
 
-YouTube import is local and user-initiated. The app includes the approved `yt-dlp` component, gives the imported video its real title, and keeps the original downloaded file in Ready. If YouTube asks for sign-in or verification, Expletive Deleted pauses and asks before doing anything with a browser. Choose a visible browser session to retry, or explicitly choose **Open YouTube** to sign in; the app never opens a browser or uses browser cookies automatically, and never sees your password.
+YouTube import is local and user-initiated. The app verifies or retrieves the approved `yt-dlp` and Deno components during setup, gives the imported video its real title, and keeps the original downloaded file in Ready. If YouTube asks for sign-in or verification, Expletive Deleted pauses and asks before doing anything with a browser. Choose a visible browser session to retry, or explicitly choose **Open YouTube** to sign in; the app never opens a browser or uses browser cookies automatically, and never sees your password.
 
 ## Install on Windows
 
 1. Download `Expletive-Deleted-Setup-1.0.1-x64.exe` from the [latest release](https://github.com/Nerotas/expletive-deleted/releases/latest).
 2. Run the installer, then open **Expletive Deleted** from the Start menu or desktop shortcut.
-3. If an application component cannot be verified, the app opens repair guidance. A packaged installation does not require a separate Python installation.
+3. Complete the setup checklist. The installer includes the private Python bridge; the app guides you through retrieving pinned Python packages, FFmpeg/FFprobe, yt-dlp, Deno, and the Whisper model when needed.
 4. Complete the first-run walkthrough: Welcome, Get ready, Your settings, Add a file, Process safely, and Finish. It checks required components, prepares your dictionary, confirms folders and censoring preferences, and lets you choose the automatic local and YouTube workflows. It saves progress only when you choose **Save & Continue**.
 
-The installer contains the Electron application, private Python processing runtime, yt-dlp, FFmpeg/FFprobe, and Python packages. It does not bundle Whisper models.
-
-In a packaged build, application components are verified automatically and the walkthrough requests only the Whisper model. Development checkouts can use **Get required components** to prepare an inspectable setup plan for external tools. Nothing is retrieved until you review every source and destination and approve the plan.
+The installer contains the Electron application and private Python bridge. It does not silently bundle or retrieve FFmpeg/FFprobe, yt-dlp, Deno, Python packages, or Whisper models. The walkthrough shows each missing component, its source, license, destination, and download impact before grouped approval.
 
 ## Requirements
 
@@ -67,7 +65,7 @@ In a packaged build, application components are verified automatically and the w
 - Whisper `large-v3`, the supported accuracy baseline
 - Disk space for the model, source media, transcripts, and finished copies
 
-YouTube importing supports individual videos and uses the included, verified `yt-dlp` executable. It prepares them locally as H.264/AAC MP4 files in the Ready folder.
+YouTube importing supports individual videos and uses a verified `yt-dlp` executable after YouTube setup is complete. It prepares them locally as H.264/AAC MP4 files in the Ready folder.
 
 The first-run walkthrough verifies readiness. A network connection is needed only when you choose to retrieve a missing third-party component.
 
@@ -137,7 +135,7 @@ cd frontend
 npm run package:win
 ```
 
-The package audit fails if the installer contains the external processing FFmpeg runtime, Whisper model payloads, or Python binary packages. Electron's framework-owned root `ffmpeg.dll` is Chromium codec support and cannot satisfy processing readiness.
+The package audit fails if the installer contains Whisper model payloads or accidental development binaries. Electron's framework-owned root `ffmpeg.dll` is Chromium codec support and cannot satisfy processing readiness.
 
 ## Releases and versioning
 
