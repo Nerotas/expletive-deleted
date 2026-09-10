@@ -22,20 +22,13 @@ npm run smoke
 npm run package:dir
 npm run smoke:package
 npm run package:win
-
-# Release-only: requires BUNDLED_RUNTIME_DIR to point to an audited Windows runtime.
-npm run package:bundled-dir
-npm run smoke:bundled-package
-npm run package:bundled-win
 ```
 
-`package:dir` and `package:win` support ordinary development packaging. `package:bundled-dir` builds an auditable unpacked app; `package:bundled-win` creates the release x64 NSIS installer only after `BUNDLED_RUNTIME_DIR` supplies an audited private Python, FFmpeg, FFprobe, yt-dlp, and package payload. Whisper models remain outside that payload.
-
-The release workflow uses `package:bundled-win` and `smoke:bundled-package`. Provision the audited runtime payload on the Windows release runner and set its `BUNDLED_RUNTIME_DIR` environment value to that directory. The release preflight checks Python, FFmpeg, FFprobe, yt-dlp, Deno, the runtime manifest, SBOM, and notices before packaging. A release cannot proceed without that payload; this prevents shipping an installer that lacks yt-dlp or Deno for YouTube imports.
+`package:dir` and `package:win` build the setup-first installer. The installer contains the application and private Python payload; FFmpeg/FFprobe, yt-dlp, Deno, Python packages, and the selected Whisper model are verified or obtained through explicit onboarding setup. Whisper models remain user-selected and are never bundled.
 
 The Windows package wrapper cleans incomplete generated staging directories and retries Electron Builder's transient `EPERM` rename failure up to three times. If cleanup remains locked, close any packaged Expletive Deleted process and Explorer window open to `frontend/release`, then run the command again.
 
-The ordinary package audits reject external processing binaries. The bundled-release audit instead requires the audited runtime beneath `resources/app-runtime`, rejects Whisper model payloads, and verifies the runtime manifest, SBOM, notices, source archive, and approved FFmpeg configuration. Electron's single root `ffmpeg.dll` remains framework-owned Chromium codec support.
+The package audit rejects Whisper model payloads and accidental development binaries. Electron's single root `ffmpeg.dll` remains framework-owned Chromium codec support and must not satisfy the application's FFmpeg readiness check.
 
 ## Renderer architecture
 

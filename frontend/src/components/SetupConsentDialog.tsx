@@ -42,9 +42,13 @@ export function SetupConsentDialog({
             <article key={action.id}>
               <strong>{action.description}</strong>
               <dl>
+                <div><dt>Purpose</dt><dd>{action.purpose}</dd></div>
+                <div><dt>Version</dt><dd>{action.version}</dd></div>
+                <div><dt>License</dt><dd>{action.license}</dd></div>
                 <div><dt>Source</dt><dd>{action.source_name}</dd></div>
                 <div><dt>Stored in</dt><dd title={action.destination}>{action.destination}</dd></div>
                 <div><dt>Download size</dt><dd>{formatSize(action.estimated_download_bytes)}</dd></div>
+                <div><dt>Network</dt><dd>{action.requires_network ? 'Required for this download' : 'Not required'}</dd></div>
               </dl>
               <button
                 className="setup-source-link"

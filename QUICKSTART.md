@@ -14,7 +14,7 @@ Normal users should follow the desktop application workflow. Do not start `backe
 3. If Python is missing, the first screen explains why it is needed and offers **Get Python**, which opens the official download page. After Python 3.9 or later is installed, return to the app and choose **Try again**.
 4. Follow the in-app walkthrough to check local components, choose initial settings, and optionally try a first file.
 
-The installer contains the application and its first-party backend, but does not bundle or silently retrieve Python, the external `ffmpeg.exe`/`ffprobe.exe` processing runtime, Python speech-recognition packages, or Whisper models. Electron's required Chromium codec `ffmpeg.dll` is part of the desktop framework, cannot process jobs, and does not count as an installed FFmpeg dependency. Uninstalling the application does not delete settings, downloaded runtime components, models, or user media beneath `%LOCALAPPDATA%\ExpletiveDeleted` and `%USERPROFILE%\Documents\Expletive Deleted`.
+The installer contains the application and its private Python bridge, but does not silently retrieve Python packages, the external `ffmpeg.exe`/`ffprobe.exe` processing runtime, yt-dlp, Deno, or Whisper models. Electron's required Chromium codec `ffmpeg.dll` is part of the desktop framework, cannot process jobs, and does not count as an installed FFmpeg dependency. Uninstalling the application does not delete settings, downloaded runtime components, models, or user media beneath `%LOCALAPPDATA%\ExpletiveDeleted` and `%USERPROFILE%\Documents\Expletive Deleted`.
 
 ## Desktop source build (developers)
 
@@ -52,7 +52,7 @@ The first launch checks the local system for:
 - Python speech-recognition dependencies
 - Whisper `large-v3`
 
-In a packaged build, the application components, including FFmpeg/FFprobe, Python speech-recognition packages, and yt-dlp, are verified automatically. The only required download is the Whisper model. Development checkouts may use **Get required components** or **Locate existing** for external tools. The review shows each third-party source, local destination, and download size before continuing. Canceling the disclosure does not start retrieval. After an approved operation, the backend verifies the component and refreshes System Ready status.
+In a packaged build, the setup checklist verifies the private Python bridge and guides the user through Python speech-recognition packages, FFmpeg/FFprobe, yt-dlp, Deno, and the Whisper model. The review shows each third-party source, version, license, local destination, and download size before grouped approval. Canceling the disclosure does not start retrieval. After an approved operation, the backend verifies each component and refreshes readiness status.
 
 Approved FFmpeg binaries and Whisper models are stored beneath `%LOCALAPPDATA%\ExpletiveDeleted\`, outside the application package and user-media folders. The app does not modify the global Windows `PATH`. Runtime locations remain inspectable and changeable under **Settings → Runtime components**.
 
@@ -61,7 +61,7 @@ Whisper `large-v3` is required for reliable word-level censor timing. Smaller mo
 ### Process media
 
 1. In **Your settings** during first-run setup, or later in **Settings**, confirm the working folders and processing preferences. **Automatically create a censored copy after transcription** queues a censored copy after every newly verified transcript; leave it off to review the transcript first. **Automatically process YouTube downloads** sends a completed YouTube import through Ready, transcription, and the censored-copy queue. Both are off by default and saving either choice never starts files already in Ready. The default input folder is `%USERPROFILE%\Documents\Expletive Deleted\Ready`.
-2. Add supported audio or video files to the configured Ready/Input folder, drag them into Queue, or use **Download from YouTube** for an individual video you are authorized to download. The included `yt-dlp` component is used only for YouTube import.
+2. Add supported audio or video files to the configured Ready/Input folder, drag them into Queue, or use **Download from YouTube** for an individual video you are authorized to download. YouTube import becomes available after yt-dlp and Deno setup is verified.
    If YouTube requires sign-in or verification, the app shows a browser-session dialog. Choose the visible browser session only when you are ready to retry. **Open YouTube** is optional, opens no browser until you press it, and does not retry the download. Your password is never requested or handled by Expletive Deleted; yt-dlp reads the selected browser's local cookies.
 3. Return to **Queue** and choose an action for one file:
    - **Transcribe only** creates and verifies a transcript without creating media output.
@@ -137,3 +137,11 @@ Use the settings CLI only for automation or diagnostics:
 .\.venv\Scripts\python.exe manage_settings.py set-directories --input 'D:\Media\Ready' --create
 .\.venv\Scripts\python.exe -m unittest discover -s tests
 ```
+
+To run the full Windows validation flow from the repository root:
+
+```powershell
+.\scripts\run_all_tests.ps1
+```
+
+Use `-SkipPackaged` to omit the Electron package build and packaged smoke test when iterating on backend or renderer code.

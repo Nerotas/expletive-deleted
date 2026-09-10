@@ -17,17 +17,15 @@ from backend.settings import AppSettings
 def _app_runtime_status(inventory) -> tuple[str, str, str]:
     """Describe app-owned runtime health separately from user-selected assets."""
     bundled = os.environ.get("CENSOR_BUNDLED_RUNTIME") == "1"
-    runtime_ready = all(
-        status.ready for status in (inventory.ffmpeg, inventory.ffprobe, *inventory.python, inventory.ytdlp)
-    )
+    runtime_ready = all(status.ready for status in inventory.python)
     if runtime_ready:
         return (
             "ready",
             "bundled" if bundled else "development",
-            "Application components are verified.",
+            "Private Python processing runtime is verified. Additional media components may still need setup.",
         )
 
-    missing = [status.name for status in (inventory.ffmpeg, inventory.ffprobe, *inventory.python, inventory.ytdlp) if not status.ready]
+    missing = [status.name for status in inventory.python if not status.ready]
     detail = "Could not verify: " + ", ".join(missing) + "."
     if bundled:
         return (
@@ -67,7 +65,7 @@ def get_capabilities(settings: AppSettings) -> dict[str, object]:
     model_ready = inventory.whisper_model.ready
     return {
         # Legacy fields remain until all renderer consumers use the grouped contract.
-        "ready": app_runtime == "ready" and model_ready,
+        "ready": app_runtime == "ready" and inventory.ffmpeg.ready and inventory.ffprobe.ready and model_ready,
         "ffmpeg": inventory.ffmpeg.ready,
         "ffprobe": inventory.ffprobe.ready,
         "whisper": all(status.ready for status in inventory.python),
@@ -76,7 +74,7 @@ def get_capabilities(settings: AppSettings) -> dict[str, object]:
         "whisper_model_ready": model_ready,
         "model_large_v3": model_ready and settings.whisper.model == "large-v3",
         # Grouped system-check contract.
-        "processing_ready": app_runtime == "ready" and model_ready,
+        "processing_ready": app_runtime == "ready" and inventory.ffmpeg.ready and inventory.ffprobe.ready and model_ready,
         "app_runtime": app_runtime,
         "app_runtime_source": app_runtime_source,
         "app_runtime_detail": app_runtime_detail,

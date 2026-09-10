@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { FilePlus2, Upload } from 'lucide-react'
 import type { ImportResult, Settings } from '../../types/domain'
 import type { QueueController } from '../queue/useQueue'
+import { ImportConfirmationCard } from './ImportConfirmationCard'
 import { OnboardingStepHeading } from './OnboardingStepHeading'
 
 type AddMediaStepProps = {
@@ -31,7 +32,7 @@ export function AddMediaStep({ queue, settings, onAdded }: AddMediaStepProps) {
       <input ref={inputRef} className="visually-hidden" type="file" multiple accept="audio/*,video/*" aria-label="Choose media files to copy to Ready" onChange={(event) => { setFiles(Array.from(event.target.files ?? [])); setResults(null) }} />
       <button className="button secondary" type="button" onClick={() => inputRef.current?.click()}>Choose files</button>
     </section>
-    {files.length > 0 && <section className="onboarding-import-confirmation" aria-live="polite"><strong>{files.length} {files.length === 1 ? 'file is' : 'files are'} ready to copy</strong><span>{files.map((file) => file.name).join(', ')}</span><button className="button primary" disabled={queue.busy} onClick={() => void importFiles()}>Copy to Ready</button></section>}
+    {files.length > 0 && <ImportConfirmationCard fileCount={files.length} fileNames={files.map((file) => file.name).join(', ')} busy={queue.busy} onCopy={() => void importFiles()} />}
     {results && <p className="selection-confirmation">{results.some((result) => result.status === 'added') ? <><FilePlus2 size={15} />File added to Ready. You can create its transcript in the next step.</> : 'No files were added. Review the message above and try another supported file.'}</p>}
     <p className="onboarding-caution">Prefer to do this later? Continue without adding a file. Setup does not change the original media you already own.</p>
   </>

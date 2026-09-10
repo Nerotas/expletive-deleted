@@ -75,6 +75,33 @@ class RuntimeTests(unittest.TestCase):
 
         self.assertEqual(root, (Path.home() / ".expletive-deleted" / "runtime").resolve())
 
+    def test_transcription_audio_rejects_empty_audio_stream(self):
+        censor = object.__new__(ProfanityCensor)
+        censor.ffprobe_bin = "ffprobe"
+        censor.input_file = "input.mp4"
+        completed = MagicMock(
+            returncode=0,
+            stdout='{"streams": [{"channels": 0, "sample_rate": "0", "duration": "0"}]}',
+        )
+
+        with (
+            patch("backend.censor.engine.subprocess.run", return_value=completed),
+            self.assertRaisesRegex(TranscriptValidationError, "empty or invalid"),
+        ):
+            censor.validate_transcription_audio()
+
+    def test_transcription_audio_accepts_a_decodable_audio_stream(self):
+        censor = object.__new__(ProfanityCensor)
+        censor.ffprobe_bin = "ffprobe"
+        censor.input_file = "input.mp4"
+        completed = MagicMock(
+            returncode=0,
+            stdout='{"streams": [{"channels": 2, "sample_rate": "48000", "duration": "12.5"}]}',
+        )
+
+        with patch("backend.censor.engine.subprocess.run", return_value=completed):
+            censor.validate_transcription_audio()
+
     def test_censor_requires_ffmpeg_and_ffprobe_before_processing(self):
         with (
             patch("backend.censor.engine.find_ffmpeg", return_value=None),
@@ -344,6 +371,7 @@ class RuntimeTests(unittest.TestCase):
             censor.get_media_duration_seconds = MagicMock(return_value=60.0)
             censor.has_discrete_center_audio = MagicMock(return_value=True)
             censor.extract_center_channel = MagicMock(return_value="center.wav")
+            censor.validate_transcription_audio = MagicMock()
 
             with patch("backend.censor.engine.record_transcription_timing"):
                 transcript = censor.transcribe_with_timestamps()
@@ -393,6 +421,7 @@ class RuntimeTests(unittest.TestCase):
             censor.used_cached_transcript = False
             censor.get_media_duration_seconds = MagicMock(return_value=60.0)
             censor.has_discrete_center_audio = MagicMock(return_value=False)
+            censor.validate_transcription_audio = MagicMock()
 
             output = io.StringIO()
             with (
@@ -699,7 +728,7 @@ class RuntimeTests(unittest.TestCase):
         managed.assert_not_called()
         discover.assert_not_called()
 
-    def test_windows_winget_package_install_is_discoverable(self):
+    def test_windows_winget_package_install_is_discoverable_when_no_managed_runtime_exists(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             package_root = (
                 Path(temporary_directory)
@@ -714,7 +743,11 @@ class RuntimeTests(unittest.TestCase):
             (package_root / "ffmpeg.exe").write_text("")
             (package_root / "ffprobe.exe").write_text("")
 
-            with patch.dict(os.environ, {"LOCALAPPDATA": temporary_directory}, clear=False):
+            with patch.dict(
+                os.environ,
+                {"LOCALAPPDATA": temporary_directory, "CENSOR_RUNTIME_ASSETS_DIR": ""},
+                clear=False,
+            ), patch("backend.runtime.environment.get_managed_ffmpeg_paths", return_value=(None, None)):
                 with patch("backend.runtime.environment.shutil.which", return_value=None):
                     with patch(
                         "backend.runtime.environment.subprocess.run",
@@ -766,12 +799,20 @@ class RuntimeTests(unittest.TestCase):
                 factor = get_calibrated_transcription_factor(root=root)
             self.assertEqual(factor, 3.0)
 
-    def test_transcription_timing_defaults_to_writable_app_data(self):
+    def test_transcription_timing_defaults_to_writable_app_data_for_normal_python(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             local_app_data = Path(temporary_directory)
             expected_path = local_app_data / "ExpletiveDeleted" / ".whisper-timing.json"
             with (
-                patch.dict(os.environ, {"LOCALAPPDATA": str(local_app_data)}, clear=False),
+                patch.dict(
+                    os.environ,
+                    {"LOCALAPPDATA": str(local_app_data), "CENSOR_RUNTIME_ASSETS_DIR": ""},
+                    clear=False,
+                ),
+                patch("backend.runtime.environment.sys.executable", r"C:\Python\python.exe"),
+                patch("backend.runtime.environment.sys.prefix", temporary_directory),
+                patch("backend.runtime.environment.Path.home", return_value=Path("C:/Users/Test")),
+                patch("backend.runtime.environment.platform.system", return_value="Windows"),
                 patch(
                     "backend.runtime.environment.get_whisper_profile_key",
                     return_value="large:cpu:int8",

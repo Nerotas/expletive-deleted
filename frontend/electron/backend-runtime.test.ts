@@ -35,7 +35,7 @@ describe('backend runtime resolution', () => {
       .toMatchObject({ CENSOR_PROJECT_ROOT: '' })
   })
 
-  it('discovers only a complete bundled processing runtime', () => {
+  it('discovers bundled private Python while treating media tools as optional setup', () => {
     const resourcesPath = path.resolve('installed', 'resources')
     const runtimeRoot = path.join(resourcesPath, 'app-runtime')
     const python = path.join(runtimeRoot, 'python', 'python.exe')
@@ -47,19 +47,19 @@ describe('backend runtime resolution', () => {
     expect(findBundledRuntime(resourcesPath, 'win32', (candidate) => [python, ffmpeg, ffprobe, ytdlp, deno].includes(candidate)))
       .toEqual({ python, ffmpeg, ffprobe, ytdlp, deno })
     expect(findBundledRuntime(resourcesPath, 'win32', (candidate) => candidate !== ffprobe))
-      .toEqual({})
+      .toMatchObject({ python, ffmpeg, ytdlp, deno })
+    expect(findBundledRuntime(resourcesPath, 'win32', (candidate) => candidate === python))
+      .toEqual({ python })
   })
 
-  it('fails closed when a runtime manifest is present but its private tools are incomplete', () => {
+  it('fails closed when the private Python runtime is missing', () => {
     const resourcesPath = path.resolve('installed', 'resources')
     const runtimeRoot = path.join(resourcesPath, 'app-runtime')
     const manifest = path.join(runtimeRoot, 'runtime-manifest.json')
     const python = path.join(runtimeRoot, 'python', 'python.exe')
-    const ffmpeg = path.join(runtimeRoot, 'ffmpeg', 'ffmpeg.exe')
-    const ytdlp = path.join(runtimeRoot, 'yt-dlp', 'yt-dlp.exe')
 
-    expect(() => requireBundledRuntime(resourcesPath, 'win32', (candidate) => [manifest, python, ffmpeg, ytdlp].includes(candidate)))
-      .toThrow('runtime is incomplete')
+    expect(requireBundledRuntime(resourcesPath, 'win32', (candidate) => [manifest, python].includes(candidate)))
+      .toEqual({ python })
     expect(requireBundledRuntime(resourcesPath, 'win32', () => false)).toEqual({})
   })
 

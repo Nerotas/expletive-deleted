@@ -11,7 +11,7 @@ import shutil
 import subprocess
 import sys
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from threading import Event
 from typing import Callable, Literal
@@ -141,6 +141,11 @@ class InstallAction:
     command: tuple[str, ...]
     estimated_download_bytes: int | None = None
     progress_path: Path | None = None
+    component: str = ""
+    version: str = ""
+    purpose: str = ""
+    license: str = ""
+    requires_network: bool = True
 
 
 @dataclass(frozen=True)
@@ -196,6 +201,11 @@ def _plan_id(actions: tuple[InstallAction, ...]) -> str:
             "source": action.source_url,
             "command": action.command,
             "bytes": action.estimated_download_bytes,
+            "component": action.component,
+            "version": action.version,
+            "purpose": action.purpose,
+            "license": action.license,
+            "network": action.requires_network,
         }
         for action in actions
     ]
@@ -363,7 +373,47 @@ def build_install_plan(
             )
         )
 
-    action_tuple = tuple(actions)
+    metadata = {
+        "install-static-ffmpeg-package": {
+            "component": "ffmpeg",
+            "version": STATIC_FFMPEG_VERSION,
+            "purpose": "Install the approved FFmpeg runtime manager used to obtain FFmpeg and FFprobe.",
+            "license": "MIT",
+        },
+        "download-managed-ffmpeg-runtime": {
+            "component": "ffmpeg",
+            "version": FFMPEG_VERSION,
+            "purpose": "Download FFmpeg and FFprobe for local media processing.",
+            "license": "GPL-3.0-or-later",
+        },
+        "download-managed-ytdlp": {
+            "component": "ytdlp",
+            "version": YTDLP_VERSION,
+            "purpose": "Download individual YouTube videos into the local media library.",
+            "license": "Unlicense",
+        },
+        "download-managed-deno-runtime": {
+            "component": "js_runtime",
+            "version": DENO_VERSION,
+            "purpose": "Provide the JavaScript runtime yt-dlp uses for YouTube challenge solving.",
+            "license": "MIT",
+        },
+        "install-python-dependencies": {
+            "component": "python",
+            "version": ", ".join(PYTHON_REQUIREMENTS),
+            "purpose": "Install the pinned transcription and local processing Python packages.",
+            "license": "MIT/BSD-3-Clause/Apache-2.0 and bundled dependency notices",
+        },
+    }
+    action_tuple = tuple(
+        replace(action, **metadata.get(action.id, {
+            "component": "whisper_model",
+            "version": whisper_model,
+            "purpose": "Download the selected Whisper speech model for local transcription.",
+            "license": "MIT",
+        }))
+        for action in actions
+    )
     if not action_tuple:
         raise DependencyPlanError("At least one dependency component is required")
     return InstallPlan(

@@ -17,7 +17,8 @@ if (existsSync(bundledRuntimeManifest)) {
   })
   if (audit.status !== 0) violations.push(`Bundled runtime audit failed: ${(audit.stderr || audit.stdout).trim()}`)
 } else if (requireBundledRuntime) {
-  violations.push('Expected an audited bundled runtime at resources/app-runtime')
+  const bundledPython = path.join(bundledRuntimeRoot, 'python', process.platform === 'win32' ? 'python.exe' : 'python')
+  if (!existsSync(bundledPython)) violations.push('Expected a private Python runtime at resources/app-runtime/python')
 }
 
 async function inspect(directory) {
@@ -27,7 +28,6 @@ async function inspect(directory) {
     const normalizedName = entry.name.toLowerCase()
 
     if (entry.isDirectory()) {
-      if (relativePath === 'resources/app-runtime' && existsSync(bundledRuntimeManifest)) continue
       if (normalizedName === 'whisper-cache' || normalizedName.startsWith('models--')) {
         violations.push(relativePath)
       }
@@ -41,13 +41,16 @@ async function inspect(directory) {
       continue
     }
 
+    const inBundledRuntime = relativePath.startsWith('resources/app-runtime/')
     if (
       normalizedName === 'ffmpeg.exe'
       || normalizedName === 'ffprobe.exe'
+      || normalizedName === 'yt-dlp.exe'
+      || normalizedName === 'deno.exe'
       || normalizedName === 'model.bin'
       || normalizedName.endsWith('.pt')
       || normalizedName.endsWith('.whl')
-      || normalizedName.endsWith('.pyd')
+      || (!inBundledRuntime && normalizedName.endsWith('.pyd'))
     ) {
       violations.push(relativePath)
     }

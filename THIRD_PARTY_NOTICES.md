@@ -4,23 +4,22 @@ Expletive Deleted includes, uses, or can retrieve third-party software and
 data. Those materials remain subject to their own copyright notices and
 license terms. The Expletive Deleted MIT License does not replace those terms.
 
-This inventory was prepared from the `main` branch of
-[`Nerotas/expletive-deleted`](https://github.com/Nerotas/expletive-deleted)
-at commit
-[`92f4687d81f973d0b1b77d7824853419a70c435e`](https://github.com/Nerotas/expletive-deleted/commit/92f4687d81f973d0b1b77d7824853419a70c435e)
-(2026-09-02). Versions below are the versions pinned by `package-lock.json`,
-`requirements.txt`, or the runtime setup code at that commit.
+This inventory is a policy and attribution template for the current source
+tree. The exact production copy must be regenerated from the audited runtime
+payload and final installer before release; that generated copy must include
+the final artifact hashes, SBOM entries, and license files for the exact
+runtime binaries.
 
 This file is an informational inventory, not legal advice and not a warranty
 that every possible transitive or platform-supplied component is listed.
 
 ## 1. Included in the Windows application
 
-The release configuration includes the compiled Electron application, the
-compiled renderer and its fonts, the first-party Python source, resources, and
-`requirements.txt`. The package audit rejects processing `ffmpeg.exe` and
-`ffprobe.exe` files, Whisper model payloads, Python wheels and Python extension
-modules. Python itself is not included.
+The production release configuration includes the compiled Electron
+application, the compiled renderer and its fonts, the first-party Python
+source, resources, and the private Python bridge. The package does not include
+the managed FFmpeg/FFprobe, Python package, yt-dlp, Deno, or Whisper model
+payloads; onboarding retrieves those only after explicit user approval.
 
 ### Electron runtime
 
@@ -77,21 +76,15 @@ the renderer. The locked Fontsource packages and upstream font notices are:
 
 The SIL Open Font License 1.1 is reproduced in Appendix C.
 
-### Bundled processing runtime
+### Managed processing components
 
-The audited Windows runtime includes the pinned yt-dlp `2026.08.19` official
-Windows executable at `yt-dlp/yt-dlp.exe`. yt-dlp is released under the
-Unlicense. Each generated runtime must retain its license text in `LICENSES/`
-and record the release URL, SHA-256, and SBOM entry for the exact executable.
+The setup flow retrieves pinned yt-dlp `2026.08.19` and Deno `2.9.6` only
+after grouped user approval. yt-dlp is released under the Unlicense and Deno
+under the MIT License. The setup metadata displays each source, version,
+license, destination, and checksum before installation; the exact downloaded
+files remain in the user's application-data runtime directory.
 
-The audited Windows runtime also includes the pinned Deno `2.9.6` official
-Windows executable at `deno/deno.exe`, used only so yt-dlp can solve
-YouTube's JavaScript signature challenge during YouTube imports. Deno is
-released under the MIT License. Each generated runtime must retain its
-license text in `LICENSES/` and record the release URL, SHA-256, and SBOM
-entry for the exact executable.
-
-## 2. Not bundled; installed or retrieved separately after user approval
+## 2. Development-only retrieval and user-selected data
 
 The application can prepare an inspectable setup plan and, after the user
 approves it, install or download the following items into the user's Python
@@ -100,9 +93,11 @@ a compatible installation already present on the system.
 
 ### Python and Python packages
 
-Python 3.9 or later is supplied separately by the user and is not distributed
-by the Expletive Deleted installer. Python versions are subject to the license
-terms accompanying the selected Python distribution.
+The source-checkout development workflow uses Python 3.9 or later in a
+repository-local `.venv`. That development interpreter is not the production
+runtime and is subject to the license terms accompanying the selected Python
+distribution. The production installer instead uses the audited private
+Python runtime described in section 1.
 
 The current `requirements.txt` pins these direct packages:
 
@@ -139,8 +134,9 @@ and the [OpenAI Whisper source license](https://github.com/openai/whisper/blob/m
 
 ### FFmpeg and FFprobe processing runtime
 
-FFmpeg and FFprobe executables are **not bundled** with the Windows installer.
-If the user chooses managed setup, the application first installs
+Development checkouts may retrieve FFmpeg and FFprobe after explicit approval.
+The production installer must not use this development path. If a developer
+chooses managed setup, the application first installs
 `static-ffmpeg==3.0` (the downloader is MIT-licensed) from PyPI, then asks that
 package to retrieve platform executables and copies the resulting files into
 the user's local application runtime directory. See the

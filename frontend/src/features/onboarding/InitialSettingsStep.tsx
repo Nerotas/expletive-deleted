@@ -2,6 +2,7 @@ import { Check, FolderOpen } from 'lucide-react'
 import { SegmentedControl } from '../../components/ui/SegmentedControl'
 import type { Settings } from '../../types/domain'
 import type { DictionaryController } from '../dictionary/useDictionary'
+import { CensoringMethodCard } from './CensoringMethodCard'
 import { OnboardingStepHeading } from './OnboardingStepHeading'
 
 const DIRECTORY_LABELS: Record<keyof Settings['directories'], { title: string; detail: string }> = {
@@ -57,8 +58,8 @@ export function InitialSettingsStep({
       <div className="onboarding-section-heading"><h3 id="censoring-setup-title">How to cover the language</h3><p>Review every finished file, whichever choice you make.</p></div>
       <SegmentedControl label="Censoring method" value={draft.censoring.stereo_method} options={[["drop_audio", 'Drop audio'], ['karaoke', 'Karaoke']]} onChange={(stereo_method) => onChange('censoring', { ...draft.censoring, stereo_method })} />
       <div className="method-details two-column">
-        <article className={draft.censoring.stereo_method === 'drop_audio' ? 'selected' : undefined}><h3>Drop audio</h3><p>Silences all sound during each detected word. It works with mono and stereo files and gives the most predictable result.</p><strong>Recommended for reliable obscuring</strong></article>
-        <article className={draft.censoring.stereo_method === 'karaoke' ? 'selected' : undefined}><h3>Karaoke</h3><p>Attempts to reduce centered dialogue while keeping some music and effects. Results depend on the mix; off-center speech may remain.</p><strong>Not suitable for mono audio</strong></article>
+        <CensoringMethodCard title="Drop audio" description="Silences all sound during each detected word. It works with mono and stereo files and gives the most predictable result." note="Recommended for reliable obscuring" selected={draft.censoring.stereo_method === 'drop_audio'} />
+        <CensoringMethodCard title="Karaoke" description="Attempts to reduce centered dialogue while keeping some music and effects. Results depend on the mix; off-center speech may remain." note="Not suitable for mono audio" selected={draft.censoring.stereo_method === 'karaoke'} />
       </div>
     </section>
 
