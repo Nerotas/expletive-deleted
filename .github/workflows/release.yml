@@ -149,11 +149,11 @@ jobs:
         if: steps.version.outputs.published != 'true'
         working-directory: frontend
         env:
-          BUNDLED_PYTHON_DIR: ${{ vars.BUNDLED_PYTHON_DIR }}
+          BUNDLED_PYTHON_DIR: ${{ vars.BUNDLED_PYTHON_DIR || secrets.BUNDLED_PYTHON_DIR }}
         shell: pwsh
         run: |
           if ([string]::IsNullOrWhiteSpace($env:BUNDLED_PYTHON_DIR)) {
-            throw 'BUNDLED_PYTHON_DIR is not configured. Provision the reviewed private Python runtime before packaging the release.'
+            throw 'BUNDLED_PYTHON_DIR is not configured. Set it in repository Variables or Secrets, then provision the reviewed private Python runtime before packaging the release.'
           }
           if (-not (Test-Path (Join-Path $env:BUNDLED_PYTHON_DIR 'python.exe'))) {
             throw "BUNDLED_PYTHON_DIR is missing python.exe: $env:BUNDLED_PYTHON_DIR"
