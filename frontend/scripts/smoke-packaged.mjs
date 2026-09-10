@@ -80,6 +80,9 @@ try {
     if (capabilities.ytdlp === true && capabilities.js_runtime !== true) {
       throw new Error('Packaged bridge reported an inconsistent YouTube setup state.')
     }
+    if (capabilities.ytdlp === true || capabilities.js_runtime === true) {
+      throw new Error('Setup-first package unexpectedly reported bundled YouTube tooling.')
+    }
   }
   const installedResources = path.resolve(resourcesPath).toLowerCase()
   for (const [name, directory] of Object.entries(settings.directories)) {

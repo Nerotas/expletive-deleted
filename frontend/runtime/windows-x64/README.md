@@ -27,7 +27,7 @@ Deno to be physically present at first launch; onboarding verifies or obtains
 them before enabling the workflows that need them. Whisper models are never
 part of the installer payload.
 
-Do not place a Whisper model in this directory. The model remains a user-selected download. The pinned official yt-dlp Windows executable and the pinned official Deno executable (used only to solve YouTube's JavaScript signature challenge) are bundled with the application.
+Do not place a Whisper model, yt-dlp executable, or Deno executable in this directory. The model, yt-dlp, and Deno remain user-approved onboarding downloads.
 
 ## Approved build inputs
 

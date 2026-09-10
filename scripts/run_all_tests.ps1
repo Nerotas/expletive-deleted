@@ -36,7 +36,7 @@ try {
 
     Push-Location $frontendRoot
     try {
-        Invoke-TestStage 'Frontend tests' { npm test -- --run }
+        Invoke-TestStage 'Frontend tests' { npm test }
         Invoke-TestStage 'Frontend typecheck' { npm run typecheck }
         Invoke-TestStage 'Frontend lint' { npm run lint }
         Invoke-TestStage 'Development Electron smoke' { npm run smoke }
