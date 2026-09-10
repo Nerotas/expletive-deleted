@@ -164,6 +164,10 @@ class DownloadManager:
             # YouTube's default web client often serves only SABR (undownloadable) formats; add tv as a fallback client.
             command.extend(["--extractor-args", "youtube:player_client=default,tv"])
             deno = get_managed_deno_path()
+            if not deno.is_file():
+                deno_on_path = shutil.which("deno")
+                if deno_on_path:
+                    deno = Path(deno_on_path).resolve()
             if deno.is_file():
                 command.extend(["--js-runtimes", f"deno:{deno}"])
             command.extend([
