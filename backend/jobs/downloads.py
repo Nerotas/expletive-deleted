@@ -313,8 +313,8 @@ class DownloadManager:
         if any(marker in detail.casefold() for marker in challenge_markers):
             return YtdlpJavaScriptChallengeUnsolved(
                 "YouTube's JavaScript challenge could not be solved, so only image formats were available. "
-                "Install a supported JavaScript runtime (Deno is recommended: https://docs.deno.com/runtime/getting_started/installation/) "
-                "so yt-dlp can download this video, then retry.\n\n" + detail
+                "Use the \"Download JavaScript runtime\" button on this download to install the approved, "
+                "verified runtime, then retry.\n\n" + detail
             )
         authentication_markers = (
             "sign in to confirm", "authentication", "login required", "cookies-from-browser",

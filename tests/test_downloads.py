@@ -75,7 +75,7 @@ class DownloadManagerTests(unittest.TestCase):
 
         self.assertIsInstance(error, YtdlpJavaScriptChallengeUnsolved)
         self.assertEqual(error.code, "javascript_runtime_required")
-        self.assertIn("Deno", error.diagnostic)
+        self.assertIn("Download JavaScript runtime", error.diagnostic)
         self.assertIn(output, error.diagnostic)
 
     def test_generic_download_failure_preserves_full_diagnostic_output(self):

@@ -862,6 +862,30 @@ describe('desktop application renderer', () => {
     expect(screen.queryByRole('button', { name: 'Transcribe only' })).not.toBeInTheDocument()
   })
 
+  it('offers a managed JavaScript runtime download when yt-dlp cannot solve the YouTube challenge', async () => {
+    const source = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
+    vi.mocked(desktopClient.listDownloads).mockResolvedValue([{
+      id: 'youtube-job', source, source_type: 'youtube', url: source, video_id: 'dQw4w9WgXcQ',
+      mode: 'copy', status: 'failed', progress_percent: null,
+      error: {
+        code: 'javascript_runtime_required',
+        message: "YouTube requires a JavaScript runtime that yt-dlp could not find",
+        detail: 'n challenge solving failed',
+        retryable: true,
+        diagnostic: 'Install Deno to solve YouTube\u2019s JavaScript challenge.',
+      },
+    }])
+    const user = userEvent.setup()
+    renderApp('/')
+
+    const button = await screen.findByRole('button', { name: 'Download JavaScript runtime' })
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument()
+    await user.click(button)
+
+    await waitFor(() => expect(desktopClient.planDependencies).toHaveBeenCalledWith(['js_runtime']))
+    expect(await screen.findByRole('button', { name: /Continue/ })).toBeInTheDocument()
+  })
+
   it('renders an active YouTube download as remote media', async () => {
     const source = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
     vi.mocked(desktopClient.listDownloads).mockResolvedValue([{

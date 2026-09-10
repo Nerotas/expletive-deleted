@@ -121,6 +121,7 @@ function App() {
                       capabilities={capabilities.capabilities}
                       onChangeFolder={() => navigate('/settings')}
                       onReview={(source) => void dictionary.openReview(source)}
+                      onReviewInstall={(components) => void capabilities.reviewInstall(components)}
                     />
                   )
             )}

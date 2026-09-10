@@ -38,6 +38,7 @@ type QueuePageProps = {
   capabilities: Capabilities | null
   onChangeFolder: () => void
   onReview: (source: string) => void
+  onReviewInstall: (components: string[]) => void
 }
 type View = 'queue' | 'archive'
 type PurgeRequest = { source: string; label: string } | 'all' | null
@@ -56,7 +57,7 @@ function isBulkSelectable(item: LibraryItem, job?: Job, pendingJob?: Job) {
   return job?.source_type !== 'youtube' && !pendingJob && (item.status === 'ready' || item.status === 'transcribed')
 }
 
-export function QueuePage({ queue, settings, capabilities, onChangeFolder, onReview }: QueuePageProps) {
+export function QueuePage({ queue, settings, capabilities, onChangeFolder, onReview, onReviewInstall }: QueuePageProps) {
   const [view, setView] = useState<View>('queue')
   const [selectedSources, setSelectedSources] = useState<Set<string>>(new Set())
   const [droppedFiles, setDroppedFiles] = useState<File[] | null>(null)
@@ -200,6 +201,7 @@ export function QueuePage({ queue, settings, capabilities, onChangeFolder, onRev
       onChangeFolder={onChangeFolder}
       onReview={onReview}
       onAuthenticationRequired={(job) => setYoutubeAuthentication({ url: job.url ?? job.source, retryId: job.id, cookiesUnavailable: job.error?.code === 'browser_cookies_unavailable' })}
+      onReviewInstall={onReviewInstall}
     /> : <ArchiveView
       items={queue.archive}
       busy={queue.busy}
@@ -303,6 +305,7 @@ function QueueView({
   onChangeFolder,
   onReview,
   onAuthenticationRequired,
+  onReviewInstall,
 }: {
   mergedRows: QueueRowModel[]
   queue: QueueController
@@ -316,6 +319,7 @@ function QueueView({
   onChangeFolder: () => void
   onReview: (source: string) => void
   onAuthenticationRequired: (job: Job) => void
+  onReviewInstall: (components: string[]) => void
 }) {
   const [filter, setFilter] = useState<QueueFilter>('all')
   const [sort, setSort] = useState<QueueSort>('queue')
@@ -476,6 +480,7 @@ function QueueView({
     onOpenFile={queue.openFile}
     onRetry={queue.retryJob}
     onAuthenticationRequired={onAuthenticationRequired}
+    onDownloadJavaScriptRuntime={() => onReviewInstall(['js_runtime'])}
     onSubmit={queue.submitFile}
     onCancelRunning={queue.cancelJob}
     onRemoveQueued={queue.removeQueued}
@@ -633,6 +638,7 @@ function QueueRow({
   onOpenFile,
   onRetry,
   onAuthenticationRequired,
+  onDownloadJavaScriptRuntime,
   onSubmit,
   onCancelRunning,
   onRemoveQueued,
@@ -653,6 +659,7 @@ function QueueRow({
   onOpenFile: (filePath: string) => Promise<void>
   onRetry: (job: Job) => Promise<unknown>
   onAuthenticationRequired: (job: Job) => void
+  onDownloadJavaScriptRuntime: (job: Job) => void
   onSubmit: (source: string, mode: Job['mode'], options?: JobSubmissionOptions) => Promise<void>
   onCancelRunning: (job: Job) => Promise<unknown>
   onRemoveQueued: (job: Job) => Promise<void>
@@ -753,7 +760,8 @@ function QueueRow({
           onClick={() => void onArchive(item.source)}
         ><ArchiveIcon size={13} />Archive</button>}
         {job?.status === 'failed' && (job.error?.code === 'authentication_required' || job.error?.code === 'browser_cookies_unavailable') && !pendingJob && <button disabled={busy} onClick={() => onAuthenticationRequired(job)}>Use browser session</button>}
-        {job?.status === 'failed' && job.error?.retryable && job.error.code !== 'authentication_required' && job.error.code !== 'browser_cookies_unavailable' && !pendingJob && <button disabled={busy} onClick={() => void onRetry(job)}>Retry</button>}
+        {job?.status === 'failed' && job.error?.code === 'javascript_runtime_required' && !pendingJob && <button disabled={busy} title="Download the approved JavaScript runtime yt-dlp needs to solve YouTube's challenge" onClick={() => onDownloadJavaScriptRuntime(job)}>Download JavaScript runtime</button>}
+        {job?.status === 'failed' && job.error?.retryable && !['authentication_required', 'browser_cookies_unavailable', 'javascript_runtime_required'].includes(job.error.code) && !pendingJob && <button disabled={busy} onClick={() => void onRetry(job)}>Retry</button>}
       </div>
     </td>
   </tr>
