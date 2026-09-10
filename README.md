@@ -156,6 +156,14 @@ Repository Actions must have **Read and write permissions** so the workflow can 
 
 ## Validation
 
+Run the complete Windows validation flow from the repository root:
+
+```powershell
+.\scripts\run_all_tests.ps1
+```
+
+This runs the backend suite, frontend tests, typecheck, lint, development Electron smoke, setup-first package build/audit, and packaged Electron smoke. Use `-SkipPackaged` when you only need the code and development-app checks.
+
 Backend, from the repository root:
 
 ```powershell

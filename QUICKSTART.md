@@ -137,3 +137,11 @@ Use the settings CLI only for automation or diagnostics:
 .\.venv\Scripts\python.exe manage_settings.py set-directories --input 'D:\Media\Ready' --create
 .\.venv\Scripts\python.exe -m unittest discover -s tests
 ```
+
+To run the full Windows validation flow from the repository root:
+
+```powershell
+.\scripts\run_all_tests.ps1
+```
+
+Use `-SkipPackaged` to omit the Electron package build and packaged smoke test when iterating on backend or renderer code.
