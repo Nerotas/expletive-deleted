@@ -145,36 +145,58 @@ jobs:
         working-directory: frontend
         run: npm run smoke
 
+      - name: Resolve audited bundled runtime
+        if: steps.version.outputs.published != 'true'
+        shell: pwsh
+        env:
+          BUNDLED_RUNTIME_DIR: ${{ vars.BUNDLED_RUNTIME_DIR }}
+          BUNDLED_RUNTIME_ARCHIVE_URL: ${{ vars.BUNDLED_RUNTIME_ARCHIVE_URL }}
+          BUNDLED_RUNTIME_ARCHIVE_SHA256: ${{ vars.BUNDLED_RUNTIME_ARCHIVE_SHA256 }}
+        run: |
+          $runtimeDir = "$env:BUNDLED_RUNTIME_DIR".Trim()
+          $archiveUrl = "$env:BUNDLED_RUNTIME_ARCHIVE_URL".Trim()
+          $archiveSha256 = "$env:BUNDLED_RUNTIME_ARCHIVE_SHA256".Trim()
+
+          if ([string]::IsNullOrWhiteSpace($runtimeDir)) {
+            if ([string]::IsNullOrWhiteSpace($archiveUrl) -or [string]::IsNullOrWhiteSpace($archiveSha256)) {
+              throw 'Configure repository variables BUNDLED_RUNTIME_ARCHIVE_URL and BUNDLED_RUNTIME_ARCHIVE_SHA256 with the reviewed runtime artifact, or set BUNDLED_RUNTIME_DIR on a self-hosted runner.'
+            }
+
+            $archivePath = Join-Path $env:RUNNER_TEMP 'bundled-runtime.zip'
+            $extractRoot = Join-Path $env:RUNNER_TEMP 'bundled-runtime'
+            Invoke-WebRequest -Uri $archiveUrl -OutFile $archivePath
+            $actualSha256 = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash
+            if ($actualSha256 -ne $archiveSha256) {
+              throw "Bundled runtime archive SHA-256 mismatch. Expected $archiveSha256, got $actualSha256."
+            }
+
+            Expand-Archive -LiteralPath $archivePath -DestinationPath $extractRoot -Force
+            $runtimeCandidates = @(Get-ChildItem -LiteralPath $extractRoot -Filter runtime-manifest.json -File -Recurse)
+            if ($runtimeCandidates.Count -ne 1) {
+              throw 'The bundled runtime archive must contain exactly one runtime-manifest.json.'
+            }
+            $runtimeDir = $runtimeCandidates[0].DirectoryName
+          }
+
+          $runtimeDir = [IO.Path]::GetFullPath($runtimeDir)
+          if (-not (Test-Path -LiteralPath (Join-Path $runtimeDir 'runtime-manifest.json'))) {
+            throw "The audited bundled runtime is missing runtime-manifest.json: $runtimeDir"
+          }
+          "BUNDLED_RUNTIME_DIR=$runtimeDir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
       - name: Build and audit setup-first Windows installer
         if: steps.version.outputs.published != 'true'
         working-directory: frontend
+        env:
+          REQUIRE_BUNDLED_RUNTIME: "1"
         shell: pwsh
         run: |
-          $sourcePythonDir = (python -c "import sys; print(sys.prefix)").Trim()
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $bundledPythonDir = Join-Path $env:RUNNER_TEMP 'expletive-deleted-python'
-          if (Test-Path -LiteralPath $bundledPythonDir) {
-            Remove-Item -LiteralPath $bundledPythonDir -Recurse -Force
-          }
-          Copy-Item -LiteralPath $sourcePythonDir -Destination $bundledPythonDir -Recurse
-
-          $pythonExe = Join-Path -Path $bundledPythonDir -ChildPath 'python.exe'
-          if (-not (Test-Path -LiteralPath $pythonExe)) {
-            throw "The copied private Python runtime is missing python.exe: $bundledPythonDir"
-          }
-
-          python -m pip install --disable-pip-version-check --no-compile --upgrade --target (Join-Path $bundledPythonDir 'Lib\site-packages') -r ..\requirements.txt
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & $pythonExe -I -c "import av, ctranslate2, faster_whisper, numpy, better_profanity, huggingface_hub; print('Private Python runtime verified')"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-          $env:BUNDLED_PYTHON_DIR = $bundledPythonDir
           npm run package:win
 
       - name: Smoke-test packaged application
         if: steps.version.outputs.published != 'true'
         working-directory: frontend
-        run: npm run smoke:package
+        run: npm run smoke:setup-first-package
 
       - name: Tag release
         if: steps.version.outputs.published != 'true'
