@@ -33,7 +33,7 @@ foreach ($path in @($pythonExecutable, (Join-Path $pythonDirectory 'LICENSE.txt'
 if (Test-Path -LiteralPath $workRoot) {
     Remove-Item -LiteralPath $workRoot -Recurse -Force
 }
-New-Item -ItemType Directory -Path $licensesRoot | Out-Null
+New-Item -ItemType Directory -Path $workRoot, $metadataRoot, $licensesRoot -Force | Out-Null
 
 $pythonVersion = (& $pythonExecutable -I -c 'import platform; print(platform.python_version())').Trim()
 if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($pythonVersion)) {

@@ -230,6 +230,7 @@ class DependencyPlanTests(unittest.TestCase):
     def test_plan_is_stable_inspectable_and_version_pinned(self):
         kwargs = {
             "python_executable": Path("C:\\Python\\python.exe"),
+            "python_packages_directory": Path("C:\\Runtime\\dependencies\\python"),
             "cache_dir": Path("C:\\models"),
             "platform_name": "Windows",
         }
@@ -248,6 +249,12 @@ class DependencyPlanTests(unittest.TestCase):
         self.assertEqual(first.actions[1].license, "GPL-3.0-or-later")
         self.assertEqual(first.actions[2].component, "python")
         self.assertEqual(first.actions[3].license, "MIT")
+        python_destination = Path("C:\\Runtime\\dependencies\\python").resolve()
+        self.assertEqual(first.actions[0].destination, python_destination)
+        self.assertEqual(first.actions[2].destination, python_destination)
+        self.assertIn("--target", first.actions[0].command)
+        self.assertIn(str(python_destination), first.actions[0].command)
+        self.assertIn("--target", first.actions[2].command)
 
     def test_non_windows_ffmpeg_plan_is_supported(self):
         plan = build_install_plan(["ffmpeg"], platform_name="Linux")

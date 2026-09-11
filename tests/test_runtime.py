@@ -29,6 +29,7 @@ from backend.runtime.environment import (
     get_profanity_exclusions_file,
     get_calibrated_transcription_factor,
     get_application_runtime_root,
+    get_managed_python_packages_directory,
     get_whisper_cache_dir,
     get_whisper_device_status,
     get_whisper_timing_history_path,
@@ -44,6 +45,13 @@ from backend.runtime.environment import (
 
 
 class RuntimeTests(unittest.TestCase):
+    def test_managed_python_packages_use_application_data(self):
+        root = Path("C:/Users/Test/AppData/Local/ExpletiveDeleted")
+        self.assertEqual(
+            get_managed_python_packages_directory(root),
+            (root / "dependencies" / "python").resolve(),
+        )
+
     def test_store_python_virtualized_local_app_data_uses_stable_runtime_root(self):
         with (
             patch("backend.runtime.environment.platform.system", return_value="Windows"),
@@ -839,7 +847,10 @@ class RuntimeTests(unittest.TestCase):
                 )
 
     def test_whisper_uses_cpu_when_cuda_is_unavailable(self):
-        with patch("backend.runtime.environment.ctranslate2", None):
+        with (
+            patch("backend.runtime.environment.ctranslate2", None),
+            patch("backend.runtime.environment.importlib.import_module", side_effect=ImportError),
+        ):
             status = get_whisper_device_status()
         self.assertEqual(status.selected, "cpu")
         self.assertEqual(status.compute_type, "int8")
@@ -848,6 +859,7 @@ class RuntimeTests(unittest.TestCase):
         with (
             patch.dict(os.environ, {}, clear=True),
             patch("backend.runtime.environment.ctranslate2", None),
+            patch("backend.runtime.environment.importlib.import_module", side_effect=ImportError),
         ):
             status = get_whisper_device_status(requested_device="cuda")
         self.assertEqual(status.requested, "cuda")
@@ -860,6 +872,21 @@ class RuntimeTests(unittest.TestCase):
         ):
             status = get_whisper_device_status(requested_device="cuda")
         self.assertEqual(status.requested, "cpu")
+
+    def test_whisper_retries_ctranslate2_import_after_setup(self):
+        ctranslate2 = MagicMock()
+        ctranslate2.get_cuda_device_count.return_value = 1
+        ctranslate2.get_supported_compute_types.return_value = {"float16", "int8"}
+        with (
+            patch("backend.runtime.environment.ctranslate2", None),
+            patch("backend.runtime.environment.importlib.import_module", return_value=ctranslate2) as import_module,
+            patch("backend.runtime.environment.get_cuda_memory_mib", return_value=12288),
+        ):
+            status = get_whisper_device_status("large")
+
+        import_module.assert_any_call("ctranslate2")
+        self.assertEqual(status.selected, "cuda")
+        self.assertEqual(status.compute_type, "float16")
 
     def test_whisper_model_validation_normalizes_large_alias(self):
         self.assertEqual(require_whisper_model("large"), "large-v3")

@@ -31,7 +31,7 @@ export function ComponentsStep({ capabilities, checking, busy, onReviewInstall, 
   return <>
     <OnboardingStepHeading title="Prepare this computer" subtitle="Choose which local components to set up. Downloads happen only after you approve them, and your media stays on this computer." />
     <div className="component-list">
-      <ComponentRow title="Transcription packages" detail={pythonReady ? 'Pinned faster-whisper packages are verified.' : 'Install the pinned local transcription packages into the private Python runtime.'} ready={pythonReady} checking={checking} busy={busy} />
+      <ComponentRow title="Transcription packages" detail={pythonReady ? 'Pinned faster-whisper packages are verified.' : 'Install the pinned local transcription packages in your local application data.'} ready={pythonReady} checking={checking} busy={busy} />
       <ComponentRow title="FFmpeg and FFprobe" detail={mediaReady ? `Verified${capabilities?.ffmpeg_version ? ` (${capabilities.ffmpeg_version})` : ''}.` : 'Needed to inspect, remux, and censor local media.'} ready={mediaReady} checking={checking} busy={busy} />
       <ComponentRow title="YouTube tools" detail={youtubeDetail} ready={youtubeReady} checking={checking} busy={busy} />
       <ComponentRow title="Whisper large-v3 model" detail="Download the supported speech model when you are ready. It stays on this computer." ready={modelReady} checking={checking} busy={busy} optional />

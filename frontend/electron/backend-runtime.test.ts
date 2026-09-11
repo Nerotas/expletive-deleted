@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { backendEnvironment, findBackendRoot, findBundledRuntime, requireBundledRuntime } from './backend-runtime.js'
+import { backendEnvironment, findBackendRoot, findBundledRuntime, findPythonRuntime, requireBundledRuntime } from './backend-runtime.js'
 
 describe('backend runtime resolution', () => {
   it('uses first-party backend resources in a packaged application', () => {
@@ -68,6 +68,31 @@ describe('backend runtime resolution', () => {
     )).toMatchObject({
       CENSOR_APP_DATA_DIR: path.join(localAppData, 'ExpletiveDeleted'),
       CENSOR_BUNDLED_RUNTIME: '1',
+      CENSOR_PYTHON_PACKAGES_DIR: path.join(localAppData, 'ExpletiveDeleted', 'dependencies', 'python'),
+      PYTHONPATH: path.join(localAppData, 'ExpletiveDeleted', 'dependencies', 'python'),
+      PYTHONNOUSERSITE: '1',
     })
+  })
+
+  it('uses a working bundled Python without probing system interpreters', () => {
+    const bundledPython = path.resolve('installed', 'resources', 'app-runtime', 'python', 'python.exe')
+    const probes: string[] = []
+
+    expect(findPythonRuntime(path.resolve('.'), 'win32', { CENSOR_PYTHON: 'system-python' }, bundledPython, (command) => {
+      probes.push(command)
+      return true
+    })).toEqual({ command: bundledPython, args: ['-m', 'scripts.desktop_bridge'] })
+    expect(probes).toEqual([bundledPython])
+  })
+
+  it('fails closed when the bundled Python cannot start', () => {
+    const bundledPython = path.resolve('installed', 'resources', 'app-runtime', 'python', 'python.exe')
+    const probes: string[] = []
+
+    expect(() => findPythonRuntime(path.resolve('.'), 'win32', { CENSOR_PYTHON: 'system-python' }, bundledPython, (command) => {
+      probes.push(command)
+      return false
+    })).toThrow('private Python runtime could not start')
+    expect(probes).toEqual([bundledPython])
   })
 })

@@ -67,4 +67,4 @@ if (violations.length) {
   throw new Error(`Packaged dependency policy violation:\n- ${violations.join('\n- ')}`)
 }
 
-console.log('Package dependency audit passed: private Python is present without bundled processing tools, packages, or models')
+console.log('Package dependency audit passed: no bundled processing tools, packages, or models were found')

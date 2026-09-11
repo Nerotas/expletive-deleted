@@ -53,6 +53,7 @@ def get_capabilities(settings: AppSettings) -> dict[str, object]:
         ytdlp_bin=settings.runtime.ytdlp_path or get_managed_ytdlp_path(),
     )
     app_runtime, app_runtime_source, app_runtime_detail = _app_runtime_status(inventory)
+    python_ready = all(status.ready for status in inventory.python)
     requested_cuda = get_whisper_device_status(settings.whisper.model, "cuda")
     selected = get_whisper_device_status(settings.whisper.model, settings.processing.device)
     encoders: list[str] = []
@@ -66,16 +67,16 @@ def get_capabilities(settings: AppSettings) -> dict[str, object]:
     model_ready = inventory.whisper_model.ready
     return {
         # Legacy fields remain until all renderer consumers use the grouped contract.
-        "ready": app_runtime == "ready" and inventory.ffmpeg.ready and inventory.ffprobe.ready and model_ready,
+        "ready": app_runtime == "ready" and python_ready and inventory.ffmpeg.ready and inventory.ffprobe.ready and model_ready,
         "ffmpeg": inventory.ffmpeg.ready,
         "ffprobe": inventory.ffprobe.ready,
-        "whisper": all(status.ready for status in inventory.python),
+        "whisper": python_ready,
         "whisper_library": settings.whisper.library,
         "whisper_model": settings.whisper.model,
         "whisper_model_ready": model_ready,
         "model_large_v3": model_ready and settings.whisper.model == "large-v3",
         # Grouped system-check contract.
-        "processing_ready": app_runtime == "ready" and inventory.ffmpeg.ready and inventory.ffprobe.ready and model_ready,
+        "processing_ready": app_runtime == "ready" and python_ready and inventory.ffmpeg.ready and inventory.ffprobe.ready and model_ready,
         "app_runtime": app_runtime,
         "app_runtime_source": app_runtime_source,
         "app_runtime_detail": app_runtime_detail,

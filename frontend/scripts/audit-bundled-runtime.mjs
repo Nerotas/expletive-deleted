@@ -27,8 +27,6 @@ const forbiddenNames = new Set([
   'ffprobe.exe',
   'yt-dlp.exe',
   'deno.exe',
-  'libx264.dll',
-  'libx265.dll',
   'model.bin',
 ])
 const forbiddenFragments = [
@@ -49,6 +47,7 @@ const forbiddenFragments = [
   '/site-packages/numpy.libs/',
 ]
 const forbiddenMediaLibrary = /^(?:avcodec|avdevice|avfilter|avformat|avutil|postproc|swresample|swscale)-?\d*\.dll$/i
+const forbiddenGplEncoderLibrary = /^libx(?:264|265)(?:-\d+)?\.dll$/i
 for (const relativePath of requiredFiles) await access(path.join(runtimeRoot, relativePath))
 await access(path.join(runtimeRoot, 'LICENSES'))
 
@@ -94,6 +93,7 @@ async function inspect(directory) {
     if (
       forbiddenNames.has(normalizedName)
       || forbiddenMediaLibrary.test(normalizedName)
+      || forbiddenGplEncoderLibrary.test(normalizedName)
       || normalizedName.endsWith('.whl')
       || normalizedName.endsWith('.pt')
       || forbiddenFragments.some((fragment) => normalizedPath.includes(fragment))

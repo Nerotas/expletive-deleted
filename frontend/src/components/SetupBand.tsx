@@ -27,7 +27,7 @@ export function SetupBand({ capabilities, reviewInstall, checkAgain, busy }: Set
       </div>
       <div className="setup-items">
         {bundledRuntimeInvalid ? <SetupItem label="Expletive Deleted components" detail={capabilities.app_runtime_detail} ready={false} busy={busy} /> : null}
-        {!bundledRuntimeInvalid && <SetupItem label="Transcription packages" detail={packagesReady ? 'Pinned processing packages are verified.' : 'Install the pinned packages into the private Python runtime.'} ready={packagesReady} busy={busy} action={() => reviewInstall(['python'])} actionLabel="Review install" />}
+        {!bundledRuntimeInvalid && <SetupItem label="Transcription packages" detail={packagesReady ? 'Pinned processing packages are verified.' : 'Install the pinned packages in your local application data.'} ready={packagesReady} busy={busy} action={() => reviewInstall(['python'])} actionLabel="Review install" />}
         {!bundledRuntimeInvalid && <SetupItem label="FFmpeg and FFprobe" detail={mediaReady ? 'Media tools are verified.' : 'Required to inspect and censor local media.'} ready={mediaReady} busy={busy} action={() => reviewInstall(['ffmpeg'])} actionLabel="Review setup" />}
         <SetupItem label={`Whisper ${capabilities.whisper_model}`} detail="Download the supported speech model when you are ready. It stays on this computer." ready={modelReady} busy={busy} optional />
       </div>

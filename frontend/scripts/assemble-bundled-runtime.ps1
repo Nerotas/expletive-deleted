@@ -41,7 +41,18 @@ if (Test-Path -LiteralPath $temporaryRoot) {
 
 New-Item -ItemType Directory -Path $temporaryRoot | Out-Null
 try {
-    Copy-Item -LiteralPath $pythonRuntime -Destination (Join-Path $temporaryRoot 'python') -Recurse
+    $pythonDestination = Join-Path $temporaryRoot 'python'
+    Copy-Item -LiteralPath $pythonRuntime -Destination $pythonDestination -Recurse
+
+    # Retain the installed, audited pip while excluding CPython's bootstrap
+    # wheel cache and test fixtures from the distributable runtime.
+    foreach ($relativePath in @('Lib\ensurepip', 'Lib\test')) {
+        $excludedPath = Join-Path $pythonDestination $relativePath
+        if (Test-Path -LiteralPath $excludedPath) {
+            Remove-Item -LiteralPath $excludedPath -Recurse -Force
+        }
+    }
+
     foreach ($name in @('THIRD_PARTY_NOTICES.md', 'LICENSES', 'sbom.cdx.json', 'runtime-manifest.json')) {
         Copy-Item -LiteralPath (Join-Path $metadataRoot $name) -Destination (Join-Path $temporaryRoot $name) -Recurse
     }

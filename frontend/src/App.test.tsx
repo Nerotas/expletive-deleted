@@ -619,6 +619,22 @@ describe('desktop application renderer', () => {
     expect(screen.queryByRole('button', { name: 'Transcribe + Transcode' })).not.toBeInTheDocument()
   })
 
+  it('offers the missing YouTube components from the download dialog', async () => {
+    vi.mocked(desktopClient.getCapabilities).mockResolvedValue({
+      ...readyCapabilities,
+      ytdlp: false,
+      js_runtime: false,
+    })
+    const user = userEvent.setup()
+    renderApp('/')
+
+    await user.click(await screen.findByRole('button', { name: 'Download from YouTube' }))
+    await user.click(screen.getByRole('button', { name: 'Review YouTube setup' }))
+
+    await waitFor(() => expect(desktopClient.planDependencies).toHaveBeenCalledWith(['ytdlp', 'js_runtime']))
+    expect(await screen.findByRole('button', { name: /Continue/ })).toBeInTheDocument()
+  })
+
   it('shows a loader while adding a YouTube URL to the queue', async () => {
     let resolveDownload: () => void = () => undefined
     vi.mocked(desktopClient.getCapabilities).mockResolvedValue({ ...readyCapabilities, ytdlp: true })

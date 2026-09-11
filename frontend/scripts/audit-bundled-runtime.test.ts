@@ -83,6 +83,18 @@ describe('private Python runtime audit', () => {
     expect(result.stderr).toMatch(/python\/ffmpeg\.exe/)
   })
 
+  it('rejects versioned GPL encoder libraries even when they are hashed', async () => {
+    const runtimeRoot = await createRuntime()
+    const relativePath = 'python/DLLs/libx264-164.dll'
+    await mkdir(path.dirname(path.join(runtimeRoot, relativePath)), { recursive: true })
+    await writeFile(path.join(runtimeRoot, relativePath), 'synthetic-libx264')
+    await refreshManifestHash(runtimeRoot, relativePath)
+
+    const result = spawnSync(process.execPath, [auditScript, runtimeRoot], { encoding: 'utf8' })
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toMatch(/libx264-164\.dll/)
+  })
+
   it('rejects processing packages from the release payload', async () => {
     const runtimeRoot = await createRuntime()
     const relativePath = 'python/Lib/site-packages/faster_whisper/__init__.py'
