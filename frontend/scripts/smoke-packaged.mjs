@@ -25,7 +25,9 @@ const packagedApp = await electron.launch({
     TMP: temporaryDirectory,
     TEMP: temporaryDirectory,
     LOCALAPPDATA: appDataDirectory,
-    PATH: cleanSystemPath,
+    // Release smoke must prove that no ambient tools satisfy readiness. The
+    // development package intentionally relies on the CI-provided Python.
+    ...(requireBundledRuntime ? { PATH: cleanSystemPath } : {}),
   },
 })
 
@@ -33,7 +35,14 @@ try {
   const window = await packagedApp.firstWindow()
   window.on('pageerror', (error) => console.error(`Renderer error: ${error.message}`))
   await window.waitForLoadState('domcontentloaded')
-  await window.getByRole('heading', { name: 'Welcome to Expletive Deleted', exact: true }).waitFor()
+  const startupOutcome = await Promise.race([
+    window.getByRole('heading', { name: 'Welcome to Expletive Deleted', exact: true }).waitFor().then(() => 'ready'),
+    window.getByRole('heading', { name: 'Repair Expletive Deleted', exact: true }).waitFor().then(() => 'repair'),
+  ])
+  if (startupOutcome === 'repair') {
+    const detail = await window.locator('.backend-setup-detail').textContent().catch(() => null)
+    throw new Error(`Packaged backend did not start${detail ? `: ${detail}` : '.'}`)
+  }
 
   if (requireBundledRuntime) {
     await window.getByRole('button', { name: /Continue/ }).click()
