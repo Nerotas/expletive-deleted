@@ -17,7 +17,7 @@ dictionary entries, or settings.
 | --- | --- | --- |
 | Electron application and Python backend source | Include | Installed with the application. |
 | Private CPython, standard library, and pip | Include | Audited and verified during release packaging. |
-| `faster-whisper`, CTranslate2, PyAV, NumPy, `better-profanity`, and Hugging Face Hub | Exclude | Install pinned versions into private Python only after approval. |
+| `faster-whisper`, CTranslate2, PyAV, NumPy, `better-profanity`, and Hugging Face Hub | Exclude | Install pinned versions into the private Python package directory under application data only after approval. |
 | FFmpeg and FFprobe | Exclude | Locate a compatible installation or obtain the managed runtime after approval. |
 | yt-dlp | Exclude | Locate or download the pinned official executable after approval. |
 | Deno | Exclude | Download the pinned official executable after approval when YouTube support needs it. |
@@ -37,7 +37,7 @@ approves that exact plan.
 Setup must:
 
 - Preserve compatible existing components and allow supported locations to be selected.
-- Install Python packages only into the application-owned private Python runtime.
+- Install Python packages only into `%LOCALAPPDATA%\ExpletiveDeleted\dependencies\python`, which the private Python runtime loads without using global or per-user site packages.
 - Store managed media tools and models under the per-user application-data root.
 - Verify versions and expected files after each action.
 - Make cancellation, failure, and retry understandable without touching media.
@@ -63,8 +63,10 @@ runtime-manifest.json
 
 The version-2 runtime manifest records Python, pip, license files, and a SHA-256
 for every shipped file other than the manifest itself. The SBOM records only
-Python and pip. Release verification launches the relocated Python executable,
-checks pip, and rejects any additional installed Python distribution.
+Python and pip. Assembly removes CPython's `Lib/test` fixtures and `Lib/ensurepip`
+wheel cache while retaining the installed, pinned pip. Release verification
+launches the relocated Python executable, checks pip, and rejects any additional
+installed Python distribution.
 
 The static and packaged audits reject:
 
