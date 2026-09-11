@@ -23,6 +23,13 @@ $workRoot = Join-Path $temporaryBase 'audited-python-runtime-build'
 $metadataRoot = Join-Path $workRoot 'metadata'
 $licensesRoot = Join-Path $metadataRoot 'LICENSES'
 $buildInputs = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\runtime\windows-x64\build-inputs.json') -Raw | ConvertFrom-Json
+$utf8WithoutBom = New-Object System.Text.UTF8Encoding($false)
+
+function Write-Utf8WithoutBom([string]$Path, [string]$Content) {
+    # Windows PowerShell 5.1 adds a BOM for -Encoding utf8, which Node's
+    # JSON.parse does not accept. Keep local and GitHub metadata identical.
+    [IO.File]::WriteAllText($Path, "$Content$([Environment]::NewLine)", $utf8WithoutBom)
+}
 
 foreach ($path in @($pythonExecutable, (Join-Path $pythonDirectory 'LICENSE.txt'))) {
     if (-not (Test-Path -LiteralPath $path)) {
@@ -69,7 +76,9 @@ $manifest = [ordered]@{
     files          = @()
     licenses       = $licenseRecords
 }
-$manifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $metadataRoot 'runtime-manifest.json') -Encoding utf8
+Write-Utf8WithoutBom `
+    -Path (Join-Path $metadataRoot 'runtime-manifest.json') `
+    -Content ($manifest | ConvertTo-Json -Depth 6)
 
 $components = @(
     @{ name = 'Python'; version = $pythonVersion; license = 'PSF-2.0' },
@@ -78,10 +87,12 @@ $components = @(
 $sbomComponents = foreach ($component in $components) {
     @{ type = 'application'; name = $component.name; version = $component.version; licenses = @(@{ license = @{ id = $component.license } }) }
 }
-@{ bomFormat = 'CycloneDX'; specVersion = '1.5'; version = 1; components = $sbomComponents } |
-ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $metadataRoot 'sbom.cdx.json') -Encoding utf8
+$sbom = @{ bomFormat = 'CycloneDX'; specVersion = '1.5'; version = 1; components = $sbomComponents }
+Write-Utf8WithoutBom `
+    -Path (Join-Path $metadataRoot 'sbom.cdx.json') `
+    -Content ($sbom | ConvertTo-Json -Depth 8)
 
-@(
+$thirdPartyNotices = @(
     '# Third-Party Notices',
     '',
     'The Windows installer includes only the private Python bootstrap runtime:',
@@ -90,7 +101,10 @@ ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $metadataRoot 'sbo
     "- pip $pipVersion (MIT)",
     '',
     'Processing packages, media tools, and speech models are obtained only after user approval.'
-) | Set-Content -LiteralPath (Join-Path $metadataRoot 'THIRD_PARTY_NOTICES.md') -Encoding utf8
+) -join [Environment]::NewLine
+Write-Utf8WithoutBom `
+    -Path (Join-Path $metadataRoot 'THIRD_PARTY_NOTICES.md') `
+    -Content $thirdPartyNotices
 
 & (Join-Path $PSScriptRoot 'assemble-bundled-runtime.ps1') `
     -PythonRuntimeDirectory $pythonDirectory `

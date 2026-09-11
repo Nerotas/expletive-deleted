@@ -128,14 +128,13 @@ npm run dev
 
 Electron starts and owns the private Python bridge. Vite is used only to build and hot-reload the renderer; this is not a browser-hosted application.
 
-Create and audit the Windows installer:
+Create the release-equivalent Windows installer from the repository root:
 
 ```powershell
-cd frontend
-npm run package:win
+.\scripts\build_local_release.ps1
 ```
 
-The package audit fails if the installer contains Whisper model payloads or accidental development binaries. Electron's framework-owned root `ffmpeg.dll` is Chromium codec support and cannot satisfy processing readiness.
+This one command mirrors the GitHub release validation and packaging stages. It accepts Node.js 22.12.0 or later and uses Python 3.13.15 to match the release runtime, downloading and checksum-verifying the official Python archive temporarily when that version is not installed. It creates an isolated private Python runtime and writes the verified installer under `frontend/release/`. The package audit fails if the installer contains Whisper model payloads or accidental development binaries. Electron's framework-owned root `ffmpeg.dll` is Chromium codec support and cannot satisfy processing readiness.
 
 ## Releases and versioning
 

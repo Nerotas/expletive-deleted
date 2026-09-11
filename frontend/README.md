@@ -14,17 +14,10 @@ npm run dev
 Production validation:
 
 ```powershell
-npm test
-npm run typecheck
-npm run lint
-npm run build
-npm run smoke
-npm run package:dir
-npm run smoke:package
-npm run package:win
+..\scripts\build_local_release.ps1
 ```
 
-`package:dir` and `package:win` build the setup-first installer. The installer contains the application and private Python payload; FFmpeg/FFprobe, yt-dlp, Deno, Python packages, and the selected Whisper model are verified or obtained through explicit onboarding setup. Whisper models remain user-selected and are never bundled.
+The local release command runs the same validation and audited installer stages as the GitHub release workflow. It accepts Node.js 22.12.0 or later and obtains the checksum-verified Python 3.13.15 runtime automatically when needed. The installer contains the application and private Python payload; FFmpeg/FFprobe, yt-dlp, Deno, Python packages, and the selected Whisper model are verified or obtained through explicit onboarding setup. Whisper models remain user-selected and are never bundled.
 
 The Windows package wrapper cleans incomplete generated staging directories and retries Electron Builder's transient `EPERM` rename failure up to three times. If cleanup remains locked, close any packaged Expletive Deleted process and Explorer window open to `frontend/release`, then run the command again.
 

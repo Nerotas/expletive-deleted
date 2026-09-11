@@ -107,7 +107,7 @@ describe('desktop application renderer', () => {
     expect(screen.queryByText('Setup required')).not.toBeInTheDocument()
 
     await act(async () => completeCheck?.(readyCapabilities))
-    expect(await screen.findByText('System ready')).toBeInTheDocument()
+    expect(await screen.findByText('Processing ready')).toBeInTheDocument()
   })
 
   it('identifies a missing bundled speech model in the header and setup band', async () => {
