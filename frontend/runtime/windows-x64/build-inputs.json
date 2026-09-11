@@ -10,6 +10,7 @@
   "ffmpeg": {
     "version": "8.1.2",
     "source": "https://ffmpeg.org/releases/ffmpeg-8.1.2.tar.xz",
+    "sha256": "464beb5e7bf0c311e68b45ae2f04e9cc2af88851abb4082231742a74d97b524c",
     "license": "LGPL-2.1-or-later",
     "configure": [
       "--disable-gpl",
@@ -28,6 +29,9 @@
       "av": "18.1.0"
     },
     "pyav": {
+      "version": "18.1.0",
+      "source": "https://github.com/PyAV-Org/PyAV.git",
+      "revision": "7e3d950a8b72062502c1a60d672f8ca565313af5",
       "license": "BSD-3-Clause",
       "rule": "Build from source against the approved FFmpeg shared libraries. Do not accept the public Windows wheel or the ordinary pyav-ffmpeg output because they enable x264/x265."
     }
