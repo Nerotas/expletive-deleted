@@ -14,7 +14,7 @@
 
 Expletive Deleted is a Windows desktop application that transcribes spoken language locally, finds words you have chosen to censor, and creates a separate censored copy with FFmpeg. It is designed for parents and media owners who want control over what their family hears without sending private media or transcripts to a cloud service.
 
-Version **1.0.1** is the current Windows release.
+Version **1.2.0** is the current Windows release.
 
 Expletive Deleted is free to use. [Ko-fi support](https://ko-fi.com/nicholaserotas) is optional and does not unlock features or priority service.
 
@@ -52,7 +52,7 @@ YouTube import is local and user-initiated. The app verifies or retrieves the ap
 
 ## Install on Windows
 
-1. Download `Expletive-Deleted-Setup-1.0.1-x64.exe` from the [latest release](https://github.com/Nerotas/expletive-deleted/releases/latest).
+1. Download `Expletive-Deleted-Setup-1.2.0-x64.exe` from the [latest release](https://github.com/Nerotas/expletive-deleted/releases/latest).
 2. Run the installer, then open **Expletive Deleted** from the Start menu or desktop shortcut.
 3. Complete the setup checklist. The installer includes the private Python bridge; the app guides you through retrieving pinned Python packages, FFmpeg/FFprobe, yt-dlp, Deno, and the Whisper model when needed.
 4. Complete the first-run walkthrough: Welcome, Get ready, Your settings, Add a file, Process safely, and Finish. It checks required components, prepares your dictionary, confirms folders and censoring preferences, and lets you choose the automatic local and YouTube workflows. It saves progress only when you choose **Save & Continue**.
