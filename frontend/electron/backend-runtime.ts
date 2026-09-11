@@ -48,8 +48,6 @@ export function requireBundledRuntime(
   platform: NodeJS.Platform,
   exists: (candidate: string) => boolean = existsSync,
 ): BundledRuntimePaths {
-  const manifest = path.join(resourcesPath, 'app-runtime', 'runtime-manifest.json')
-  if (!exists(manifest)) return {}
   const runtime = findBundledRuntime(resourcesPath, platform, exists)
   if (runtime.python) return runtime
   throw new Error('The installed private Python runtime is incomplete. Reinstall Expletive Deleted.')

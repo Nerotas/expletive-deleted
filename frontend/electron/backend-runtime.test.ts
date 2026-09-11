@@ -52,15 +52,15 @@ describe('backend runtime resolution', () => {
       .toEqual({ python })
   })
 
-  it('fails closed when the private Python runtime is missing', () => {
+  it('accepts setup-first bundled Python without a full runtime manifest', () => {
     const resourcesPath = path.resolve('installed', 'resources')
     const runtimeRoot = path.join(resourcesPath, 'app-runtime')
-    const manifest = path.join(runtimeRoot, 'runtime-manifest.json')
     const python = path.join(runtimeRoot, 'python', 'python.exe')
 
-    expect(requireBundledRuntime(resourcesPath, 'win32', (candidate) => [manifest, python].includes(candidate)))
+    expect(requireBundledRuntime(resourcesPath, 'win32', (candidate) => candidate === python))
       .toEqual({ python })
-    expect(requireBundledRuntime(resourcesPath, 'win32', () => false)).toEqual({})
+    expect(() => requireBundledRuntime(resourcesPath, 'win32', () => false))
+      .toThrow('The installed private Python runtime is incomplete')
   })
 
   it('passes Electron\'s app-data root to the Python bridge', () => {

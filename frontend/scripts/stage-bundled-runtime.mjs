@@ -37,7 +37,17 @@ if (suppliedPythonDirectory) {
   if (!existsSync(path.join(pythonDirectory, executableName))) {
     throw new Error(`BUNDLED_PYTHON_DIR is missing ${executableName}: ${pythonDirectory}`)
   }
-  await cp(pythonDirectory, path.join(stagingDirectory, 'python'), { recursive: true, force: true })
+  const stagedPythonDirectory = path.join(stagingDirectory, 'python')
+  await cp(pythonDirectory, stagedPythonDirectory, { recursive: true, force: true })
+
+  async function removeWheelArchives(directory) {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const entryPath = path.join(directory, entry.name)
+      if (entry.isDirectory()) await removeWheelArchives(entryPath)
+      else if (entry.name.toLowerCase().endsWith('.whl')) await rm(entryPath, { force: true })
+    }
+  }
+  await removeWheelArchives(stagedPythonDirectory)
 }
 
 if (!sourceDirectory) {
