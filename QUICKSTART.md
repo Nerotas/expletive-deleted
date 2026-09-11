@@ -11,8 +11,8 @@ Normal users should follow the desktop application workflow. Do not start `backe
 
 1. Run `Expletive-Deleted-Setup-<version>-x64.exe` and choose the installation directory.
 2. Start **Expletive Deleted** from the Start menu or desktop shortcut.
-3. If Python is missing, the first screen explains why it is needed and offers **Get Python**, which opens the official download page. After Python 3.9 or later is installed, return to the app and choose **Try again**.
-4. Follow the in-app walkthrough to check local components, choose initial settings, and optionally try a first file.
+3. Follow the in-app walkthrough to review and approve any missing processing packages, media tools, YouTube tools, and the speech model.
+4. Choose initial settings and optionally try a first file after required components verify successfully.
 
 The installer contains the application and its private Python bridge, but does not silently retrieve Python packages, the external `ffmpeg.exe`/`ffprobe.exe` processing runtime, yt-dlp, Deno, or Whisper models. Electron's required Chromium codec `ffmpeg.dll` is part of the desktop framework, cannot process jobs, and does not count as an installed FFmpeg dependency. Uninstalling the application does not delete settings, downloaded runtime components, models, or user media beneath `%LOCALAPPDATA%\ExpletiveDeleted` and `%USERPROFILE%\Documents\Expletive Deleted`.
 
@@ -44,7 +44,7 @@ npm run dev
 
 The walkthrough has six sections: Welcome, Get ready, Your settings, Add a file, Process safely, and Finish. Each section is implemented under `frontend/src/features/onboarding/` so developers can change and test it without editing the rest of the walkthrough. The app saves progress when you choose **Save & Continue**, so an unfinished first run resumes at the last saved section. Reopening a completed walkthrough starts at Welcome and leaves its completed status intact until you finish again.
 
-If the private local processing service cannot start, the Electron window explains that Python or its required packages need attention and links to the official Python download page. No media is uploaded or changed while the service is unavailable.
+If the private local processing service cannot start in an installed build, the Electron window explains that the application needs repair. A source checkout may still direct a developer to install Python. No media is uploaded or changed while the service is unavailable.
 
 The first launch checks the local system for:
 

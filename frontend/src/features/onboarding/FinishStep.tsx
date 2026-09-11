@@ -11,8 +11,11 @@ export function FinishStep({ settings, capabilities, dictionaryPrepared }: Finis
   return <>
     <OnboardingStepHeading title="Ready when you are" subtitle="Review your choices, then finish setup. You can return to this walkthrough from Settings." />
     <dl className="finish-summary">
-      <div><dt>Application components</dt><dd>{capabilities?.app_runtime === 'ready' ? 'Verified' : capabilities?.app_runtime === 'invalid' ? 'Needs repair' : capabilities?.ready ? 'Verified' : 'Needs attention'}</dd></div>
+      <div><dt>Private Python</dt><dd>{capabilities?.app_runtime === 'ready' ? 'Verified' : capabilities?.app_runtime === 'invalid' ? 'Needs repair' : 'Needs attention'}</dd></div>
+      <div><dt>Transcription packages</dt><dd>{capabilities?.whisper ? 'Verified' : 'Needs setup'}</dd></div>
+      <div><dt>FFmpeg and FFprobe</dt><dd>{capabilities?.ffmpeg && capabilities?.ffprobe ? 'Verified' : 'Needs setup'}</dd></div>
       <div><dt>Speech model</dt><dd>{capabilities?.speech_model === 'ready' || capabilities?.whisper_model_ready ? 'Verified' : 'Not downloaded'}</dd></div>
+      <div><dt>YouTube tools</dt><dd>{capabilities?.ytdlp && capabilities?.js_runtime ? 'Verified' : 'Needs setup for YouTube imports'}</dd></div>
       <div><dt>Video output</dt><dd>{settings.video.mode === 'preserve_source' ? 'Preserve source video' : capabilities?.h264_conversion === 'unavailable' ? 'H.264 conversion unavailable' : 'Convert to H.264 when needed'}</dd></div>
       <div><dt>Dictionary</dt><dd>{dictionaryPrepared ? 'Choice prepared' : 'Not prepared'}</dd></div>
       <div><dt>Covering method</dt><dd>{settings.censoring.stereo_method === 'drop_audio' ? 'Drop audio' : 'Karaoke'}</dd></div>

@@ -28,7 +28,7 @@ npm run package:win
 
 The Windows package wrapper cleans incomplete generated staging directories and retries Electron Builder's transient `EPERM` rename failure up to three times. If cleanup remains locked, close any packaged Expletive Deleted process and Explorer window open to `frontend/release`, then run the command again.
 
-The package audit rejects Whisper model payloads and accidental development binaries. Electron's single root `ffmpeg.dll` remains framework-owned Chromium codec support and must not satisfy the application's FFmpeg readiness check.
+The package audit requires private Python and rejects processing packages, FFmpeg/FFprobe executables and libraries, yt-dlp, Deno, Whisper model payloads, and accidental development binaries. Electron's single root `ffmpeg.dll` remains framework-owned Chromium codec support and must not satisfy the application's FFmpeg readiness check.
 
 ## Renderer architecture
 

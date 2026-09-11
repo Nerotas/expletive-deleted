@@ -7,16 +7,10 @@ if (!suppliedDirectory) throw new Error('Pass the completed runtime directory or
 
 const runtimeRoot = path.resolve(suppliedDirectory)
 const manifestPath = path.join(runtimeRoot, 'runtime-manifest.json')
-const buildPath = path.join(runtimeRoot, 'ffmpeg-build.json')
-const sourceArchivePath = path.join(runtimeRoot, 'ffmpeg-source.zip')
-await Promise.all([access(manifestPath), access(buildPath), access(sourceArchivePath)])
+await access(manifestPath)
 
 const hashFile = async (filePath) => createHash('sha256').update(await readFile(filePath)).digest('hex')
 const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
-const build = JSON.parse(await readFile(buildPath, 'utf8'))
-const sourceArchive = 'ffmpeg-source.zip'
-build.source_archive = { path: sourceArchive, sha256: await hashFile(sourceArchivePath) }
-await writeFile(buildPath, `${JSON.stringify(build, null, 2)}\n`)
 
 const artifacts = []
 async function inspect(directory) {

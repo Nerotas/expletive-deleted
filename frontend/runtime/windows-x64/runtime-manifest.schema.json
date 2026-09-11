@@ -1,13 +1,15 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Expletive Deleted audited Windows runtime manifest",
+  "title": "Expletive Deleted audited Windows private Python manifest",
   "type": "object",
-  "required": ["schema_version", "platform", "python", "ffmpeg", "pyav", "ytdlp", "deno", "files", "licenses"],
+  "additionalProperties": false,
+  "required": ["schema_version", "platform", "python", "pip", "files", "licenses"],
   "properties": {
-    "schema_version": { "const": 1 },
+    "schema_version": { "const": 2 },
     "platform": { "const": "win32-x64" },
     "python": {
       "type": "object",
+      "additionalProperties": false,
       "required": ["path", "version", "license"],
       "properties": {
         "path": { "const": "python/python.exe" },
@@ -15,46 +17,12 @@
         "license": { "const": "PSF-2.0" }
       }
     },
-    "ffmpeg": {
+    "pip": {
       "type": "object",
-      "required": ["ffmpeg_path", "ffprobe_path", "version", "license", "configure"],
-      "properties": {
-        "ffmpeg_path": { "const": "ffmpeg/ffmpeg.exe" },
-        "ffprobe_path": { "const": "ffmpeg/ffprobe.exe" },
-        "version": { "type": "string", "minLength": 1 },
-        "license": { "const": "LGPL-2.1-or-later" },
-        "configure": {
-          "type": "array",
-          "items": { "type": "string", "not": { "enum": ["--enable-gpl", "--enable-nonfree"] } }
-        }
-      }
-    },
-    "pyav": {
-      "type": "object",
-      "required": ["version", "license", "ffmpeg_library_origin"],
+      "additionalProperties": false,
+      "required": ["version", "license"],
       "properties": {
         "version": { "type": "string", "minLength": 1 },
-        "license": { "const": "BSD-3-Clause" },
-        "ffmpeg_library_origin": { "const": "bundled-lgpl-build" }
-      }
-    },
-    "ytdlp": {
-      "type": "object",
-      "required": ["path", "version", "source", "license"],
-      "properties": {
-        "path": { "const": "yt-dlp/yt-dlp.exe" },
-        "version": { "type": "string", "minLength": 1 },
-        "source": { "type": "string", "pattern": "^https://" },
-        "license": { "const": "Unlicense" }
-      }
-    },
-    "deno": {
-      "type": "object",
-      "required": ["path", "version", "source", "license"],
-      "properties": {
-        "path": { "const": "deno/deno.exe" },
-        "version": { "type": "string", "minLength": 1 },
-        "source": { "type": "string", "pattern": "^https://" },
         "license": { "const": "MIT" }
       }
     },
@@ -63,6 +31,7 @@
       "minItems": 1,
       "items": {
         "type": "object",
+        "additionalProperties": false,
         "required": ["path", "sha256"],
         "properties": {
           "path": { "type": "string", "minLength": 1 },
@@ -75,6 +44,7 @@
       "minItems": 1,
       "items": {
         "type": "object",
+        "additionalProperties": false,
         "required": ["path", "spdx"],
         "properties": {
           "path": { "type": "string", "pattern": "^LICENSES/" },

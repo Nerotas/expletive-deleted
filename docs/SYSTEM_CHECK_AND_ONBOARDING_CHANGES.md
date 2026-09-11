@@ -1,134 +1,75 @@
-# System Check and Onboarding Changes for the Bundled Runtime
+# System Check and Onboarding for Private Python
 
-This document defines the product changes required when the Windows installer includes the private Python runtime, backend packages, faster-whisper, PyAV, FFmpeg, and FFprobe. It complements [BUNDLED_RUNTIME_PACKAGING_PLAN.md](BUNDLED_RUNTIME_PACKAGING_PLAN.md).
+This document defines the system-check behavior that accompanies the
+Python-only installer policy in
+[BUNDLED_RUNTIME_PACKAGING_PLAN.md](BUNDLED_RUNTIME_PACKAGING_PLAN.md).
 
-The model stays separate and user-selected. yt-dlp is included in the installed application. A normal customer must never be asked to install Python, Python packages, FFmpeg, FFprobe, or yt-dlp.
+## Readiness groups
 
-## 1. System check: required changes
-
-### Replace the current dependency checklist
-
-The current system check treats these as user-provided components:
-
-- FFmpeg and FFprobe
-- Python and the faster-whisper package set
-- Whisper `large-v3`
-- yt-dlp
-
-After bundling, only the model is a required customer download. The check must divide results into these groups.
-
-| Group | What the app checks | Blocks local processing? | User action when unhealthy |
+| Group | What the app checks | Blocks local processing? | Recovery |
 | --- | --- | --- | --- |
-| App components | Private Python, backend package imports, PyAV load, FFmpeg, FFprobe, and the bundled-runtime manifest | Yes | Explain that the installed app is damaged or incomplete. Offer **Restart**, **Open diagnostics**, and **Reinstall app** guidance. Do not offer Python, pip, FFmpeg, or path-selection actions. |
-| Speech model | The selected Whisper model exists, is complete, and matches the supported revision | Yes | Show its download size and destination. Offer **Download model**, **Locate existing model**, retry, and cancel. |
-| Application components | Private Python, backend packages, PyAV, FFmpeg, FFprobe, and yt-dlp pass verification | Yes | Explain that the installed app is damaged or incomplete. Offer repair/reinstall guidance. |
-| Optional H.264 conversion | A compatible H.264 encoder is available only when the user selected Convert to H.264 | No for normal stream-copy processing | Explain that source-video preservation still works. Offer a link to Video output settings. Do not silently select `libx264` or change the setting. |
-| Hardware acceleration | CUDA and selected compute type | No | Report as an informational performance choice. Keep CPU transcription available. |
+| Private Python | The packaged bridge is running from the app-owned Python runtime | Yes | A startup failure is an application repair or reinstall issue. |
+| Transcription packages | Pinned `faster-whisper`, CTranslate2, PyAV, NumPy, `better-profanity`, and Hugging Face Hub versions | Yes | Review and approve installation into private Python, then verify. |
+| Media tools | Compatible FFmpeg and FFprobe executables | Yes | Locate existing tools or approve managed setup. |
+| Speech model | The selected model files and supported revision | Yes | Locate an existing model or approve the selected download. |
+| YouTube tools | yt-dlp and Deno | No for local files | Locate or approve setup before importing from YouTube. |
+| H.264 conversion | A working encoder when H.264 output is selected | No when preserving source video | Select another output mode or a compatible FFmpeg installation. |
+| Hardware acceleration | CUDA and the selected compute type | No | Keep CPU transcription available. |
 
-### Make the bundled runtime an application-integrity check
+`processing_ready` is true only when private Python, the transcription packages,
+FFmpeg, FFprobe, and the selected model are ready. yt-dlp and Deno are separate
+YouTube capabilities.
 
-The private runtime is owned by the installed application, so its failures are repair failures, not setup failures. The system check needs a distinct `app_runtime` result with individual details for:
+## Packaged-runtime behavior
 
-1. The runtime manifest exists and identifies the installed runtime version.
-2. `python/python.exe`, `ffmpeg/ffmpeg.exe`, and `ffmpeg/ffprobe.exe` exist at the expected private paths.
-3. FFmpeg and FFprobe run and meet the approved version/configuration requirements.
-4. Required backend imports load: faster-whisper, CTranslate2, PyAV, NumPy, better-profanity, and Hugging Face Hub.
-5. PyAV can load the approved FFmpeg shared libraries.
-6. The bridge is using the bundled FFmpeg and FFprobe paths, never Electron's root `ffmpeg.dll`, `PATH`, WinGet, or a user-selected executable.
+The presence of private Python does not imply that processing packages or media
+tools came with the application. A missing processing package is a setup state,
+not evidence that the installer is damaged. Packaged mode must continue to
+inspect the application-managed component root, compatible user installations,
+and saved path overrides.
 
-The runtime-manifest hash/SBOM/source audit remains a release-build gate. The desktop check should verify installed paths, executable versions, and library imports; it should not make the customer wait while recalculating hashes for every installed binary on every launch.
+The Settings page keeps FFmpeg and FFprobe overrides available in packaged
+builds. Its copy distinguishes the included private Python runtime from the
+separately approved processing components.
 
-### Change the readiness contract
+If private Python or the packaged backend cannot start, the application shows
+repair guidance. It must not fall back to a system Python interpreter after a
+valid packaged-runtime manifest has selected the private interpreter.
 
-Current `ready` combines FFmpeg, FFprobe, all Python dependencies, and the Whisper model. Retain `ready` as the processing gate, but expose the reason in a grouped form so the renderer does not infer product behavior from individual Python-package booleans.
+## First-run setup
 
-The replacement capability payload should include fields equivalent to:
+The **Prepare this computer** step lists:
 
-```text
-app_runtime: ready | missing | invalid
-app_runtime_detail: parent-facing repair instruction
-app_runtime_source: bundled | development
-speech_model: ready | missing | invalid
-speech_model_name: large-v3
-speech_model_path: local path when verified
-speech_model_detail: source/revision/incomplete-download explanation
-ytdlp: ready | missing | invalid
-h264_conversion: available | unavailable | not_requested
-processing_ready: app_runtime ready AND speech_model ready
-```
+1. Transcription packages.
+2. FFmpeg and FFprobe.
+3. YouTube tools.
+4. The selected Whisper model.
 
-Keep the existing FFmpeg path/version and encoder details as developer diagnostics. They should not be the main customer-facing checklist. During source-checkout development, retain the external-runtime inspection path behind a `development` source so developers can use a repository `.venv` and explicitly configured tools without changing the packaged-app experience.
+Each missing item remains visible. The primary setup action creates a plan but
+does not begin a download. The consent dialog presents source, purpose, version,
+license, destination, network use, and size when known. The user may cancel the
+dialog without changing the computer.
 
-### Remove obsolete customer actions
+The walkthrough may continue with warnings so users can review folders and
+settings, but processing controls remain unavailable until required components
+verify successfully. Outside onboarding, the setup band offers the package,
+media-tool, and model actions again so an incomplete or cancelled setup is
+recoverable.
 
-Remove these actions from a packaged build:
+## Parent-facing language
 
-- **Get Components** for Python or Python packages.
-- **Get Components** or **Locate existing** for FFmpeg/FFprobe.
-- The combined **Get required components** action when its plan includes Python or FFmpeg.
-- Browser instructions to download Python.
-- Settings fields that ask a customer to paste or browse to FFmpeg/FFprobe paths.
-
-Do not remove the underlying diagnostics or development support until the packaged runtime has passed release qualification. In a packaged build, a missing bundled executable must lead to repair/reinstall guidance instead of a fallback to `PATH`.
-
-### New parent-facing status copy
-
-Use plain language and distinguish application repair from optional downloads.
-
-| Condition | Heading | Supporting copy | Primary action |
-| --- | --- | --- | --- |
-| Bundled runtime verified, model missing | `Choose speech recognition` | `Expletive Deleted is ready to process files. Download the speech model when you are ready; it stays on this computer.` | `Download large-v3 model` |
-| Model download incomplete | `Finish downloading the speech model` | `The previous download was not complete. You can retry without changing your files or settings.` | `Resume download` or `Start again` |
-| Bundled runtime invalid | `Repair Expletive Deleted` | `A component that came with the app could not be verified. Your media and settings have not changed.` | `Restart` and `Open diagnostics` |
-| yt-dlp unavailable | `Repair Expletive Deleted` | `A component that came with the app could not be verified. Your media and settings have not changed.` | `Restart` and `Open diagnostics` |
-| H.264 unavailable after user selected it | `H.264 conversion is unavailable` | `Your usual workflow can still preserve the source video. Choose another video-output setting or use a computer with a compatible encoder.` | `Open video settings` |
-
-## 2. Onboarding changes that follow from the system check
-
-### Get ready step
-
-Replace the four-row component installer with:
-
-1. **Expletive Deleted components** — verified automatically; expandable details show that the app includes its local processing tools.
-2. **Speech model** — the only required first-run download. Explain approximate download and disk space before consent.
-3. **YouTube downloads** — included with the application and used only when the customer chooses to import a YouTube video. Network access remains required.
-4. **Video output** — informational confirmation that the default preserves source video. If the user chose H.264, surface availability without blocking the walkthrough.
-
-The normal primary action should be **Download large-v3 model**, not **Get required components**. The step can continue only after the model is verified or the user explicitly exits the walkthrough; processing controls remain disabled until it is ready.
-
-### Backend startup failure page
-
-Replace `Install Python to continue` with a repair page for packaged builds. It must not link to Python downloads. A source-checkout/developer build may retain Python instructions behind an explicit development-only condition.
-
-### Workflow settings step
-
-Keep the existing automatic-flow choices:
-
-- transcribed local file creates a censor queue entry;
-- YouTube download then transcribe then censor, when the customer chooses that workflow.
-
-Explain that these choices do not start existing files and that YouTube automation requires network access. Add a concise video-output explanation: **Preserve source video** is the default; **Convert to H.264** is an explicit compatibility choice.
-
-### Finish step and setup band
-
-The finish summary should say:
-
-- `Application components: verified` or `Needs repair`;
-- `Speech model: verified` or `Not downloaded`;
-- `YouTube downloads: included / ready`;
-- selected video-output behavior.
-
-Outside onboarding, replace the existing “System requirements” band with the same grouped status. It should route a damaged app to repair guidance and a missing model to model setup.
-
-## 3. Implementation order
-
-1. Add the grouped backend capability contract and tests for bundled, development, missing-model, invalid-runtime, bundled-yt-dlp, and unavailable-H.264 states.
-2. Change the packaged bridge/runtime lookup so it cannot fall back to system Python or `PATH` FFmpeg after a bundled-runtime manifest is present.
-3. Update System Check, Setup Band, Finish, and Components onboarding UI to consume the grouped contract and remove obsolete customer actions.
-4. Hide manual FFmpeg/FFprobe settings in packaged builds; retain them only in clearly marked developer diagnostics.
-5. Add Electron smoke tests for a clean packaged runtime with a missing model, a damaged-runtime failure, model setup, and bundled yt-dlp.
-6. Visually review the walkthrough in light and dark modes at supported window sizes.
+- Say **Private Python is included** only for the interpreter and bootstrap.
+- Say **Install transcription packages** for the pinned Python dependencies.
+- Say **Set up FFmpeg and FFprobe** for media tools.
+- Say **Set up YouTube tools** for yt-dlp and Deno.
+- Never claim that processing packages, FFmpeg, yt-dlp, Deno, or a model came with the installer.
+- Explain that all processing stays local and setup does not change source media.
 
 ## Acceptance criteria
 
-On a clean Windows computer, the system check says the application components are already verified, requests only the speech model, and shows YouTube downloads as included. It never directs a parent to Python, pip, FFmpeg, yt-dlp, PATH, or an executable location. A damaged bundled runtime is a repair/reinstall issue, a missing model is a user-approved download, and lack of an H.264 encoder does not block the default source-video workflow.
+On a clean Windows x64 computer, the application opens using private Python and
+shows every processing component as pending. Nothing downloads until the user
+approves an exact plan. After setup, the app verifies each component and reports
+processing readiness. Existing compatible tools can be selected, retry is
+available after failure, and uninstalling or repairing the application does not
+delete user media, settings, managed components, or models.

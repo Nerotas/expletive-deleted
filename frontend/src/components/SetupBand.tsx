@@ -10,23 +10,25 @@ type SetupBandProps = {
 
 export function SetupBand({ capabilities, reviewInstall, checkAgain, busy }: SetupBandProps) {
   const bundledRuntime = capabilities.app_runtime_source === 'bundled'
+  const packagesReady = Boolean(capabilities.whisper)
+  const mediaReady = Boolean(capabilities.ffmpeg && capabilities.ffprobe)
   const modelReady = capabilities.speech_model === 'ready' || capabilities.whisper_model_ready
   const bundledRuntimeInvalid = bundledRuntime && capabilities.app_runtime === 'invalid'
-  const developmentRuntimeMissing = capabilities.app_runtime_source === 'development' && capabilities.app_runtime !== 'ready'
 
   return (
     <section className="setup-band">
       <div>
         <span className="eyebrow">System check</span>
-        <h2>{bundledRuntime ? 'Local processing status' : 'Local components'}</h2>
+        <h2>Local processing status</h2>
         <p>{bundledRuntime
-          ? 'The app checks its included tools automatically. The speech model is a separate choice that stays on this computer.'
-          : 'The app checks its processing components automatically. The speech model is a separate choice that stays on this computer.'}
+          ? 'Private Python is included. Processing packages, media tools, and the speech model are prepared only after you approve them.'
+          : 'The app checks its processing components automatically and lets you review anything it needs to obtain.'}
         </p>
       </div>
       <div className="setup-items">
         {bundledRuntimeInvalid ? <SetupItem label="Expletive Deleted components" detail={capabilities.app_runtime_detail} ready={false} busy={busy} /> : null}
-        {developmentRuntimeMissing ? <SetupItem label="Development runtime components" detail={capabilities.app_runtime_detail} ready={false} busy={busy} /> : null}
+        {!bundledRuntimeInvalid && <SetupItem label="Transcription packages" detail={packagesReady ? 'Pinned processing packages are verified.' : 'Install the pinned packages into the private Python runtime.'} ready={packagesReady} busy={busy} action={() => reviewInstall(['python'])} actionLabel="Review install" />}
+        {!bundledRuntimeInvalid && <SetupItem label="FFmpeg and FFprobe" detail={mediaReady ? 'Media tools are verified.' : 'Required to inspect and censor local media.'} ready={mediaReady} busy={busy} action={() => reviewInstall(['ffmpeg'])} actionLabel="Review setup" />}
         <SetupItem label={`Whisper ${capabilities.whisper_model}`} detail="Download the supported speech model when you are ready. It stays on this computer." ready={modelReady} busy={busy} optional />
       </div>
       <div className="setup-band-controls">

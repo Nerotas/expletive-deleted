@@ -1,62 +1,28 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "platform": "win32-x64",
   "python": {
     "version": "3.13.15",
     "license": "PSF-2.0",
     "distribution": "private application runtime",
-    "rule": "Build or extract a private runtime only; do not require a system Python. Record the final source or installer URL and SHA-256 in the release SBOM."
+    "rule": "Copy the pinned Actions Python runtime before installing development dependencies, verify it remains relocatable, and retain its license."
   },
-  "ffmpeg": {
-    "version": "8.1.2",
-    "source": "https://ffmpeg.org/releases/ffmpeg-8.1.2.tar.xz",
-    "sha256": "464beb5e7bf0c311e68b45ae2f04e9cc2af88851abb4082231742a74d97b524c",
-    "license": "LGPL-2.1-or-later",
-    "configure": [
-      "--disable-gpl",
-      "--disable-nonfree",
-      "--enable-shared",
-      "--disable-static"
-    ],
-    "forbidden_libraries": ["libx264", "libx265"],
-    "rule": "Use the resulting shared libraries for both FFmpeg/FFprobe and the custom PyAV build. Preserve the exact source archive, patch list, compiler version, configure arguments, and binary hashes."
-  },
-  "python_packages": {
-    "requirements_file": "../../../requirements.txt",
-    "pinned": {
-      "faster-whisper": "1.2.1",
-      "ctranslate2": "4.8.1",
-      "av": "18.1.0"
-    },
-    "pyav": {
-      "version": "18.1.0",
-      "source": "https://github.com/PyAV-Org/PyAV.git",
-      "revision": "7e3d950a8b72062502c1a60d672f8ca565313af5",
-      "license": "BSD-3-Clause",
-      "rule": "Build from source against the approved FFmpeg shared libraries. Do not accept the public Windows wheel or the ordinary pyav-ffmpeg output because they enable x264/x265."
-    }
-  },
-  "ytdlp": {
-    "version": "2026.08.19",
-    "source": "https://github.com/yt-dlp/yt-dlp/releases/download/2026.08.19/yt-dlp.exe",
-    "license": "Unlicense",
-    "path": "yt-dlp/yt-dlp.exe",
-    "distribution": "official Windows x64 executable",
-    "rule": "Bundle the pinned official executable and record its release hash in the runtime manifest and SBOM."
-  },
-  "deno": {
-    "version": "2.9.6",
-    "source": "https://github.com/denoland/deno/releases/download/v2.9.6/deno-x86_64-pc-windows-msvc.zip",
+  "pip": {
+    "version": "25.2",
     "license": "MIT",
-    "path": "deno/deno.exe",
-    "distribution": "official Windows x64 executable, extracted from the release zip",
-    "rule": "Bundle only the pinned official deno.exe, verified against the release's published SHA-256 checksum, and record its release hash in the runtime manifest and SBOM. Used solely so yt-dlp can solve YouTube's JavaScript signature challenge."
+    "purpose": "Consent-driven installation of processing dependencies into the private runtime.",
+    "rule": "Retain pip as the only installed third-party Python distribution in the release payload."
   },
-  "excluded_payloads": ["Whisper model files", "Hugging Face model cache"],
+  "excluded_payloads": [
+    "processing Python packages from requirements.txt",
+    "FFmpeg and FFprobe",
+    "yt-dlp",
+    "Deno",
+    "Whisper model files",
+    "Hugging Face model cache"
+  ],
   "release_outputs": [
     "runtime-manifest.json",
-    "ffmpeg-build.json",
-    "ffmpeg-source.zip",
     "sbom.cdx.json",
     "THIRD_PARTY_NOTICES.md",
     "LICENSES/"

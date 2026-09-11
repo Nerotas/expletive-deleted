@@ -6,7 +6,7 @@ This repository contains the Python profanity-censor pipeline, local application
 
 The master product and architecture direction is recorded in [docs/Profanity Censor Desktop App - Master Project Handoff.md](docs/Profanity%20Censor%20Desktop%20App%20%E2%80%94%20Master%20Project%20Handoff.md).
 
-The proposed Windows runtime distribution change is recorded in [docs/BUNDLED_RUNTIME_PACKAGING_PLAN.md](docs/BUNDLED_RUNTIME_PACKAGING_PLAN.md). It is a plan, not current release behavior.
+The Windows installer bundles only private CPython and its pip bootstrap. The consent-driven processing-component policy and release audit are recorded in [docs/BUNDLED_RUNTIME_PACKAGING_PLAN.md](docs/BUNDLED_RUNTIME_PACKAGING_PLAN.md).
 
 ## Working Pipeline
 

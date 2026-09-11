@@ -17,22 +17,23 @@ from backend.settings import AppSettings
 def _app_runtime_status(inventory) -> tuple[str, str, str]:
     """Describe app-owned runtime health separately from user-selected assets."""
     bundled = os.environ.get("CENSOR_BUNDLED_RUNTIME") == "1"
+    if bundled:
+        return (
+            "ready",
+            "bundled",
+            "Private Python is verified. Processing packages and media tools are set up separately after approval.",
+        )
+
     runtime_ready = all(status.ready for status in inventory.python)
     if runtime_ready:
         return (
             "ready",
-            "bundled" if bundled else "development",
-            "Private Python processing runtime is verified. Additional media components may still need setup.",
+            "development",
+            "Development Python processing packages are verified. Additional media components may still need setup.",
         )
 
     missing = [status.name for status in inventory.python if not status.ready]
     detail = "Could not verify: " + ", ".join(missing) + "."
-    if bundled:
-        return (
-            "invalid",
-            "bundled",
-            f"A component that came with Expletive Deleted could not be verified. {detail} Reinstall the app.",
-        )
     return (
         "missing",
         "development",
