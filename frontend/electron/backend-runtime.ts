@@ -12,6 +12,8 @@ export type BundledRuntimePaths = {
   python?: string
 }
 
+type PythonProbe = (command: string, args: string[]) => boolean
+
 export function findBundledRuntime(
   resourcesPath: string,
   platform: NodeJS.Platform,
@@ -42,13 +44,25 @@ export function backendEnvironment(
   bundledRuntime: BundledRuntimePaths = {},
 ): NodeJS.ProcessEnv {
   const localAppData = environment.LOCALAPPDATA?.trim()
+  const appDataRoot = environment.CENSOR_APP_DATA_DIR?.trim()
+    || (localAppData ? path.join(localAppData, 'ExpletiveDeleted') : undefined)
   const bundledPythonRuntime = Boolean(bundledRuntime.python)
+  const managedPythonPackages = appDataRoot
+    ? path.join(appDataRoot, 'dependencies', 'python')
+    : undefined
 
   return {
     ...environment,
     CENSOR_PROJECT_ROOT: '',
-    ...(localAppData ? { CENSOR_APP_DATA_DIR: path.join(localAppData, 'ExpletiveDeleted') } : {}),
+    ...(appDataRoot ? { CENSOR_APP_DATA_DIR: appDataRoot } : {}),
     ...(bundledPythonRuntime ? { CENSOR_BUNDLED_RUNTIME: '1' } : {}),
+    ...(bundledPythonRuntime && managedPythonPackages
+      ? {
+          CENSOR_PYTHON_PACKAGES_DIR: managedPythonPackages,
+          PYTHONPATH: managedPythonPackages,
+          PYTHONNOUSERSITE: '1',
+        }
+      : {}),
   }
 }
 
@@ -90,10 +104,22 @@ export function findPythonRuntime(
   platform: NodeJS.Platform,
   environment: NodeJS.ProcessEnv = process.env,
   bundledPython?: string,
+  probe: PythonProbe = (command, args) => spawnSync(command, args, {
+    encoding: 'utf8',
+    windowsHide: true,
+    timeout: 10_000,
+  }).status === 0,
 ): Omit<BackendRuntime, 'root'> {
   const configured = environment.CENSOR_PYTHON?.trim()
+  const versionCheck = 'import sys; raise SystemExit(0 if sys.version_info >= (3, 9) else 1)'
+  if (bundledPython) {
+    if (probe(bundledPython, ['-c', versionCheck])) {
+      return { command: bundledPython, args: ['-m', 'scripts.desktop_bridge'] }
+    }
+    throw new Error('The installed private Python runtime could not start. Reinstall Expletive Deleted.')
+  }
+
   const candidates: Array<{ command: string; prefix: string[] }> = []
-  if (bundledPython && existsSync(bundledPython)) candidates.push({ command: bundledPython, prefix: [] })
   if (configured) candidates.push({ command: configured, prefix: [] })
 
   const localPython = path.join(
@@ -106,14 +132,8 @@ export function findPythonRuntime(
   if (platform === 'win32') candidates.push({ command: 'py', prefix: ['-3'] })
   candidates.push({ command: 'python', prefix: [] })
 
-  const versionCheck = 'import sys; raise SystemExit(0 if sys.version_info >= (3, 9) else 1)'
   for (const candidate of candidates) {
-    const check = spawnSync(candidate.command, [...candidate.prefix, '-c', versionCheck], {
-      encoding: 'utf8',
-      windowsHide: true,
-      timeout: 10_000,
-    })
-    if (check.status === 0) {
+    if (probe(candidate.command, [...candidate.prefix, '-c', versionCheck])) {
       return {
         command: candidate.command,
         args: [...candidate.prefix, '-m', 'scripts.desktop_bridge'],

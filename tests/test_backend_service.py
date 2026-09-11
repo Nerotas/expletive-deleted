@@ -85,10 +85,10 @@ class BackendServiceTests(unittest.TestCase):
             return DependencyStatus(identifier, name, state, "1", "1" if state == "ready" else None, None, f"{state} detail", False)
 
         inventory = DependencyInventory(
-            ffmpeg=status("ffmpeg", "FFmpeg", "missing"),
+            ffmpeg=status("ffmpeg", "FFmpeg"),
             ffprobe=status("ffprobe", "FFprobe"),
             python=(status("python:faster-whisper", "faster-whisper", "missing"),),
-            whisper_model=status("whisper:large-v3", "Whisper large-v3", "missing"),
+            whisper_model=status("whisper:large-v3", "Whisper large-v3"),
             ytdlp=status("ytdlp", "yt-dlp", "missing"),
         )
         selected = MagicMock(selected="cpu", compute_type="int8")
@@ -100,10 +100,11 @@ class BackendServiceTests(unittest.TestCase):
             result = get_capabilities(AppSettings.defaults(Path("C:/media")))
 
         self.assertFalse(result["processing_ready"])
+        self.assertFalse(result["ready"])
         self.assertEqual(result["app_runtime"], "ready")
         self.assertEqual(result["app_runtime_source"], "bundled")
         self.assertFalse(result["whisper"])
-        self.assertEqual(result["speech_model"], "missing")
+        self.assertEqual(result["speech_model"], "ready")
         self.assertFalse(result["ytdlp"])
         self.assertIn("set up separately", result["app_runtime_detail"])
 

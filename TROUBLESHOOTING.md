@@ -41,7 +41,7 @@ $env:CENSOR_FFPROBE = 'C:\path\to\ffprobe.exe'
 
 ## A Python Dependency Is Missing
 
-In an installed build, reopen **Get ready**, review the transcription-package plan, and approve installation into the private Python runtime. A private Python startup failure is different: use the application's repair or reinstall guidance. No media is processed, uploaded, or changed while either issue is unresolved.
+In an installed build, reopen **Get ready**, review the transcription-package plan, and approve installation into the private Python package directory under your local application data. A private Python startup failure is different: use the application's repair or reinstall guidance. No media is processed, uploaded, or changed while either issue is unresolved.
 
 Use the repository virtual environment rather than a global Python installation:
 

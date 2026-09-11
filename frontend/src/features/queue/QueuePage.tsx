@@ -12,7 +12,7 @@ import {
   RotateCcw,
   Trash2,
   Upload,
-    Download,
+  Download,
   X,
 } from 'lucide-react'
 import { LoadingRow } from '../../components/ui/LoadingRow'
@@ -68,6 +68,10 @@ export function QueuePage({ queue, settings, capabilities, onChangeFolder, onRev
   const [youtubeAuthentication, setYoutubeAuthentication] = useState<YoutubeAuthenticationRequest | null>(null)
   const dragDepth = useRef(0)
   const [dragActive, setDragActive] = useState(false)
+  const missingYoutubeComponents = [
+    ...(!capabilities?.ytdlp ? ['ytdlp'] : []),
+    ...(!capabilities?.js_runtime ? ['js_runtime'] : []),
+  ]
 
   const mergedRows: QueueRowModel[] = queue.library.map((item) => {
     const sourceJobs = queue.jobs.filter((candidate) => candidate.source === item.source)
@@ -229,14 +233,23 @@ export function QueuePage({ queue, settings, capabilities, onChangeFolder, onRev
       onCancel={() => setPurgeRequest(null)}
       onConfirm={() => void confirmPurge()}
     />}
-    {youtubeDialogOpen && <YoutubeDialog available={Boolean(capabilities?.ytdlp)} busy={queue.busy} onCancel={() => setYoutubeDialogOpen(false)} onConfirm={async (url, browser) => {
-      const outcome = await queue.submitYoutubeDownload(url, undefined, browser)
-      if (outcome.status === 'success') setYoutubeDialogOpen(false)
-      if (outcome.status === 'authentication_required' || outcome.status === 'browser_cookies_unavailable') {
+    {youtubeDialogOpen && <YoutubeDialog
+      available={Boolean(capabilities?.ytdlp)}
+      busy={queue.busy}
+      onCancel={() => setYoutubeDialogOpen(false)}
+      onReviewSetup={() => {
         setYoutubeDialogOpen(false)
-        setYoutubeAuthentication({ url, cookiesUnavailable: outcome.status === 'browser_cookies_unavailable', diagnostic: outcome.diagnostic })
-      }
-    }} />}
+        onReviewInstall(missingYoutubeComponents)
+      }}
+      onConfirm={async (url, browser) => {
+        const outcome = await queue.submitYoutubeDownload(url, undefined, browser)
+        if (outcome.status === 'success') setYoutubeDialogOpen(false)
+        if (outcome.status === 'authentication_required' || outcome.status === 'browser_cookies_unavailable') {
+          setYoutubeDialogOpen(false)
+          setYoutubeAuthentication({ url, cookiesUnavailable: outcome.status === 'browser_cookies_unavailable', diagnostic: outcome.diagnostic })
+        }
+      }}
+    />}
     {youtubeAuthentication && <YoutubeAuthenticationDialog
       busy={queue.busy}
       cookiesUnavailable={youtubeAuthentication.cookiesUnavailable}
@@ -253,7 +266,7 @@ export function QueuePage({ queue, settings, capabilities, onChangeFolder, onRev
   </section>
 }
 
-function YoutubeDialog({ available, busy, onCancel, onConfirm }: { available: boolean; busy: boolean; onCancel: () => void; onConfirm: (url: string, browser?: string) => Promise<void> }) {
+function YoutubeDialog({ available, busy, onCancel, onReviewSetup, onConfirm }: { available: boolean; busy: boolean; onCancel: () => void; onReviewSetup: () => void; onConfirm: (url: string, browser?: string) => Promise<void> }) {
   const [url, setUrl] = useState('')
   const [useBrowserCookies, setUseBrowserCookies] = useState(false)
   const [browser, setBrowser] = useState('firefox')
@@ -264,7 +277,7 @@ function YoutubeDialog({ available, busy, onCancel, onConfirm }: { available: bo
       <div className="youtube-form-row"><label className="youtube-checkbox"><input type="checkbox" checked={useBrowserCookies} disabled={busy} onChange={(event) => setUseBrowserCookies(event.target.checked)} /> Use my signed-in browser session</label></div>
       {useBrowserCookies && <div className="youtube-form-row"><label htmlFor="youtube-cookie-browser">Browser session</label><select id="youtube-cookie-browser" value={browser} disabled={busy} onChange={(event) => setBrowser(event.target.value)}><option value="firefox">Firefox</option><option value="chrome">Chrome</option><option value="edge">Microsoft Edge</option><option value="brave">Brave</option></select><small>Chrome, Edge, and Brave currently block yt-dlp on Windows; Firefox is recommended until that is fixed.</small></div>}
       <p>Only download media you are authorized to download and process.</p><div className="modal-actions"><button className="button secondary" disabled={busy} onClick={onCancel}>Cancel</button><button className="button primary" disabled={busy || !valid} onClick={() => void onConfirm(url, useBrowserCookies ? browser : undefined)}>{busy ? <><LoaderCircle className="spin" size={16} />Adding to Queue…</> : 'Add to Queue'}</button></div></>
-      : <><p>yt-dlp is required for YouTube downloads. Get it from System Requirements, then return here to add an individual video.</p><div className="modal-actions"><button className="button primary" onClick={onCancel}>Done</button></div></>}
+      : <><p>yt-dlp is required for YouTube downloads. Review the local setup plan, then return here to add an individual video.</p><div className="modal-actions"><button className="button secondary" onClick={onCancel}>Cancel</button><button className="button primary" onClick={onReviewSetup}>Review YouTube setup</button></div></>}
   </section></div>
 }
 

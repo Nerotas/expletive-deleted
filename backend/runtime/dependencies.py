@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import importlib.metadata
 import hashlib
 import json
@@ -23,6 +24,7 @@ from .environment import (
     get_application_runtime_root,
     get_directory_size,
     get_managed_deno_path,
+    get_managed_ffmpeg_directory,
     get_managed_ytdlp_path,
     get_whisper_cache_dir,
 )
@@ -146,6 +148,7 @@ class InstallAction:
     purpose: str = ""
     license: str = ""
     requires_network: bool = True
+    destination: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -206,6 +209,7 @@ def _plan_id(actions: tuple[InstallAction, ...]) -> str:
             "purpose": action.purpose,
             "license": action.license,
             "network": action.requires_network,
+            "destination": str(action.destination) if action.destination else None,
         }
         for action in actions
     ]
@@ -221,6 +225,7 @@ def build_install_plan(
     python_executable: Path | None = None,
     cache_dir: Path | None = None,
     runtime_root: Path | None = None,
+    python_packages_directory: Path | None = None,
     platform_name: str | None = None,
     whisper_library: str = "faster-whisper",
     whisper_model: str = "large-v3",
@@ -238,6 +243,19 @@ def build_install_plan(
     python_executable = (python_executable or Path(sys.executable)).resolve()
     cache_dir = (cache_dir or get_whisper_cache_dir()).resolve()
     runtime_root = (runtime_root or get_application_runtime_root()).resolve()
+    configured_python_packages = os.environ.get("CENSOR_PYTHON_PACKAGES_DIR", "").strip()
+    python_packages_directory = (
+        python_packages_directory
+        or (Path(configured_python_packages) if configured_python_packages else None)
+    )
+    if python_packages_directory is not None:
+        python_packages_directory = python_packages_directory.expanduser().resolve()
+    python_package_destination = python_packages_directory or python_executable.parent
+    pip_target_arguments = (
+        ("--upgrade", "--target", str(python_packages_directory))
+        if python_packages_directory is not None
+        else ()
+    )
     platform_name = platform_name or platform.system()
     actions: list[InstallAction] = []
     python_dependencies_ready = all(
@@ -259,8 +277,10 @@ def build_install_plan(
                     "pip",
                     "install",
                     "--disable-pip-version-check",
+                    *pip_target_arguments,
                     f"static-ffmpeg=={STATIC_FFMPEG_VERSION}",
                 ),
+                destination=python_package_destination,
             )
         )
 
@@ -279,6 +299,7 @@ def build_install_plan(
                     "--root",
                     str(runtime_root),
                 ),
+                destination=get_managed_ffmpeg_directory(runtime_root),
             )
         )
 
@@ -294,6 +315,7 @@ def build_install_plan(
                 source_name="yt-dlp official GitHub release",
                 source_url=YTDLP_RELEASE_URL,
                 command=(str(python_executable), "-m", "scripts.download_ytdlp", "--root", str(runtime_root), "--version", YTDLP_VERSION),
+                destination=runtime_root / "dependencies" / "yt-dlp",
             )
         )
 
@@ -309,6 +331,7 @@ def build_install_plan(
                 source_name="Deno official GitHub release",
                 source_url=DENO_RELEASE_URL,
                 command=(str(python_executable), "-m", "scripts.download_deno_runtime", "--root", str(runtime_root), "--version", DENO_VERSION),
+                destination=runtime_root / "dependencies" / "deno",
             )
         )
 
@@ -334,8 +357,10 @@ def build_install_plan(
                     "pip",
                     "install",
                     "--disable-pip-version-check",
+                    *pip_target_arguments,
                     *requirements,
                 ),
+                destination=python_package_destination,
             )
         )
 
@@ -370,6 +395,7 @@ def build_install_plan(
                     else None
                 ),
                 progress_path=cache_dir,
+                destination=cache_dir,
             )
         )
 
@@ -520,6 +546,7 @@ def execute_install_plan(
             raise DependencyInstallError("Dependency installation was cancelled")
         _emit(progress_callback, InstallProgress(action.id, "starting", action.description))
         output = _run_action(action, cancellation, progress_callback)
+        importlib.invalidate_caches()
         _emit(progress_callback, InstallProgress(action.id, "verifying", "Verifying installation"))
         statuses = _status_by_id(
             inspect_dependencies(

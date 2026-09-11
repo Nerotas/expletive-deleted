@@ -381,10 +381,13 @@ class DesktopBridgeTests(unittest.TestCase):
 
         with patch.dict(
             "os.environ",
-            {"CENSOR_RUNTIME_ASSETS_DIR": "/tmp/expletive-runtime"},
+            {
+                "CENSOR_RUNTIME_ASSETS_DIR": "/tmp/expletive-runtime",
+                "CENSOR_PYTHON_PACKAGES_DIR": "/tmp/expletive-runtime/dependencies/python",
+            },
             clear=False,
         ):
-            result = bridge.handle("dependencies.plan", {"components": ["whisper_model"]})
+            result = bridge.handle("dependencies.plan", {"components": ["python", "whisper_model"]})
 
         model_action = next(
             action for action in result["actions"] if action["id"].startswith("download-")
@@ -393,6 +396,13 @@ class DesktopBridgeTests(unittest.TestCase):
         self.assertEqual(
             model_action["destination"],
             str((Path("/tmp/expletive-runtime") / "models" / "whisper").resolve()),
+        )
+        python_action = next(
+            action for action in result["actions"] if action["id"] == "install-python-dependencies"
+        )
+        self.assertEqual(
+            python_action["destination"],
+            str(Path("/tmp/expletive-runtime/dependencies/python").resolve()),
         )
         service.update_settings.assert_not_called()
 

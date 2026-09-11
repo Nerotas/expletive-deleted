@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import configparser
+import importlib
 import json
 import os
 import platform
@@ -120,6 +121,12 @@ def get_managed_whisper_cache_dir(root: Path | None = None) -> Path:
     """Return the app-owned cache root without creating or downloading anything."""
     runtime_root = (root or get_application_runtime_root()).expanduser().resolve()
     return runtime_root / "models" / "whisper"
+
+
+def get_managed_python_packages_directory(root: Path | None = None) -> Path:
+    """Return the writable per-user target for approved Python packages."""
+    runtime_root = (root or get_application_runtime_root()).expanduser().resolve()
+    return runtime_root / "dependencies" / "python"
 
 
 def get_managed_ffmpeg_directory(root: Path | None = None) -> Path:
@@ -461,6 +468,15 @@ def get_whisper_device_status(
 
     if requested == "cpu":
         return WhisperDeviceStatus("cpu", "cpu", "int8", "CPU was explicitly requested.")
+
+    # A packaged bridge starts before optional packages are installed, so retry
+    # this import after approved setup instead of caching the initial miss.
+    global ctranslate2
+    if ctranslate2 is None:
+        try:
+            ctranslate2 = importlib.import_module("ctranslate2")
+        except ImportError:
+            pass
 
     if ctranslate2 is not None:
         try:

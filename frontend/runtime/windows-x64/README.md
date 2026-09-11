@@ -13,10 +13,12 @@ sbom.cdx.json
 runtime-manifest.json
 ```
 
-The private Python directory includes the standard library and `pip`, which is
-the bootstrap used by the consent-driven first-run setup. It must not contain
-the processing packages from `requirements.txt`, FFmpeg/FFprobe, yt-dlp, Deno,
-or a Whisper model.
+The private Python directory includes the standard library and the installed,
+pinned `pip`, which is the bootstrap used by the consent-driven first-run setup.
+Assembly removes `Lib/test` and `Lib/ensurepip`: neither is needed at runtime,
+and both can contain unaudited wheel fixtures or bootstrap wheels. The payload
+must not contain the processing packages from `requirements.txt`,
+FFmpeg/FFprobe, yt-dlp, Deno, or a Whisper model.
 
 `runtime-manifest.json` conforms to `runtime-manifest.schema.json`. The release
 builder copies the pinned Python runtime before installing development
@@ -31,5 +33,6 @@ runtime manifests.
 
 After installation, onboarding can locate compatible existing components or,
 after showing an exact plan and receiving approval, obtain the pinned Python
-packages, FFmpeg/FFprobe, yt-dlp, Deno, and the selected Whisper model into the
+packages under `%LOCALAPPDATA%\ExpletiveDeleted\dependencies\python` and place
+FFmpeg/FFprobe, yt-dlp, Deno, and the selected Whisper model elsewhere in the
 per-user application-data runtime.

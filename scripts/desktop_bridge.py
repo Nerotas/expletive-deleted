@@ -21,7 +21,6 @@ from backend.runtime import (
     build_install_plan,
     execute_install_plan,
     get_application_runtime_root,
-    get_managed_ffmpeg_directory,
     get_managed_ffmpeg_paths,
     get_managed_whisper_cache_dir,
     inspect_executable,
@@ -258,11 +257,7 @@ class DesktopBridge:
                         "purpose": action.purpose,
                         "license": action.license,
                         "requires_network": action.requires_network,
-                        "destination": self._install_destination(
-                            action.id,
-                            runtime_root,
-                            cache_dir,
-                        ),
+                        "destination": str(action.destination),
                     }
                     for action in plan.actions
                 ],
@@ -489,18 +484,6 @@ class DesktopBridge:
             "page_size": page_size,
             "total_pages": math.ceil(total / page_size),
         }
-
-    @staticmethod
-    def _install_destination(action_id: str, runtime_root: Path, cache_dir: Path) -> str:
-        if "ffmpeg" in action_id:
-            return str(get_managed_ffmpeg_directory(runtime_root))
-        if "ytdlp" in action_id:
-            return str(runtime_root / "dependencies" / "yt-dlp")
-        if "deno" in action_id:
-            return str(runtime_root / "dependencies" / "deno")
-        if action_id.startswith("download-"):
-            return str(cache_dir)
-        return "The repository-local Python environment"
 
     @staticmethod
     def _inspect_ffmpeg_selection(selected: object) -> dict[str, object]:
