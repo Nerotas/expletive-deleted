@@ -716,16 +716,16 @@ class RuntimeTests(unittest.TestCase):
             self.assertEqual(paths.transcoded, paths.finished)
             self.assertTrue(paths.transcripts.is_dir())
 
-    def test_bundled_runtime_never_falls_back_to_managed_or_path_tools(self):
+    def test_private_python_runtime_still_discovers_user_managed_media_tools(self):
         with (
             patch.dict(os.environ, {"CENSOR_BUNDLED_RUNTIME": "1"}, clear=False),
             patch("backend.runtime.environment.get_managed_ffmpeg_paths", return_value=("managed-ffmpeg", "managed-ffprobe")) as managed,
             patch("backend.runtime.environment._find_executable", return_value="path-tool") as discover,
         ):
-            self.assertIsNone(find_ffmpeg())
-            self.assertIsNone(find_ffprobe())
+            self.assertEqual(find_ffmpeg(), "managed-ffmpeg")
+            self.assertEqual(find_ffprobe(), "managed-ffprobe")
 
-        managed.assert_not_called()
+        self.assertEqual(managed.call_count, 2)
         discover.assert_not_called()
 
     def test_windows_winget_package_install_is_discoverable_when_no_managed_runtime_exists(self):

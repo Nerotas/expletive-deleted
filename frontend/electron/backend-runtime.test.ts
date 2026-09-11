@@ -35,19 +35,14 @@ describe('backend runtime resolution', () => {
       .toMatchObject({ CENSOR_PROJECT_ROOT: '' })
   })
 
-  it('discovers bundled private Python while treating media tools as optional setup', () => {
+  it('discovers only the bundled private Python runtime', () => {
     const resourcesPath = path.resolve('installed', 'resources')
     const runtimeRoot = path.join(resourcesPath, 'app-runtime')
     const python = path.join(runtimeRoot, 'python', 'python.exe')
     const ffmpeg = path.join(runtimeRoot, 'ffmpeg', 'ffmpeg.exe')
-    const ffprobe = path.join(runtimeRoot, 'ffmpeg', 'ffprobe.exe')
-    const ytdlp = path.join(runtimeRoot, 'yt-dlp', 'yt-dlp.exe')
-    const deno = path.join(runtimeRoot, 'deno', 'deno.exe')
 
-    expect(findBundledRuntime(resourcesPath, 'win32', (candidate) => [python, ffmpeg, ffprobe, ytdlp, deno].includes(candidate)))
-      .toEqual({ python, ffmpeg, ffprobe, ytdlp, deno })
-    expect(findBundledRuntime(resourcesPath, 'win32', (candidate) => candidate !== ffprobe))
-      .toMatchObject({ python, ffmpeg, ytdlp, deno })
+    expect(findBundledRuntime(resourcesPath, 'win32', (candidate) => [python, ffmpeg].includes(candidate)))
+      .toEqual({ python })
     expect(findBundledRuntime(resourcesPath, 'win32', (candidate) => candidate === python))
       .toEqual({ python })
   })
@@ -67,28 +62,12 @@ describe('backend runtime resolution', () => {
     const localAppData = path.resolve('parent-local-app-data')
 
     const bundledRoot = path.resolve('installed', 'resources', 'app-runtime')
-    const bundledFfmpeg = path.join(bundledRoot, 'ffmpeg', 'ffmpeg.exe')
-    const bundledFfprobe = path.join(bundledRoot, 'ffmpeg', 'ffprobe.exe')
-    const bundledYtdlp = path.join(bundledRoot, 'yt-dlp', 'yt-dlp.exe')
-    const bundledDeno = path.join(bundledRoot, 'deno', 'deno.exe')
-
     expect(backendEnvironment(
       { LOCALAPPDATA: localAppData },
-      {
-        python: path.join(bundledRoot, 'python', 'python.exe'),
-        ffmpeg: bundledFfmpeg,
-        ffprobe: bundledFfprobe,
-        ytdlp: bundledYtdlp,
-        deno: bundledDeno,
-      },
+      { python: path.join(bundledRoot, 'python', 'python.exe') },
     )).toMatchObject({
       CENSOR_APP_DATA_DIR: path.join(localAppData, 'ExpletiveDeleted'),
-      CENSOR_FFMPEG: bundledFfmpeg,
-      CENSOR_FFPROBE: bundledFfprobe,
-      CENSOR_YTDLP: bundledYtdlp,
-      CENSOR_DENO: bundledDeno,
       CENSOR_BUNDLED_RUNTIME: '1',
-      PATH: expect.stringContaining(path.join('app-runtime', 'ffmpeg')),
     })
   })
 })

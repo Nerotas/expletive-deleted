@@ -128,6 +128,27 @@ describe('desktop application renderer', () => {
     expect(screen.getByRole('button', { name: 'Download large-v3 model' })).toBeInTheDocument()
   })
 
+  it('offers approved processing setup when private Python is bundled', async () => {
+    vi.mocked(desktopClient.getCapabilities).mockResolvedValueOnce({
+      ...readyCapabilities,
+      ready: false,
+      processing_ready: false,
+      app_runtime: 'ready',
+      app_runtime_source: 'bundled',
+      whisper: false,
+      ffmpeg: false,
+      ffprobe: false,
+      speech_model: 'missing',
+      whisper_model_ready: false,
+    })
+    renderApp('/')
+
+    expect(await screen.findByText('Setup required')).toBeInTheDocument()
+    expect(screen.getByText(/Private Python is included/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Review install' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Review setup' })).toBeInTheDocument()
+  })
+
   it('explains that app repair is needed before queue processing', async () => {
     vi.mocked(desktopClient.getCapabilities).mockResolvedValueOnce({
       ...readyCapabilities,
@@ -389,10 +410,10 @@ describe('desktop application renderer', () => {
       'Using automatic detection',
     )
     expect(screen.getByText(/they do not add FFmpeg command-line flags/i)).toBeInTheDocument()
-    expect(screen.getByText('Application components and speech model are verified.')).toBeInTheDocument()
+    expect(screen.getByText('Processing components and speech model are verified.')).toBeInTheDocument()
   })
 
-  it('hides FFmpeg path overrides for the bundled application runtime', async () => {
+  it('keeps user-managed FFmpeg paths available with bundled private Python', async () => {
     vi.mocked(desktopClient.getCapabilities).mockResolvedValueOnce({
       ...readyCapabilities,
       processing_ready: true,
@@ -403,9 +424,9 @@ describe('desktop application renderer', () => {
     })
     renderApp('/settings')
 
-    expect(await screen.findByText(/came with Expletive Deleted/i)).toBeInTheDocument()
-    expect(screen.queryByLabelText('FFmpeg path override')).not.toBeInTheDocument()
-    expect(screen.queryByLabelText('FFprobe path override')).not.toBeInTheDocument()
+    expect(await screen.findByText(/Private Python came with Expletive Deleted/i)).toBeInTheDocument()
+    expect(screen.getByLabelText('FFmpeg path override')).toBeInTheDocument()
+    expect(screen.getByLabelText('FFprobe path override')).toBeInTheDocument()
     expect(screen.getByLabelText('Whisper model location')).toBeInTheDocument()
   })
 

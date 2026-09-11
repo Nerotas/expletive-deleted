@@ -9,6 +9,12 @@ files:
 extraResources:
   - from: runtime/windows-x64
     to: app-runtime
+    filter:
+      - "python/**/*"
+      - "THIRD_PARTY_NOTICES.md"
+      - "LICENSES/**/*"
+      - "sbom.cdx.json"
+      - "runtime-manifest.json"
   - from: ../backend
     to: app-backend/backend
     filter:

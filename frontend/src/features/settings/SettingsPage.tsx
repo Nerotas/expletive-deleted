@@ -253,20 +253,19 @@ export function SettingsPage({ controller, capabilities, checkingSystem, onCheck
           </small>
         </SettingsSection>
 
-        <SettingsSection title="Runtime components" description={bundledRuntime ? 'Included application tools and your speech-model location' : 'Automatic discovery and optional path overrides'}>
-          {bundledRuntime ? <p className="whisper-library-note">FFmpeg, FFprobe, Python, and speech recognition came with Expletive Deleted. If they need repair, reinstall the app; do not install or choose separate executables.</p> : <>
-            <label className="path-field">
-              <span>FFmpeg path override</span>
-              <div>
-                <input value={settings.runtime.ffmpeg_path ?? ''} placeholder="Using automatic detection" onChange={(event) => setGroup('runtime', { ...settings.runtime, ffmpeg_path: event.target.value || null })} />
-                <button className="icon-button" title="Choose and verify FFmpeg" onClick={() => void controller.chooseFfmpeg()}><FileSearch size={17} /></button>
-              </div>
-            </label>
-            <label className="path-field">
-              <span>FFprobe path override</span>
-              <input value={settings.runtime.ffprobe_path ?? ''} placeholder="Using automatic detection" onChange={(event) => setGroup('runtime', { ...settings.runtime, ffprobe_path: event.target.value || null })} />
-            </label>
-          </>}
+        <SettingsSection title="Runtime components" description={bundledRuntime ? 'Included private Python and user-approved processing components' : 'Automatic discovery and optional path overrides'}>
+          {bundledRuntime && <p className="whisper-library-note">Private Python came with Expletive Deleted. Transcription packages, FFmpeg, FFprobe, YouTube tools, and speech models are installed or selected separately after your approval.</p>}
+          <label className="path-field">
+            <span>FFmpeg path override</span>
+            <div>
+              <input value={settings.runtime.ffmpeg_path ?? ''} placeholder="Using automatic detection" onChange={(event) => setGroup('runtime', { ...settings.runtime, ffmpeg_path: event.target.value || null })} />
+              <button className="icon-button" title="Choose and verify FFmpeg" onClick={() => void controller.chooseFfmpeg()}><FileSearch size={17} /></button>
+            </div>
+          </label>
+          <label className="path-field">
+            <span>FFprobe path override</span>
+            <input value={settings.runtime.ffprobe_path ?? ''} placeholder="Using automatic detection" onChange={(event) => setGroup('runtime', { ...settings.runtime, ffprobe_path: event.target.value || null })} />
+          </label>
           <label className="path-field">
             <span>Whisper model location</span>
             <div>
@@ -276,10 +275,10 @@ export function SettingsPage({ controller, capabilities, checkingSystem, onCheck
           </label>
           <div className={`runtime-status ${(capabilities?.processing_ready ?? capabilities?.ready) ? 'ready' : 'attention'}`}>
             {(capabilities?.processing_ready ?? capabilities?.ready) ? <CheckCircle2 size={17} /> : <AlertCircle size={17} />}
-            <span>{(capabilities?.processing_ready ?? capabilities?.ready) ? 'Application components and speech model are verified.' : capabilities?.app_runtime === 'invalid' ? 'The installed app needs repair.' : 'A speech model or development component needs attention.'}</span>
+            <span>{(capabilities?.processing_ready ?? capabilities?.ready) ? 'Processing components and speech model are verified.' : capabilities?.app_runtime === 'invalid' ? 'The installed app needs repair.' : 'One or more processing components need attention.'}</span>
             <button className="button secondary" disabled={checkingSystem} onClick={onCheckSystem}><RefreshCw className={checkingSystem ? 'spin' : undefined} size={15} />Check system</button>
           </div>
-          {!bundledRuntime && <small className="whisper-library-note">Leave overrides blank to use automatically detected components. These fields select executable or cache locations; they do not add FFmpeg command-line flags. Save changed paths before checking again.</small>}
+          <small className="whisper-library-note">Leave overrides blank to use automatically detected components. These fields select executable or cache locations; they do not add FFmpeg command-line flags. Save changed paths before checking again.</small>
         </SettingsSection>
 
         <SettingsSection title="About" description="Desktop application identity">

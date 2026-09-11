@@ -10,10 +10,6 @@ export type BackendRuntime = {
 
 export type BundledRuntimePaths = {
   python?: string
-  ffmpeg?: string
-  ffprobe?: string
-  ytdlp?: string
-  deno?: string
 }
 
 export function findBundledRuntime(
@@ -22,25 +18,11 @@ export function findBundledRuntime(
   exists: (candidate: string) => boolean = existsSync,
 ): BundledRuntimePaths {
   const executableName = platform === 'win32' ? 'python.exe' : 'python'
-  const ffmpegName = platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg'
-  const ffprobeName = platform === 'win32' ? 'ffprobe.exe' : 'ffprobe'
-  const ytdlpName = platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp'
-  const denoName = platform === 'win32' ? 'deno.exe' : 'deno'
   const runtimeRoot = path.join(resourcesPath, 'app-runtime')
   const python = path.join(runtimeRoot, 'python', executableName)
-  const ffmpeg = path.join(runtimeRoot, 'ffmpeg', ffmpegName)
-  const ffprobe = path.join(runtimeRoot, 'ffmpeg', ffprobeName)
-  const ytdlp = path.join(runtimeRoot, 'yt-dlp', ytdlpName)
-  const deno = path.join(runtimeRoot, 'deno', denoName)
 
   if (!exists(python)) return {}
-  return {
-    python,
-    ...(exists(ffmpeg) ? { ffmpeg } : {}),
-    ...(exists(ffprobe) ? { ffprobe } : {}),
-    ...(exists(ytdlp) ? { ytdlp } : {}),
-    ...(exists(deno) ? { deno } : {}),
-  }
+  return { python }
 }
 
 export function requireBundledRuntime(
@@ -60,24 +42,13 @@ export function backendEnvironment(
   bundledRuntime: BundledRuntimePaths = {},
 ): NodeJS.ProcessEnv {
   const localAppData = environment.LOCALAPPDATA?.trim()
-  const bundledFfmpegDirectory = bundledRuntime.ffmpeg
-    ? path.dirname(bundledRuntime.ffmpeg)
-    : undefined
   const bundledPythonRuntime = Boolean(bundledRuntime.python)
-  const currentPath = environment.PATH ?? ''
 
   return {
     ...environment,
     CENSOR_PROJECT_ROOT: '',
     ...(localAppData ? { CENSOR_APP_DATA_DIR: path.join(localAppData, 'ExpletiveDeleted') } : {}),
     ...(bundledPythonRuntime ? { CENSOR_BUNDLED_RUNTIME: '1' } : {}),
-    ...(bundledRuntime.ffmpeg ? { CENSOR_FFMPEG: bundledRuntime.ffmpeg } : {}),
-    ...(bundledRuntime.ffprobe ? { CENSOR_FFPROBE: bundledRuntime.ffprobe } : {}),
-    ...(bundledRuntime.ytdlp ? { CENSOR_YTDLP: bundledRuntime.ytdlp } : {}),
-    ...(bundledRuntime.deno ? { CENSOR_DENO: bundledRuntime.deno } : {}),
-    ...(bundledFfmpegDirectory
-      ? { PATH: currentPath ? bundledFfmpegDirectory + path.delimiter + currentPath : bundledFfmpegDirectory }
-      : {}),
   }
 }
 

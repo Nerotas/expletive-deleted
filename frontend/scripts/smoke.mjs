@@ -46,6 +46,8 @@ try {
 
   const results = path.join(process.cwd(), 'test-results')
   await mkdir(results, { recursive: true })
+  await window.getByRole('button', { name: /Continue/ }).click()
+  await window.getByRole('heading', { name: 'Prepare this computer', exact: true }).waitFor()
   await window.locator('.onboarding-page').evaluate(async (element) => {
     await Promise.all(element.getAnimations().map((animation) => animation.finished))
   })
@@ -69,15 +71,19 @@ try {
   if (applicationMenuVisible) throw new Error('Production Electron menu should be hidden')
 
   await Promise.race([
-    window.getByRole('heading', { name: 'Local components', exact: true }).waitFor(),
+    window.getByRole('heading', { name: 'Local processing status', exact: true }).waitFor(),
     window.getByText('System ready', { exact: true }).waitFor(),
   ])
 
   await window.getByRole('link', { name: 'Settings', exact: true }).click()
   await window.getByRole('heading', { name: 'Settings', exact: true }).waitFor()
+  await window.locator('.page').evaluate(async (element) => {
+    await Promise.all(element.getAnimations().map((animation) => animation.finished))
+  })
+  const previousTheme = await window.evaluate(() => document.documentElement.dataset.theme)
+  await window.evaluate(() => { document.documentElement.dataset.theme = 'light' })
   await window.screenshot({ path: path.join(results, 'desktop-settings.png'), fullPage: true })
 
-  const previousTheme = await window.evaluate(() => document.documentElement.dataset.theme)
   await window.evaluate(() => { document.documentElement.dataset.theme = 'dark' })
   const activeNavigationContrast = await window.getByRole('link', { name: 'Settings' }).evaluate(
     (element) => {

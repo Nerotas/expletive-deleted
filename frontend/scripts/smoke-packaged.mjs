@@ -13,6 +13,7 @@ await rm(appDataDirectory, { recursive: true, force: true })
 await mkdir(temporaryDirectory, { recursive: true })
 await mkdir(appDataDirectory, { recursive: true })
 delete process.env.ELECTRON_RUN_AS_NODE
+const cleanSystemPath = path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32')
 
 const { _electron: electron } = await import('playwright')
 const packagedApp = await electron.launch({
@@ -24,6 +25,9 @@ const packagedApp = await electron.launch({
     TMP: temporaryDirectory,
     TEMP: temporaryDirectory,
     LOCALAPPDATA: appDataDirectory,
+    // Release smoke must prove that no ambient tools satisfy readiness. The
+    // development package intentionally relies on the CI-provided Python.
+    ...(requireBundledRuntime ? { PATH: cleanSystemPath } : {}),
   },
 })
 
@@ -31,7 +35,14 @@ try {
   const window = await packagedApp.firstWindow()
   window.on('pageerror', (error) => console.error(`Renderer error: ${error.message}`))
   await window.waitForLoadState('domcontentloaded')
-  await window.getByRole('heading', { name: 'Welcome to Expletive Deleted', exact: true }).waitFor()
+  const startupOutcome = await Promise.race([
+    window.getByRole('heading', { name: 'Welcome to Expletive Deleted', exact: true }).waitFor().then(() => 'ready'),
+    window.getByRole('heading', { name: 'Repair Expletive Deleted', exact: true }).waitFor().then(() => 'repair'),
+  ])
+  if (startupOutcome === 'repair') {
+    const detail = await window.locator('.backend-setup-detail').textContent().catch(() => null)
+    throw new Error(`Packaged backend did not start${detail ? `: ${detail}` : '.'}`)
+  }
 
   if (requireBundledRuntime) {
     await window.getByRole('button', { name: /Continue/ }).click()
@@ -62,6 +73,19 @@ try {
     await Promise.all([
       access(path.join(runtimeRoot, 'python', 'python.exe')),
     ])
+    for (const excludedPath of [
+      path.join(runtimeRoot, 'ffmpeg'),
+      path.join(runtimeRoot, 'yt-dlp'),
+      path.join(runtimeRoot, 'deno'),
+      path.join(runtimeRoot, 'ffmpeg-build.json'),
+      path.join(runtimeRoot, 'ffmpeg-source.zip'),
+    ]) {
+      await access(excludedPath)
+        .then(() => { throw new Error(`Python-only package unexpectedly included ${excludedPath}`) })
+        .catch((error) => {
+          if (error instanceof Error && error.message.startsWith('Python-only package unexpectedly')) throw error
+        })
+    }
   }
 
   const { settings, capabilities, legacyBridgePresent } = await window.evaluate(async () => ({
@@ -76,6 +100,9 @@ try {
     }
     if (capabilities.speech_model === 'ready' || capabilities.processing_ready === true) {
       throw new Error('Clean packaged app unexpectedly included a speech model.')
+    }
+    if (capabilities.whisper === true || capabilities.ffmpeg === true || capabilities.ffprobe === true) {
+      throw new Error('Clean packaged app unexpectedly reported bundled processing packages or media tools.')
     }
     if (capabilities.ytdlp === true && capabilities.js_runtime !== true) {
       throw new Error('Packaged bridge reported an inconsistent YouTube setup state.')

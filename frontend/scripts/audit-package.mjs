@@ -40,7 +40,6 @@ async function inspect(directory) {
       continue
     }
 
-    const inBundledRuntime = relativePath.startsWith('resources/app-runtime/')
     const runtimeExecutable = [
       'ffmpeg.exe',
       'ffprobe.exe',
@@ -48,11 +47,11 @@ async function inspect(directory) {
       'deno.exe',
     ].includes(normalizedName)
     if (
-      (runtimeExecutable && !inBundledRuntime)
+      runtimeExecutable
       || normalizedName === 'model.bin'
       || normalizedName.endsWith('.pt')
       || normalizedName.endsWith('.whl')
-      || (!inBundledRuntime && normalizedName.endsWith('.pyd'))
+      || (!relativePath.startsWith('resources/app-runtime/') && normalizedName.endsWith('.pyd'))
     ) {
       violations.push(relativePath)
     }
@@ -68,4 +67,4 @@ if (violations.length) {
   throw new Error(`Packaged dependency policy violation:\n- ${violations.join('\n- ')}`)
 }
 
-console.log('Package dependency audit passed: no unapproved runtime, Whisper model, or Python package artifacts were found')
+console.log('Package dependency audit passed: private Python is present without bundled processing tools, packages, or models')

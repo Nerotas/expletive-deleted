@@ -80,14 +80,14 @@ class BackendServiceTests(unittest.TestCase):
 
         submit.assert_called_once_with(source, "report_only", auto_censor_after_transcription=True)
 
-    def test_capabilities_classify_missing_bundled_tooling_as_setup_pending(self):
+    def test_capabilities_keep_private_python_ready_while_setup_is_pending(self):
         def status(identifier: str, name: str, state: str = "ready") -> DependencyStatus:
             return DependencyStatus(identifier, name, state, "1", "1" if state == "ready" else None, None, f"{state} detail", False)
 
         inventory = DependencyInventory(
             ffmpeg=status("ffmpeg", "FFmpeg", "missing"),
             ffprobe=status("ffprobe", "FFprobe"),
-            python=(status("python:faster-whisper", "faster-whisper"),),
+            python=(status("python:faster-whisper", "faster-whisper", "missing"),),
             whisper_model=status("whisper:large-v3", "Whisper large-v3", "missing"),
             ytdlp=status("ytdlp", "yt-dlp", "missing"),
         )
@@ -102,9 +102,10 @@ class BackendServiceTests(unittest.TestCase):
         self.assertFalse(result["processing_ready"])
         self.assertEqual(result["app_runtime"], "ready")
         self.assertEqual(result["app_runtime_source"], "bundled")
+        self.assertFalse(result["whisper"])
         self.assertEqual(result["speech_model"], "missing")
         self.assertFalse(result["ytdlp"])
-        self.assertIn("Additional media components", result["app_runtime_detail"])
+        self.assertIn("set up separately", result["app_runtime_detail"])
 
     def test_capabilities_without_configured_cache_inspect_managed_cache(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

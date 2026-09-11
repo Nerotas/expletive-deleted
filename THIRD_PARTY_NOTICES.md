@@ -43,6 +43,14 @@ Electron is licensed under the MIT License text in Appendix A. See the
 [Electron 44.0.0 license](https://github.com/electron/electron/blob/v44.0.0/LICENSE)
 and [Chromium notices shipped by Electron](https://github.com/electron/electron/blob/v44.0.0/LICENSES.chromium.html).
 
+### Private Python bootstrap
+
+The Windows installer includes the pinned CPython runtime, its standard
+library, and pip. The release-generated runtime notice and SBOM record their
+exact shipped versions. Python is distributed under the PSF License and pip
+under the MIT License. No processing package from `requirements.txt` is part
+of this bootstrap payload.
+
 ### Compiled renderer libraries
 
 The following packages are direct or transitive production packages in the
@@ -76,28 +84,30 @@ the renderer. The locked Fontsource packages and upstream font notices are:
 
 The SIL Open Font License 1.1 is reproduced in Appendix C.
 
-### Managed processing components
+### Separately managed processing components
 
 The setup flow retrieves pinned yt-dlp `2026.08.19` and Deno `2.9.6` only
 after grouped user approval. yt-dlp is released under the Unlicense and Deno
 under the MIT License. The setup metadata displays each source, version,
 license, destination, and checksum before installation; the exact downloaded
-files remain in the user's application-data runtime directory.
+files remain in the user's application-data runtime directory. These files
+are not included in the installer.
 
-## 2. Development-only retrieval and user-selected data
+## 2. User-approved processing components and data
 
 The application can prepare an inspectable setup plan and, after the user
 approves it, install or download the following items into the user's Python
 environment or local application-data directories. A user can instead select
 a compatible installation already present on the system.
 
-### Python and Python packages
+### Python processing packages
 
 The source-checkout development workflow uses Python 3.9 or later in a
 repository-local `.venv`. That development interpreter is not the production
 runtime and is subject to the license terms accompanying the selected Python
 distribution. The production installer instead uses the audited private
-Python runtime described in section 1.
+Python runtime described in section 1. In both cases, processing packages are
+installed only after the user approves the disclosed setup plan.
 
 The current `requirements.txt` pins these direct packages:
 
@@ -127,16 +137,10 @@ redistributes that binary wheel should evaluate and satisfy the GPL and all
 included-library notice/source obligations, rather than relying only on the
 BSD-3-Clause label in PyAV's package metadata.
 
-The setup code also supports `openai-whisper==20250625` (MIT) as an optional
-alternative Whisper library, although it is not in the default
-`requirements.txt`. See [PyPI metadata](https://pypi.org/project/openai-whisper/20250625/)
-and the [OpenAI Whisper source license](https://github.com/openai/whisper/blob/main/LICENSE).
-
 ### FFmpeg and FFprobe processing runtime
 
-Development checkouts may retrieve FFmpeg and FFprobe after explicit approval.
-The production installer must not use this development path. If a developer
-chooses managed setup, the application first installs
+Packaged applications and development checkouts may retrieve FFmpeg and
+FFprobe after explicit approval. The application first installs
 `static-ffmpeg==3.0` (the downloader is MIT-licensed) from PyPI, then asks that
 package to retrieve platform executables and copies the resulting files into
 the user's local application runtime directory. See the

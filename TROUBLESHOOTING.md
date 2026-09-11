@@ -41,7 +41,7 @@ $env:CENSOR_FFPROBE = 'C:\path\to\ffprobe.exe'
 
 ## A Python Dependency Is Missing
 
-If the desktop window says it could not start the local processing service, use **Open Python downloads** from that screen, complete the customer-controlled Python/package setup, and choose **Try again**. No media is processed, uploaded, or changed while this service is unavailable.
+In an installed build, reopen **Get ready**, review the transcription-package plan, and approve installation into the private Python runtime. A private Python startup failure is different: use the application's repair or reinstall guidance. No media is processed, uploaded, or changed while either issue is unresolved.
 
 Use the repository virtual environment rather than a global Python installation:
 

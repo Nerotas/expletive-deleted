@@ -7,82 +7,73 @@ const suppliedDirectory = process.argv[2] ?? process.env.BUNDLED_RUNTIME_DIR
 if (!suppliedDirectory) throw new Error('Pass the staged runtime directory or set BUNDLED_RUNTIME_DIR.')
 
 const runtimeRoot = path.resolve(suppliedDirectory)
+const scriptDirectory = path.dirname(fileURLToPath(import.meta.url))
+const buildInputs = JSON.parse(await readFile(path.join(scriptDirectory, '..', 'runtime', 'windows-x64', 'build-inputs.json'), 'utf8'))
 const requiredFiles = [
   'python/python.exe',
-  'ffmpeg/ffmpeg.exe',
-  'ffmpeg/ffprobe.exe',
-  'yt-dlp/yt-dlp.exe',
-  'deno/deno.exe',
   'THIRD_PARTY_NOTICES.md',
   'sbom.cdx.json',
-  'ffmpeg-source.zip',
-  'ffmpeg-build.json',
   'runtime-manifest.json',
 ]
-const forbiddenNames = new Set(['libx264.dll', 'libx265.dll', 'model.bin'])
-const forbiddenFragments = ['models--', 'whisper-cache']
+const allowedTopLevelEntries = new Set([
+  'python',
+  'LICENSES',
+  'THIRD_PARTY_NOTICES.md',
+  'sbom.cdx.json',
+  'runtime-manifest.json',
+])
+const forbiddenNames = new Set([
+  'ffmpeg.exe',
+  'ffprobe.exe',
+  'yt-dlp.exe',
+  'deno.exe',
+  'libx264.dll',
+  'libx265.dll',
+  'model.bin',
+])
+const forbiddenFragments = [
+  'models--',
+  'whisper-cache',
+  '/site-packages/av/',
+  '/site-packages/av-',
+  '/site-packages/better_profanity/',
+  '/site-packages/better_profanity-',
+  '/site-packages/ctranslate2/',
+  '/site-packages/ctranslate2-',
+  '/site-packages/faster_whisper/',
+  '/site-packages/faster_whisper-',
+  '/site-packages/huggingface_hub/',
+  '/site-packages/huggingface_hub-',
+  '/site-packages/numpy/',
+  '/site-packages/numpy-',
+  '/site-packages/numpy.libs/',
+]
+const forbiddenMediaLibrary = /^(?:avcodec|avdevice|avfilter|avformat|avutil|postproc|swresample|swscale)-?\d*\.dll$/i
 for (const relativePath of requiredFiles) await access(path.join(runtimeRoot, relativePath))
 await access(path.join(runtimeRoot, 'LICENSES'))
 
-const hash = async (relativePath) => createHash('sha256')
-  .update(await readFile(path.join(runtimeRoot, relativePath)))
-  .digest('hex')
-
 const manifest = JSON.parse(await readFile(path.join(runtimeRoot, 'runtime-manifest.json'), 'utf8'))
-const requirementsPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'requirements.txt')
-const requirements = new Map(
-  (await readFile(requirementsPath, 'utf8')).split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => line.split('=='))
-    .filter(([name, version]) => Boolean(name && version))
-    .map(([name, version]) => [name.toLowerCase(), version]),
-)
 const requiredSbomComponents = [
   { label: 'Python', names: ['python', 'cpython'], version: manifest.python?.version, license: 'PSF-2.0' },
-  { label: 'FFmpeg', names: ['ffmpeg'], version: manifest.ffmpeg?.version, license: 'LGPL-2.1-or-later' },
-  { label: 'PyAV', names: ['pyav', 'av'], version: requirements.get('av'), license: 'BSD-3-Clause' },
-  { label: 'faster-whisper', names: ['faster-whisper'], version: requirements.get('faster-whisper'), license: 'MIT' },
-  { label: 'CTranslate2', names: ['ctranslate2'], version: requirements.get('ctranslate2'), license: 'MIT' },
-  { label: 'NumPy', names: ['numpy'], version: requirements.get('numpy'), license: 'BSD-3-Clause' },
-  { label: 'better-profanity', names: ['better-profanity'], version: requirements.get('better-profanity'), license: 'MIT' },
-  { label: 'huggingface-hub', names: ['huggingface-hub', 'huggingface_hub'], version: requirements.get('huggingface-hub'), license: 'Apache-2.0' },
-  { label: 'yt-dlp', names: ['yt-dlp', 'yt_dlp'], version: manifest.ytdlp?.version, license: 'Unlicense' },
-  { label: 'Deno', names: ['deno'], version: manifest.deno?.version, license: 'MIT' },
+  { label: 'pip', names: ['pip'], version: manifest.pip?.version, license: 'MIT' },
 ]
 const manifestErrors = []
-if (manifest.schema_version !== 1) manifestErrors.push('schema_version must be 1')
+if (manifest.schema_version !== 2) manifestErrors.push('schema_version must be 2')
 if (manifest.platform !== 'win32-x64') manifestErrors.push('platform must be win32-x64')
-if (manifest.python?.path !== 'python/python.exe' || manifest.python?.license !== 'PSF-2.0') {
-  manifestErrors.push('python must identify python/python.exe under PSF-2.0')
+if (
+  manifest.python?.path !== 'python/python.exe'
+  || manifest.python?.version !== buildInputs.python?.version
+  || manifest.python?.license !== 'PSF-2.0'
+) manifestErrors.push(`python must identify python/python.exe version ${buildInputs.python?.version} under PSF-2.0`)
+if (manifest.pip?.version !== buildInputs.pip?.version || manifest.pip?.license !== 'MIT') {
+  manifestErrors.push(`pip must identify bootstrap version ${buildInputs.pip?.version} under MIT`)
 }
-if (
-  manifest.ffmpeg?.ffmpeg_path !== 'ffmpeg/ffmpeg.exe'
-  || manifest.ffmpeg?.ffprobe_path !== 'ffmpeg/ffprobe.exe'
-  || manifest.ffmpeg?.license !== 'LGPL-2.1-or-later'
-) manifestErrors.push('ffmpeg must identify the approved executable paths under LGPL-2.1-or-later')
-if (manifest.pyav?.license !== 'BSD-3-Clause' || manifest.pyav?.ffmpeg_library_origin !== 'bundled-lgpl-build') {
-  manifestErrors.push('pyav must identify its BSD-3-Clause license and approved LGPL FFmpeg library origin')
-}
-if (
-  manifest.ytdlp?.path !== 'yt-dlp/yt-dlp.exe'
-  || typeof manifest.ytdlp?.version !== 'string'
-  || !/^https:\/\//.test(manifest.ytdlp?.source ?? '')
-  || manifest.ytdlp?.license !== 'Unlicense'
-) manifestErrors.push('yt-dlp must identify the approved executable path, HTTPS source, version, and Unlicense')
-if (
-  manifest.deno?.path !== 'deno/deno.exe'
-  || typeof manifest.deno?.version !== 'string'
-  || !/^https:\/\//.test(manifest.deno?.source ?? '')
-  || manifest.deno?.license !== 'MIT'
-) manifestErrors.push('deno must identify the approved executable path, HTTPS source, version, and MIT license')
-const configure = manifest.ffmpeg?.configure
-if (!Array.isArray(configure) || configure.some((argument) => argument === '--enable-gpl' || argument === '--enable-nonfree')) {
-  manifestErrors.push('ffmpeg configure arguments must be present and exclude --enable-gpl and --enable-nonfree')
+for (const forbiddenField of ['ffmpeg', 'pyav', 'ytdlp', 'deno']) {
+  if (forbiddenField in manifest) manifestErrors.push(`${forbiddenField} cannot be part of a Python-only runtime manifest`)
 }
 if (!Array.isArray(manifest.files) || manifest.files.length === 0) manifestErrors.push('files must record hashed packaged artifacts')
 if (!Array.isArray(manifest.licenses) || manifest.licenses.length === 0) manifestErrors.push('licenses must record shipped license texts')
-if (manifestErrors.length) throw new Error(`Bundled runtime manifest violation:\n- ${manifestErrors.join('\n- ')}`)
+if (manifestErrors.length) throw new Error(`Private Python runtime manifest violation:\n- ${manifestErrors.join('\n- ')}`)
 
 const violations = []
 const artifacts = new Map()
@@ -90,13 +81,23 @@ async function inspect(directory) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const absolutePath = path.join(directory, entry.name)
     const relativePath = path.relative(runtimeRoot, absolutePath).replaceAll('\\', '/')
+    const normalizedPath = `/${relativePath.toLowerCase()}`
+    if (path.dirname(absolutePath) === runtimeRoot && !allowedTopLevelEntries.has(entry.name)) {
+      violations.push(`unexpected top-level runtime entry: ${relativePath}`)
+    }
     if (entry.isDirectory()) {
-      if (forbiddenFragments.some((fragment) => entry.name.toLowerCase().includes(fragment))) violations.push(relativePath)
+      if (forbiddenFragments.some((fragment) => normalizedPath.includes(fragment))) violations.push(relativePath)
       await inspect(absolutePath)
       continue
     }
     const normalizedName = entry.name.toLowerCase()
-    if (forbiddenNames.has(normalizedName)) violations.push(relativePath)
+    if (
+      forbiddenNames.has(normalizedName)
+      || forbiddenMediaLibrary.test(normalizedName)
+      || normalizedName.endsWith('.whl')
+      || normalizedName.endsWith('.pt')
+      || forbiddenFragments.some((fragment) => normalizedPath.includes(fragment))
+    ) violations.push(relativePath)
     artifacts.set(relativePath, createHash('sha256').update(await readFile(absolutePath)).digest('hex'))
   }
 }
@@ -104,7 +105,7 @@ await inspect(runtimeRoot)
 
 const manifestFiles = new Map()
 for (const file of manifest.files) {
-  if (!file || typeof file.path !== 'string' || typeof file.sha256 !== 'string') {
+  if (!file || typeof file.path !== 'string' || !/^[a-f0-9]{64}$/.test(file.sha256 ?? '')) {
     violations.push('manifest has an invalid file record')
     continue
   }
@@ -144,19 +145,6 @@ for (const licenseId of new Set(requiredSbomComponents.map((component) => compon
   if (!licenseIds.has(licenseId)) violations.push(`required license text is not recorded: ${licenseId}`)
 }
 
-const build = JSON.parse(await readFile(path.join(runtimeRoot, 'ffmpeg-build.json'), 'utf8'))
-if (typeof build.source_revision !== 'string' || !build.source_revision) violations.push('ffmpeg-build.json needs source_revision')
-if (typeof build.source_url !== 'string' || !/^https:\/\//.test(build.source_url)) violations.push('ffmpeg-build.json needs an HTTPS source_url')
-if (build.version !== manifest.ffmpeg?.version) violations.push('ffmpeg-build.json version must exactly match runtime manifest')
-if (!Array.isArray(build.patches)) violations.push('ffmpeg-build.json needs patches')
-if (typeof build.compiler !== 'string' || !build.compiler) violations.push('ffmpeg-build.json needs compiler')
-if (!Array.isArray(build.configure) || JSON.stringify(build.configure) !== JSON.stringify(configure)) {
-  violations.push('ffmpeg-build.json configure must exactly match runtime manifest')
-}
-if (build.source_archive?.path !== 'ffmpeg-source.zip' || build.source_archive?.sha256 !== await hash('ffmpeg-source.zip')) {
-  violations.push('ffmpeg-build.json source archive hash does not match ffmpeg-source.zip')
-}
-
 const sbom = JSON.parse(await readFile(path.join(runtimeRoot, 'sbom.cdx.json'), 'utf8'))
 if (sbom.bomFormat !== 'CycloneDX' || !Array.isArray(sbom.components)) {
   violations.push('sbom.cdx.json must be a CycloneDX document with components')
@@ -169,8 +157,14 @@ if (sbom.bomFormat !== 'CycloneDX' || !Array.isArray(sbom.components)) {
       violations.push(`SBOM must identify ${requirement.label} ${requirement.version} under ${requirement.license}`)
     }
   }
+  const allowedNames = new Set(requiredSbomComponents.flatMap((component) => component.names))
+  for (const component of sbom.components) {
+    if (!allowedNames.has(String(component.name).toLowerCase())) {
+      violations.push(`SBOM identifies a non-bootstrap bundled component: ${component.name}`)
+    }
+  }
 }
 
-if (violations.length) throw new Error(`Bundled runtime artifact violation:\n- ${violations.join('\n- ')}`)
+if (violations.length) throw new Error(`Private Python runtime artifact violation:\n- ${[...new Set(violations)].join('\n- ')}`)
 
-console.log(`Bundled Windows runtime audit passed: ${runtimeRoot}`)
+console.log(`Private Python runtime audit passed: ${runtimeRoot}`)
