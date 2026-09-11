@@ -69,6 +69,16 @@ def validate_youtube_url(value: str) -> tuple[str, str]:
     return value.strip(), video_id
 
 
+def _javascript_runtime_arguments() -> tuple[str, ...]:
+    """Point every yt-dlp probe at the verified managed Deno executable."""
+    deno = get_managed_deno_path()
+    if not deno.is_file():
+        deno_on_path = shutil.which("deno")
+        if deno_on_path:
+            deno = Path(deno_on_path).resolve()
+    return ("--js-runtimes", f"deno:{deno}") if deno.is_file() else ()
+
+
 @dataclass(frozen=True)
 class DownloadRecord:
     id: str
@@ -163,13 +173,7 @@ class DownloadManager:
                 command.extend(["--cookies-from-browser", record.cookie_browser])
             # YouTube's default web client often serves only SABR (undownloadable) formats; add tv as a fallback client.
             command.extend(["--extractor-args", "youtube:player_client=default,tv"])
-            deno = get_managed_deno_path()
-            if not deno.is_file():
-                deno_on_path = shutil.which("deno")
-                if deno_on_path:
-                    deno = Path(deno_on_path).resolve()
-            if deno.is_file():
-                command.extend(["--js-runtimes", f"deno:{deno}"])
+            command.extend(_javascript_runtime_arguments())
             command.extend([
                 "--ffmpeg-location", str(ffmpeg.parent),
                 "--no-playlist", "--newline",
@@ -292,8 +296,18 @@ class DownloadManager:
     @staticmethod
     def _resolve_title(ytdlp: Path, url: str, cookie_browser: str | None = None) -> str:
         """Read structured metadata without downloading media or parsing console output."""
+        command = [
+            str(ytdlp),
+            "--ignore-config",
+            *_javascript_runtime_arguments(),
+            *(["--cookies-from-browser", cookie_browser] if cookie_browser else []),
+            "--no-playlist",
+            "--skip-download",
+            "--dump-single-json",
+            url,
+        ]
         result = subprocess.run(
-            [str(ytdlp), "--ignore-config", *(["--cookies-from-browser", cookie_browser] if cookie_browser else []), "--no-playlist", "--skip-download", "--dump-single-json", url],
+            command,
             capture_output=True,
             text=True,
             encoding="utf-8",

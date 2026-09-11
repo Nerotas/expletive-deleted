@@ -31,11 +31,19 @@ class YoutubeUrlTests(unittest.TestCase):
 class DownloadManagerTests(unittest.TestCase):
     def test_metadata_title_uses_ytdlp_json_output(self):
         completed = MagicMock(returncode=0, stdout='{"title": "Example Movie"}', stderr="")
-        with patch("backend.jobs.downloads.subprocess.run", return_value=completed) as run:
-            title = DownloadManager._resolve_title(Path("C:/Tools/yt-dlp.exe"), "https://youtu.be/dQw4w9WgXcQ")
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            deno = Path(temporary_directory) / "deno.exe"
+            deno.touch()
+            with (
+                patch("backend.jobs.downloads.get_managed_deno_path", return_value=deno),
+                patch("backend.jobs.downloads.subprocess.run", return_value=completed) as run,
+            ):
+                title = DownloadManager._resolve_title(Path("C:/Tools/yt-dlp.exe"), "https://youtu.be/dQw4w9WgXcQ")
 
         self.assertEqual(title, "Example Movie")
         self.assertIn("--ignore-config", run.call_args.args[0])
+        js_runtime_index = run.call_args.args[0].index("--js-runtimes")
+        self.assertEqual(run.call_args.args[0][js_runtime_index + 1], f"deno:{deno}")
         self.assertIn("--dump-single-json", run.call_args.args[0])
         self.assertIn("--skip-download", run.call_args.args[0])
 

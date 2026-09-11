@@ -23,7 +23,7 @@ type AppHeaderProps = {
 }
 
 function readinessLabel(capabilities: Capabilities | null) {
-  if (capabilities?.processing_ready ?? capabilities?.ready) return 'System ready'
+  if (capabilities?.processing_ready ?? capabilities?.ready) return 'Processing ready'
   if (capabilities?.app_runtime === 'invalid') return 'App repair needed'
   if (!capabilities?.whisper || !capabilities?.ffmpeg || !capabilities?.ffprobe) return 'Setup required'
   if (capabilities?.speech_model && capabilities.speech_model !== 'ready') return 'Download speech model'

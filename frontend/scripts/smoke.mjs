@@ -72,7 +72,7 @@ try {
 
   await Promise.race([
     window.getByRole('heading', { name: 'Local processing status', exact: true }).waitFor(),
-    window.getByText('System ready', { exact: true }).waitFor(),
+    window.getByText('Processing ready', { exact: true }).waitFor(),
   ])
 
   await window.getByRole('link', { name: 'Settings', exact: true }).click()
