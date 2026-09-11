@@ -17,8 +17,7 @@ if (existsSync(bundledRuntimeManifest)) {
   })
   if (audit.status !== 0) violations.push(`Bundled runtime audit failed: ${(audit.stderr || audit.stdout).trim()}`)
 } else if (requireBundledRuntime) {
-  const bundledPython = path.join(bundledRuntimeRoot, 'python', process.platform === 'win32' ? 'python.exe' : 'python')
-  if (!existsSync(bundledPython)) violations.push('Expected a private Python runtime at resources/app-runtime/python')
+  violations.push('Expected an audited runtime manifest at resources/app-runtime/runtime-manifest.json')
 }
 
 async function inspect(directory) {
@@ -42,11 +41,14 @@ async function inspect(directory) {
     }
 
     const inBundledRuntime = relativePath.startsWith('resources/app-runtime/')
+    const runtimeExecutable = [
+      'ffmpeg.exe',
+      'ffprobe.exe',
+      'yt-dlp.exe',
+      'deno.exe',
+    ].includes(normalizedName)
     if (
-      normalizedName === 'ffmpeg.exe'
-      || normalizedName === 'ffprobe.exe'
-      || normalizedName === 'yt-dlp.exe'
-      || normalizedName === 'deno.exe'
+      (runtimeExecutable && !inBundledRuntime)
       || normalizedName === 'model.bin'
       || normalizedName.endsWith('.pt')
       || normalizedName.endsWith('.whl')

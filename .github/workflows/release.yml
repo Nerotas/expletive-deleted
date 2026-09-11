@@ -145,123 +145,58 @@ jobs:
         working-directory: frontend
         run: npm run smoke
 
-      - name: Resolve bundled runtime inputs
+      - name: Resolve audited bundled runtime
         if: steps.version.outputs.published != 'true'
         shell: pwsh
         env:
           BUNDLED_RUNTIME_DIR: ${{ vars.BUNDLED_RUNTIME_DIR }}
           BUNDLED_RUNTIME_ARCHIVE_URL: ${{ vars.BUNDLED_RUNTIME_ARCHIVE_URL }}
           BUNDLED_RUNTIME_ARCHIVE_SHA256: ${{ vars.BUNDLED_RUNTIME_ARCHIVE_SHA256 }}
-          BUNDLED_PYTHON_DIR: ${{ vars.BUNDLED_PYTHON_DIR }}
         run: |
-          Set-StrictMode -Version Latest
-          $ErrorActionPreference = 'Stop'
-
-          function Normalize-InputPath([string]$Value) {
-            $trimmed = "$Value".Trim()
-            if ([string]::IsNullOrWhiteSpace($trimmed)) { return '' }
-            if ($trimmed -match '^\$env:') {
-              throw "Bundled runtime path values must be concrete absolute paths, not literal PowerShell expressions: $trimmed"
-            }
-            return [Environment]::ExpandEnvironmentVariables($trimmed)
-          }
-
-          function Export-GithubEnv([string]$Name, [string]$Value) {
-            "$Name=$Value" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          }
-
-          $runtimeDir = Normalize-InputPath $env:BUNDLED_RUNTIME_DIR
-          $pythonDir = Normalize-InputPath $env:BUNDLED_PYTHON_DIR
+          $runtimeDir = "$env:BUNDLED_RUNTIME_DIR".Trim()
           $archiveUrl = "$env:BUNDLED_RUNTIME_ARCHIVE_URL".Trim()
-          $archiveSha = "$env:BUNDLED_RUNTIME_ARCHIVE_SHA256".Trim()
+          $archiveSha256 = "$env:BUNDLED_RUNTIME_ARCHIVE_SHA256".Trim()
 
-          if ([string]::IsNullOrWhiteSpace($runtimeDir) -and -not [string]::IsNullOrWhiteSpace($archiveUrl)) {
+          if ([string]::IsNullOrWhiteSpace($runtimeDir)) {
+            if ([string]::IsNullOrWhiteSpace($archiveUrl) -or [string]::IsNullOrWhiteSpace($archiveSha256)) {
+              throw 'Configure repository variables BUNDLED_RUNTIME_ARCHIVE_URL and BUNDLED_RUNTIME_ARCHIVE_SHA256 with the reviewed runtime artifact, or set BUNDLED_RUNTIME_DIR on a self-hosted runner.'
+            }
+
             $archivePath = Join-Path $env:RUNNER_TEMP 'bundled-runtime.zip'
             $extractRoot = Join-Path $env:RUNNER_TEMP 'bundled-runtime'
-            if (Test-Path -LiteralPath $archivePath) { Remove-Item -LiteralPath $archivePath -Force }
-            if (Test-Path -LiteralPath $extractRoot) { Remove-Item -LiteralPath $extractRoot -Recurse -Force }
-
             Invoke-WebRequest -Uri $archiveUrl -OutFile $archivePath
-            if (-not (Test-Path -LiteralPath $archivePath)) {
-              throw 'Bundled runtime archive download did not create a file.'
-            }
-
-            if (-not [string]::IsNullOrWhiteSpace($archiveSha)) {
-              $actualSha = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
-              if ($actualSha -ne $archiveSha.ToLowerInvariant()) {
-                throw "Bundled runtime archive SHA-256 mismatch. Expected $archiveSha, got $actualSha"
-              }
+            $actualSha256 = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash
+            if ($actualSha256 -ne $archiveSha256) {
+              throw "Bundled runtime archive SHA-256 mismatch. Expected $archiveSha256, got $actualSha256."
             }
 
             Expand-Archive -LiteralPath $archivePath -DestinationPath $extractRoot -Force
-            $manifestAtRoot = Join-Path $extractRoot 'runtime-manifest.json'
-            if (Test-Path -LiteralPath $manifestAtRoot) {
-              $runtimeDir = $extractRoot
-            } else {
-              $candidates = @(Get-ChildItem -LiteralPath $extractRoot -Directory | Where-Object {
-                Test-Path -LiteralPath (Join-Path $_.FullName 'runtime-manifest.json')
-              })
-              if ($candidates.Count -eq 1) {
-                $runtimeDir = $candidates[0].FullName
-              } else {
-                throw 'Bundled runtime archive must contain runtime-manifest.json at root or in exactly one top-level folder.'
-              }
+            $runtimeCandidates = @(Get-ChildItem -LiteralPath $extractRoot -Filter runtime-manifest.json -File -Recurse)
+            if ($runtimeCandidates.Count -ne 1) {
+              throw 'The bundled runtime archive must contain exactly one runtime-manifest.json.'
             }
+            $runtimeDir = $runtimeCandidates[0].DirectoryName
           }
 
-          if (-not [string]::IsNullOrWhiteSpace($runtimeDir)) {
-            $runtimeDir = [IO.Path]::GetFullPath($runtimeDir)
-            $runtimeManifest = Join-Path $runtimeDir 'runtime-manifest.json'
-            $runtimePython = Join-Path $runtimeDir 'python'
-            $runtimePythonExe = Join-Path $runtimePython 'python.exe'
-
-            if (-not (Test-Path -LiteralPath $runtimeManifest)) {
-              throw "BUNDLED_RUNTIME_DIR is missing runtime-manifest.json: $runtimeDir"
-            }
-            if (-not (Test-Path -LiteralPath $runtimePythonExe)) {
-              throw "BUNDLED_RUNTIME_DIR is missing python/python.exe: $runtimeDir"
-            }
-
-            Export-GithubEnv 'BUNDLED_RUNTIME_DIR' $runtimeDir
-            Export-GithubEnv 'BUNDLED_PYTHON_DIR' $runtimePython
-            Write-Host "Bundled runtime resolved: $runtimeDir"
-            exit 0
+          $runtimeDir = [IO.Path]::GetFullPath($runtimeDir)
+          if (-not (Test-Path -LiteralPath (Join-Path $runtimeDir 'runtime-manifest.json'))) {
+            throw "The audited bundled runtime is missing runtime-manifest.json: $runtimeDir"
           }
-
-          if ([string]::IsNullOrWhiteSpace($pythonDir)) {
-            throw 'Bundled runtime is not configured. Set BUNDLED_RUNTIME_DIR, or set BUNDLED_RUNTIME_ARCHIVE_URL (optionally BUNDLED_RUNTIME_ARCHIVE_SHA256), or set BUNDLED_PYTHON_DIR.'
-          }
-
-          $pythonDir = [IO.Path]::GetFullPath($pythonDir)
-          $pythonExe = Join-Path $pythonDir 'python.exe'
-          if (-not (Test-Path -LiteralPath $pythonExe)) {
-            throw "BUNDLED_PYTHON_DIR is missing python.exe: $pythonDir"
-          }
-          Export-GithubEnv 'BUNDLED_PYTHON_DIR' $pythonDir
-          Write-Host "Bundled Python runtime resolved: $pythonDir"
+          "BUNDLED_RUNTIME_DIR=$runtimeDir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Build and audit setup-first Windows installer
         if: steps.version.outputs.published != 'true'
         working-directory: frontend
+        env:
+          REQUIRE_BUNDLED_RUNTIME: "1"
         shell: pwsh
         run: |
-          $bundledPythonDir = "$env:BUNDLED_PYTHON_DIR".Trim()
-          if ([string]::IsNullOrWhiteSpace($bundledPythonDir)) {
-            throw 'BUNDLED_PYTHON_DIR is not configured. Resolve bundled runtime inputs earlier in this workflow before packaging.'
-          }
-          if ($bundledPythonDir -match '^\$env:') {
-            throw "BUNDLED_PYTHON_DIR must be a real absolute path, not a literal PowerShell expression: $bundledPythonDir"
-          }
-          $pythonExe = Join-Path -Path $bundledPythonDir -ChildPath 'python.exe'
-          if (-not (Test-Path -LiteralPath $pythonExe)) {
-            throw "BUNDLED_PYTHON_DIR is missing python.exe: $bundledPythonDir"
-          }
           npm run package:win
 
       - name: Smoke-test packaged application
         if: steps.version.outputs.published != 'true'
         working-directory: frontend
-        run: npm run smoke:package
+        run: npm run smoke:setup-first-package
 
       - name: Tag release
         if: steps.version.outputs.published != 'true'
