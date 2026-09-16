@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from dataclasses import replace
 from pathlib import Path
+from threading import Event
 from unittest.mock import MagicMock, patch
 
 from backend.censor.engine import ProfanityCensor
@@ -37,6 +38,7 @@ class ComponentResolutionTests(unittest.TestCase):
             manager = DownloadManager(settings)
             manager._records["job"] = DownloadRecord("job", "https://youtu.be/dQw4w9WgXcQ", "dQw4w9WgXcQ")
             manager._events["job"] = []
+            manager._cancellations["job"] = Event()
             try:
                 with patch("backend.jobs.downloads.subprocess.Popen") as run:
                     manager._run("job")

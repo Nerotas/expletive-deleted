@@ -3,10 +3,12 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Event
+from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import MagicMock, patch
 
 from backend.jobs import JobManager, JobRecord
 from backend.jobs.models import JobError
+from backend.jobs.downloads import DownloadRecord
 from backend.runtime.dependencies import DependencyInventory, DependencyStatus
 from backend.service import ArchiveSourceError, BackendService, LibraryItem, ServiceBusyError
 from backend.service.capabilities import get_capabilities
@@ -25,11 +27,63 @@ class StubManager:
     def wait(self, job_id, timeout=None):
         return None
 
-    def close(self):
+    def close(self, wait=True):
         self.closed = True
 
 
 class BackendServiceTests(unittest.TestCase):
+    def test_settings_preserve_active_download_manager_and_persisted_settings(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            service = BackendService(self.create_store(Path(temporary_directory)), manager_factory=StubManager)
+            manager = service.downloads
+            original = service.get_settings()
+            edited = service.get_settings()
+            edited["processing"]["mode"] = "report_only"
+            try:
+                for status in ("queued", "downloading", "preparing"):
+                    with self.subTest(status=status):
+                        manager._records["download"] = DownloadRecord("download", "url", "id", status=status)
+                        with self.assertRaises(ServiceBusyError):
+                            service.update_settings(edited)
+                        self.assertIs(service.downloads, manager)
+                        self.assertEqual(service.get_settings(), original)
+                        self.assertEqual(service.store.load().processing.mode, original["processing"]["mode"])
+                manager._records["download"] = DownloadRecord("download", "url", "id", status="completed")
+                self.assertEqual(service.update_settings(edited)["processing"]["mode"], "report_only")
+            finally:
+                service.close()
+
+    def test_settings_and_download_submission_are_serialized_during_metadata_lookup(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            service = BackendService(self.create_store(Path(temporary_directory)), manager_factory=StubManager)
+            manager = service.downloads
+            lookup_started, release_lookup, save_started = Event(), Event(), Event()
+            def submit(*args):
+                lookup_started.set()
+                self.assertTrue(release_lookup.wait(3))
+                record = DownloadRecord("download", "url", "id", status="queued")
+                manager._records[record.id] = record
+                return record
+            def save():
+                save_started.set()
+                return service.update_settings(service.get_settings())
+            try:
+                with ThreadPoolExecutor(max_workers=2) as executor, patch.object(manager, "submit", side_effect=submit):
+                    submitted = executor.submit(service.submit_youtube_download, "url")
+                    self.assertTrue(lookup_started.wait(3))
+                    saved = executor.submit(save)
+                    self.assertTrue(save_started.wait(3))
+                    self.assertFalse(saved.done())
+                    release_lookup.set()
+                    self.assertEqual(submitted.result(3).id, "download")
+                    with self.assertRaises(ServiceBusyError):
+                        saved.result(3)
+                self.assertIs(service.downloads, manager)
+                self.assertEqual(len(service.downloads.list()), 1)
+            finally:
+                release_lookup.set()
+                service.close()
+
     def create_store(self, root: Path) -> SettingsStore:
         directories = DirectorySettings(
             input=root / "Ready",

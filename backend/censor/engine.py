@@ -1155,6 +1155,21 @@ class ProfanityCensor:
             print(f"[*] Total elapsed before failure: {self._format_seconds(time.perf_counter() - started)}")
             return False
 
+    def verify_output(self) -> None:
+        """Check the staged media before the job publishes it or archives its source."""
+        self._check_cancelled()
+        result = subprocess.run(
+            [self.ffprobe_bin, "-v", "error", "-show_entries", "stream=codec_type", "-of", "json", self.output_file],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=15,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        try:
+            stream_types = {item.get("codec_type") for item in json.loads(result.stdout).get("streams", [])}
+        except (ValueError, TypeError, AttributeError) as exc:
+            raise RuntimeError("The processed output could not be verified") from exc
+        if result.returncode or "audio" not in stream_types or (not self.is_audio_only() and "video" not in stream_types):
+            raise RuntimeError("The processed output is missing readable media streams")
+
     def process_verified_transcript(self, include_undiscovered: bool = False) -> bool:
         """Create censored output from an already verified transcript without Whisper work."""
         started = time.perf_counter()

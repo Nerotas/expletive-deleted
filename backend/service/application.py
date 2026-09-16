@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import shutil
+from functools import wraps
+from threading import RLock
 from uuid import uuid4
 from collections.abc import Mapping
 from pathlib import Path
@@ -36,6 +38,17 @@ class ImportSourceError(ValueError):
     """Raised when a file cannot be safely copied into Ready."""
 
 
+def _while_open(operation: Callable[..., Any]) -> Callable[..., Any]:
+    """Serialize submissions with settings replacement, including metadata lookup."""
+    @wraps(operation)
+    def guarded(self, *args, **kwargs):
+        with self._lifecycle_lock:
+            if self._closing:
+                raise ServiceBusyError("The local processing service is closing")
+            return operation(self, *args, **kwargs)
+    return guarded
+
+
 class BackendService:
     """Own settings and one serial job manager behind a stable callable boundary."""
 
@@ -45,6 +58,8 @@ class BackendService:
         *,
         manager_factory: Callable[[AppSettings], JobManager] = JobManager,
     ):
+        self._lifecycle_lock = RLock()
+        self._closing = False
         self.store = store or SettingsStore()
         self._manager_factory = manager_factory
         self.settings = load_effective_settings(self.store)
@@ -55,12 +70,17 @@ class BackendService:
     def get_settings(self) -> dict[str, object]:
         return settings_to_dict(self.settings)
 
+    @_while_open
     def update_settings(self, payload: Mapping[str, Any]) -> dict[str, object]:
         active = tuple(
             job for job in self.jobs.list()
             if job.status not in ("completed", "failed", "cancelled", "transcribed")
         )
-        if active:
+        downloads_active = any(
+            item.status not in ("completed", "failed", "cancelled")
+            for item in self.downloads.list()
+        )
+        if active or downloads_active:
             raise ServiceBusyError("Settings cannot change while jobs are active")
         updated = settings_from_dict(payload, self.settings)
         ensure_directories(updated.directories)
@@ -86,6 +106,7 @@ class BackendService:
     def get_capabilities(self) -> dict[str, object]:
         return get_capabilities(self.settings)
 
+    @_while_open
     def submit_job(
         self,
         source: Path,
@@ -101,15 +122,19 @@ class BackendService:
             overwrite_output=overwrite_output,
         )
 
+    @_while_open
     def submit_jobs(self, sources: list[Path], mode: JobMode) -> tuple[JobSubmissionResult, ...]:
         """Submit a selective batch while retaining ordered per-source results."""
         return self.jobs.submit_many(sources, mode)
 
+    @_while_open
     def submit_youtube_download(self, url: str, retry_id: str | None = None, cookie_browser: str | None = None) -> DownloadRecord:
         return self.downloads.submit(url, retry_id, cookie_browser)
 
     def _queue_completed_youtube_download(self, source: Path) -> None:
-        self.jobs.submit(source, "report_only", auto_censor_after_transcription=True)
+        with self._lifecycle_lock:
+            if not self._closing:
+                self.jobs.submit(source, "report_only", auto_censor_after_transcription=True)
 
     def archive_source(self, source: Path) -> dict[str, object]:
         """Move a completed or transcribed source out of the Queue without touching artifacts."""
@@ -142,6 +167,7 @@ class BackendService:
             raise ArchiveSourceError(f"Could not archive source: {exc}") from exc
         return {"source": str(source), "archived_to": str(destination)}
 
+    @_while_open
     def import_sources(self, sources: list[Path]) -> list[dict[str, object]]:
         """Queue a copy job for each selected file and report the accepted import."""
         ready = self.settings.directories.input.resolve()
@@ -245,5 +271,9 @@ class BackendService:
             directory = directory.parent
 
     def close(self) -> None:
-        self.jobs.close()
+        with self._lifecycle_lock:
+            self._closing = True
+        # Stop both lanes before waiting; callbacks must not queue work during exit.
+        self.jobs.close(wait=False)
         self.downloads.close()
+        self.jobs.close()

@@ -105,6 +105,7 @@ class DownloadManager:
         self._cancellations: dict[str, Event] = {}
         self._processes: dict[str, subprocess.Popen[str]] = {}
         self._sequence = 0
+        self._closing = False
 
     def submit(self, url: str, retry_id: str | None = None, cookie_browser: str | None = None) -> DownloadRecord:
         url, video_id = validate_youtube_url(url)
@@ -115,6 +116,8 @@ class DownloadManager:
             raise RuntimeError("yt-dlp is not installed. Get it from System Requirements before importing YouTube videos.")
         title = self._resolve_title(ytdlp, url, cookie_browser)
         with self._lock:
+            if self._closing:
+                raise RuntimeError("The local processing service is closing")
             prior = self._records.get(retry_id) if retry_id else None
             if retry_id and (prior is None or prior.url != url):
                 raise ValueError("Download retry is unavailable")
@@ -140,7 +143,16 @@ class DownloadManager:
             if process and process.poll() is None: process.terminate()
             return self._records[job_id]
 
-    def close(self) -> None: self._executor.shutdown(wait=False, cancel_futures=True)
+    def close(self) -> None:
+        with self._lock:
+            self._closing = True
+            for cancellation in self._cancellations.values():
+                cancellation.set()
+            for process in self._processes.values():
+                if process.poll() is None:
+                    process.terminate()
+        # Wait outside the lock so workers can reap subprocesses and clean staging.
+        self._executor.shutdown(wait=True, cancel_futures=True)
 
     def _emit(self, job_id: str, event: str, **values: object) -> None:
         with self._lock:
@@ -155,7 +167,10 @@ class DownloadManager:
 
     def _run(self, job_id: str) -> None:
         staging = self.settings.directories.input.resolve() / ".downloads" / job_id
+        cancellation = self._cancellations[job_id]
         try:
+            if cancellation.is_set():
+                raise InterruptedError
             ytdlp = resolve_ytdlp_path(self.settings.runtime.ytdlp_path)
             if not ytdlp.is_file(): raise RuntimeError("yt-dlp is not installed. Get it from System Requirements before importing YouTube videos.")
             record = self._records[job_id]
@@ -186,7 +201,10 @@ class DownloadManager:
                 "--paths", str(staging), "--output", "source.%(ext)s", record.url,
             ])
             process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
-            with self._lock: self._processes[job_id] = process
+            with self._lock:
+                self._processes[job_id] = process
+                if cancellation.is_set():
+                    process.terminate()
             output: list[str] = []
             for line in process.stdout or ():
                 output.append(line)
@@ -198,19 +216,24 @@ class DownloadManager:
                     self._set(job_id, "downloading", percent, message="Downloading video")
                     self._emit(job_id, "progress", stage="downloading", percent=percent, eta_seconds=_float(fields[1]) if len(fields) > 1 else None, message="Downloading video")
                 if cancellation.is_set(): process.terminate(); raise InterruptedError
-            if process.wait() != 0: raise self._download_error("".join(output))
+            returncode = process.wait()
+            if cancellation.is_set(): raise InterruptedError
+            if returncode != 0: raise self._download_error("".join(output))
             source = next((item for item in staging.glob("source.*") if item.suffix != ".part"), None)
             if source is None: raise RuntimeError("yt-dlp completed without creating media")
             final = staging / "final.mp4"
             self._set(job_id, "preparing", message="Preparing downloaded media")
             self._prepare(job_id, source, final, str(ffmpeg), str(ffprobe), cancellation)
+            if cancellation.is_set(): raise InterruptedError
             title = self._records[job_id].title or record.video_id
             destination = self._destination(title, record.video_id)
             if destination.exists(): raise RuntimeError(f"A file named {destination.name} already exists in Ready")
             final.replace(destination)
-            self._set(job_id, "completed", 100, message="Added to Ready")
+            # Remain active until the callback finishes, preventing settings from
+            # replacing the managers in the gap between download and local work.
             if self.settings.processing.auto_transcode_youtube_downloads and self._on_completed:
                 self._on_completed(destination)
+            self._set(job_id, "completed", 100, message="Added to Ready")
         except InterruptedError: self._set(job_id, "cancelled", message="Download cancelled")
         except Exception as exc:
             if isinstance(exc, YtdlpAuthenticationRequired):
@@ -223,7 +246,17 @@ class DownloadManager:
                 code, summary, diagnostic = "download_failed", "YouTube download failed", getattr(exc, "diagnostic", None) or traceback.format_exc()
             self._set(job_id, "failed", error=JobError(code, summary, str(exc), True, diagnostic), message=summary)
         finally:
-            with self._lock: self._processes.pop(job_id, None)
+            with self._lock: process = self._processes.pop(job_id, None)
+            if process is not None:
+                if process.poll() is None:
+                    process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+                if process.stdout is not None:
+                    process.stdout.close()
             shutil.rmtree(staging, ignore_errors=True)
 
     def _prepare(self, job_id: str, source: Path, final: Path, ffmpeg: str, ffprobe: str, cancellation: Event) -> None:
@@ -248,10 +281,13 @@ class DownloadManager:
         self._verify(final, ffprobe, require_h264=True)
 
     def _run_ffmpeg(self, job_id: str, command: list[str], cancellation: Event, duration_seconds: float | None) -> subprocess.CompletedProcess[str]:
+        if cancellation.is_set(): raise InterruptedError
         progress_command = [command[0], "-progress", "pipe:2", "-nostats", *command[1:]]
         process = subprocess.Popen(progress_command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         with self._lock:
             self._processes[job_id] = process
+            if cancellation.is_set():
+                process.terminate()
         encoded_seconds = 0.0
         output: list[str] = []
         for line in process.stdout or ():
@@ -268,6 +304,7 @@ class DownloadManager:
                 process.terminate()
                 raise InterruptedError
         process.wait()
+        if cancellation.is_set(): raise InterruptedError
         return subprocess.CompletedProcess(progress_command, process.returncode, "".join(output), "")
 
     @staticmethod

@@ -66,6 +66,7 @@ class JobManager:
         self._cancellations: dict[str, Event] = {}
         self._futures: dict[str, Future[None]] = {}
         self._sequence = 0
+        self._closing = False
         self._runtime = JobRuntime(
             settings,
             censor_factory=censor_factory,
@@ -120,6 +121,8 @@ class JobManager:
         )
         cancellation = Event()
         with self._lock:
+            if self._closing:
+                raise JobSubmissionError("unavailable", "The local processing service is closing")
             if any(
                 existing.source == source and existing.status not in TERMINAL_STATUSES
                 for existing in self._jobs.values()
@@ -215,8 +218,12 @@ class JobManager:
         return self.get(job_id)
 
     def close(self, wait: bool = True) -> None:
+        with self._lock:
+            self._closing = True
+            for job_id in self._jobs:
+                self.cancel(job_id)
         for executor in self._executors.values():
-            executor.shutdown(wait=wait, cancel_futures=not wait)
+            executor.shutdown(wait=wait, cancel_futures=True)
 
     def _emit(self, job_id: str, event: str, **values: object) -> JobEvent:
         self._sequence += 1
@@ -251,6 +258,7 @@ class JobManager:
         self._emit(job_id, event_type, stage=status, percent=percent, error=error, message=message)
         if (
             status == "transcribed"
+            and not self._closing
             and current.mode == "report_only"
             and (self.settings.processing.auto_censor_after_transcription or current.auto_censor_after_transcription)
             and not output_path(current.source, self.settings.directories.output, self.settings.directories.input).exists()

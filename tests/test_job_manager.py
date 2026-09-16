@@ -20,6 +20,10 @@ class FakeCensor:
     fail_processing = False
     process_options = []
 
+    def verify_output(self):
+        if self.output_file.read_bytes() != b"output":
+            raise RuntimeError("Invalid output")
+
     def __init__(self, input_file, output_file, *args, **kwargs):
         self.input_file = Path(input_file)
         self.output_file = Path(output_file)
@@ -78,6 +82,77 @@ class FakeCensor:
 
 
 class JobManagerTests(unittest.TestCase):
+    def test_close_cancels_running_and_queued_jobs_without_publishing_partial_media(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            settings = self.create_settings(Path(temporary_directory))
+            staged = Event()
+            class BlockingCensor(FakeCensor):
+                def process_verified_transcript(self):
+                    self.output_file.write_bytes(b"partial")
+                    staged.set()
+                    self.options["cancellation"].wait(5)
+                    return False
+            source = settings.directories.input / "first.mkv"
+            queued_source = settings.directories.input / "second.mkv"
+            for item in (source, queued_source):
+                item.write_bytes(b"original")
+                self.write_verified_transcript(settings, item)
+            manager = JobManager(settings, censor_factory=BlockingCensor)
+            try:
+                active = manager.submit(source, "censor")
+                self.assertTrue(staged.wait(3))
+                queued = manager.submit(queued_source, "censor")
+                self.assertFalse(output_path(source, settings.directories.output).exists())
+                manager.close()
+                self.assertEqual(manager.get(active.id).status, "cancelled")
+                self.assertEqual(manager.get(queued.id).status, "cancelled")
+                self.assertEqual(list(settings.directories.output.iterdir()), [])
+                self.assertEqual(source.read_bytes(), b"original")
+                self.assertEqual(queued_source.read_bytes(), b"original")
+                with self.assertRaises(JobSubmissionError):
+                    manager.submit(source, "censor")
+            finally:
+                manager.close()
+
+    def test_verification_failure_never_publishes_or_archives_output(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            settings = self.create_settings(Path(temporary_directory))
+            settings = replace(settings, source=replace(settings.source, archive_after_success=True))
+            source = settings.directories.input / "movie.mkv"
+            source.write_bytes(b"original")
+            self.write_verified_transcript(settings, source)
+            class InvalidCensor(FakeCensor):
+                def verify_output(self):
+                    raise RuntimeError("Unreadable media")
+            manager = JobManager(settings, censor_factory=InvalidCensor)
+            try:
+                job = manager.submit(source, "censor")
+                self.assertEqual(manager.wait(job.id, 3).status, "failed")
+                self.assertEqual(list(settings.directories.output.iterdir()), [])
+                self.assertEqual(list(settings.directories.archive.iterdir()), [])
+                self.assertEqual(source.read_bytes(), b"original")
+            finally:
+                manager.close()
+
+    def test_publish_refuses_an_output_created_after_submission(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            settings = self.create_settings(Path(temporary_directory))
+            source = settings.directories.input / "movie.mkv"
+            source.write_bytes(b"original")
+            self.write_verified_transcript(settings, source)
+            final = output_path(source, settings.directories.output)
+            class RacingCensor(FakeCensor):
+                def verify_output(self):
+                    final.write_bytes(b"other completed output")
+            manager = JobManager(settings, censor_factory=RacingCensor)
+            try:
+                job = manager.submit(source, "censor")
+                self.assertEqual(manager.wait(job.id, 3).status, "failed")
+                self.assertEqual(final.read_bytes(), b"other completed output")
+                self.assertEqual(list(settings.directories.output.iterdir()), [final])
+            finally:
+                manager.close()
+
     def setUp(self):
         FakeCensor.instances = []
         FakeCensor.processed_sources = []

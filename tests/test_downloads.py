@@ -1,6 +1,10 @@
+import io
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from dataclasses import replace
 from threading import Event
 from unittest.mock import MagicMock, patch
 
@@ -16,6 +20,73 @@ from backend.settings import AppSettings, DirectorySettings, RuntimeSettings
 
 
 class YoutubeUrlTests(unittest.TestCase):
+    def test_close_stops_a_silent_download_and_waits_for_worker_cleanup(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            manager = DownloadManager(AppSettings.defaults(root))
+            started = Event()
+            cancellation = Event()
+            manager._cancellations["job"] = cancellation
+            partial = root / "partial-download"
+            def worker():
+                partial.write_bytes(b"partial")
+                process = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"],
+                                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                with manager._lock:
+                    manager._processes["job"] = process
+                started.set()
+                try:
+                    process.wait(timeout=10)
+                finally:
+                    if process.poll() is None:
+                        process.kill()
+                        process.wait()
+                    partial.unlink()
+            future = manager._executor.submit(worker)
+            try:
+                self.assertTrue(started.wait(3))
+                manager.close()
+                self.assertTrue(cancellation.is_set())
+                self.assertTrue(future.done())
+                future.result()
+                self.assertFalse(partial.exists())
+            finally:
+                manager.close()
+
+    def test_completion_callback_runs_before_download_becomes_terminal(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            ytdlp = root / "yt-dlp.exe"
+            ytdlp.touch()
+            settings = AppSettings(
+                directories=DirectorySettings(root / "Ready", root / "Finished", root / "Processed", root / "Transcripts"),
+                runtime=RuntimeSettings(ytdlp_path=ytdlp),
+            )
+            settings = replace(settings, processing=replace(settings.processing, auto_transcode_youtube_downloads=True))
+            manager = DownloadManager(settings)
+            manager._records["job"] = DownloadRecord("job", "url", "id")
+            manager._events["job"] = []
+            manager._cancellations["job"] = Event()
+            staging = root / "Ready" / ".downloads" / "job"
+            staging.mkdir(parents=True)
+            (staging / "source.mp4").write_bytes(b"source")
+            process = MagicMock(returncode=0)
+            process.stdout = io.StringIO()
+            process.wait.return_value = 0
+            process.poll.return_value = 0
+            callback_states = []
+            manager._on_completed = lambda source: callback_states.append(manager.list()[0].status)
+            try:
+                with patch.object(manager, "_runtime_media_tools", return_value=(Path("ffmpeg"), Path("ffprobe"))), \
+                        patch.object(manager, "_prepare", side_effect=lambda job, source, final, *args: final.write_bytes(b"verified")), \
+                        patch("backend.jobs.downloads.subprocess.Popen", return_value=process):
+                    manager._run("job")
+                self.assertEqual(callback_states, ["preparing"])
+                self.assertEqual(manager.list()[0].status, "completed")
+                self.assertFalse(staging.exists())
+            finally:
+                manager.close()
+
     def test_individual_youtube_urls_are_accepted(self):
         url, video_id = validate_youtube_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
         self.assertEqual(url, "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
@@ -168,7 +239,7 @@ class DownloadManagerTests(unittest.TestCase):
             manager._events[job_id] = []
             manager._cancellations[job_id] = Event()
             process = MagicMock(returncode=1)
-            process.stdout = iter(["ERROR: Could not copy Chrome cookie database\n"])
+            process.stdout = io.StringIO("ERROR: Could not copy Chrome cookie database\n")
 
             with (
                 patch.object(manager, "_runtime_media_tools", return_value=(Path("ffmpeg"), Path("ffprobe"))),
@@ -195,7 +266,7 @@ class DownloadManagerTests(unittest.TestCase):
             manager._events[job_id] = []
             manager._cancellations[job_id] = Event()
             process = MagicMock(returncode=1)
-            process.stdout = iter([])
+            process.stdout = io.StringIO()
 
             with (
                 patch.object(manager, "_runtime_media_tools", return_value=(Path("ffmpeg"), Path("ffprobe"))),
@@ -223,7 +294,7 @@ class DownloadManagerTests(unittest.TestCase):
             manager._events[job_id] = []
             manager._cancellations[job_id] = Event()
             process = MagicMock(returncode=1)
-            process.stdout = iter([])
+            process.stdout = io.StringIO()
 
             with (
                 patch.object(manager, "_runtime_media_tools", return_value=(Path("ffmpeg"), Path("ffprobe"))),
