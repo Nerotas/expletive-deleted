@@ -10,7 +10,6 @@ from backend.runtime import (
     get_whisper_device_status,
     inspect_dependencies,
 )
-from backend.runtime.environment import get_managed_ytdlp_path
 from backend.settings import AppSettings
 
 
@@ -50,7 +49,7 @@ def get_capabilities(settings: AppSettings) -> dict[str, object]:
         ffprobe_bin=settings.runtime.ffprobe_path,
         whisper_library=settings.whisper.library,
         whisper_model=settings.whisper.model,
-        ytdlp_bin=settings.runtime.ytdlp_path or get_managed_ytdlp_path(),
+        ytdlp_bin=settings.runtime.ytdlp_path,
     )
     app_runtime, app_runtime_source, app_runtime_detail = _app_runtime_status(inventory)
     python_ready = all(status.ready for status in inventory.python)

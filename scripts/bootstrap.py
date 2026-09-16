@@ -24,11 +24,7 @@ from backend.runtime import (
     get_whisper_cache_dir,
     inspect_dependencies,
 )
-from backend.runtime.environment import (
-    get_application_runtime_root,
-    get_managed_deno_path,
-    get_managed_ytdlp_path,
-)
+from backend.runtime.environment import get_application_runtime_root
 from backend.settings import (
     DirectoryAccessError,
     SettingsFileError,
@@ -93,11 +89,7 @@ def initialize_application_settings(store: SettingsStore | None = None) -> tuple
 
 
 def _development_runtime_components() -> list[str]:
-    inventory = inspect_dependencies(
-        get_whisper_cache_dir(),
-        ytdlp_bin=get_managed_ytdlp_path(),
-        js_runtime_bin=get_managed_deno_path(),
-    )
+    inventory = inspect_dependencies(get_whisper_cache_dir())
     missing: list[str] = []
     if not inventory.ffmpeg.ready or not inventory.ffprobe.ready:
         missing.append("ffmpeg")

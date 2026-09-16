@@ -23,10 +23,13 @@ class DownloadYtdlpTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
+            external = root / "external-yt-dlp.exe"
+            external.write_bytes(b"external-original")
             completed = type("Completed", (), {"returncode": 0, "stdout": f"{YTDLP_VERSION}\n", "stderr": ""})()
             with (
                 patch("scripts.download_ytdlp.urllib.request.urlopen", side_effect=fake_urlopen),
                 patch("scripts.download_ytdlp.subprocess.run", return_value=completed) as run,
+                patch.dict("os.environ", {"CENSOR_YTDLP": str(external)}),
             ):
                 exit_code = main(["--root", str(root)])
 
@@ -34,6 +37,7 @@ class DownloadYtdlpTests(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             self.assertEqual(destination.read_bytes(), binary)
             run.assert_called_once()
+            self.assertEqual(external.read_bytes(), b"external-original")
 
     def test_failed_binary_is_not_replaced(self):
         binary = b"corrupt-yt-dlp-binary"

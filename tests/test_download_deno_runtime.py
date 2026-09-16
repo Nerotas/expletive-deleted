@@ -42,8 +42,14 @@ class DownloadDenoRuntimeTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
-            with patch("scripts.download_deno_runtime.urllib.request.urlopen", side_effect=fake_urlopen):
+            external = root / "external-deno.exe"
+            external.write_bytes(b"external-original")
+            with (
+                patch("scripts.download_deno_runtime.urllib.request.urlopen", side_effect=fake_urlopen),
+                patch.dict("os.environ", {"CENSOR_DENO": str(external)}),
+            ):
                 exit_code = main(["--root", str(root)])
+            self.assertEqual(external.read_bytes(), b"external-original")
 
             destination = root / "dependencies" / "deno" / "deno.exe"
             self.assertEqual(exit_code, 0)

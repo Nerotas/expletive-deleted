@@ -17,8 +17,7 @@ from typing import Callable, List, Dict
 from backend.policy import PolicyStore
 from backend.runtime import (
     available_encoders,
-    find_ffmpeg,
-    find_ffprobe,
+    resolve_media_tools,
     get_calibrated_transcription_factor,
     get_whisper_cache_dir,
     get_whisper_device_status,
@@ -365,8 +364,7 @@ class ProfanityCensor:
         self.video_mode = video_mode
         self.progress_callback = progress_callback
         self.cancellation = cancellation or Event()
-        self.ffmpeg_bin = ffmpeg_bin or find_ffmpeg()
-        self.ffprobe_bin = ffprobe_bin or find_ffprobe()
+        self.ffmpeg_bin, self.ffprobe_bin = resolve_media_tools(ffmpeg_bin, ffprobe_bin)
         if not self.ffmpeg_bin or not self.ffprobe_bin:
             raise RuntimeError(
                 "FFmpeg and FFprobe must be available on PATH or configured with "

@@ -35,7 +35,7 @@ class DownloadManagerTests(unittest.TestCase):
             deno = Path(temporary_directory) / "deno.exe"
             deno.touch()
             with (
-                patch("backend.jobs.downloads.get_managed_deno_path", return_value=deno),
+                patch("backend.jobs.downloads.resolve_deno_path", return_value=deno),
                 patch("backend.jobs.downloads.subprocess.run", return_value=completed) as run,
             ):
                 title = DownloadManager._resolve_title(Path("C:/Tools/yt-dlp.exe"), "https://youtu.be/dQw4w9WgXcQ")
