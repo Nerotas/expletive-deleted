@@ -23,6 +23,8 @@ The Windows package wrapper cleans incomplete generated staging directories and 
 
 The package audit requires private Python and rejects processing packages, FFmpeg/FFprobe executables and libraries, yt-dlp, Deno, Whisper model payloads, and accidental development binaries. Electron's single root `ffmpeg.dll` remains framework-owned Chromium codec support and must not satisfy the application's FFmpeg readiness check.
 
+`npm run package:win` requires `BUNDLED_RUNTIME_DIR` even outside CI and refuses to create an installer without private Python. `package:dir` still supports the development-only package used by CI. For a separate build directory, set `PACKAGE_AUDIT_ROOT` to its `win-unpacked` directory and `PACKAGED_EXECUTABLE` to its executable before running the audit and packaged smoke commands. The setup-first smoke checks fresh Unicode application-data and media paths, a restricted system PATH, and conflicting system Python configuration without obtaining processing components.
+
 ## Renderer architecture
 
 - `src/App.tsx` composes the shell, global status, and routes.

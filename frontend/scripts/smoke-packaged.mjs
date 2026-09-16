@@ -8,32 +8,43 @@ const requireBundledRuntime = process.argv.includes('--require-bundled-runtime')
 await access(executable)
 
 const temporaryDirectory = path.resolve('node_modules', '.tmp', 'playwright-packaged')
-const appDataDirectory = path.join(temporaryDirectory, 'fresh-app-data')
+const appDataDirectory = path.join(temporaryDirectory, 'fresh-app-data caf\u00e9 \u5bb6\u5ead')
 await rm(appDataDirectory, { recursive: true, force: true })
 await mkdir(temporaryDirectory, { recursive: true })
 await mkdir(appDataDirectory, { recursive: true })
 delete process.env.ELECTRON_RUN_AS_NODE
 const cleanSystemPath = path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32')
+// Do not let developer overrides or the user's real settings satisfy this check.
+const cleanEnvironment = Object.fromEntries(Object.entries(process.env)
+  .filter(([key]) => !/^(CENSOR_|PYTHON|ELECTRON_RENDERER_URL)/i.test(key)))
 
 const { _electron: electron } = await import('playwright')
 const packagedApp = await electron.launch({
   executablePath: executable,
   env: {
-    ...process.env,
+    ...cleanEnvironment,
     CENSOR_PROJECT_ROOT: path.join(path.dirname(executable), 'resources', 'app-backend'),
     TMPDIR: temporaryDirectory,
     TMP: temporaryDirectory,
     TEMP: temporaryDirectory,
     LOCALAPPDATA: appDataDirectory,
+    CENSOR_APP_DATA_DIR: path.join(appDataDirectory, 'ExpletiveDeleted'),
     // Release smoke must prove that no ambient tools satisfy readiness. The
     // development package intentionally relies on the CI-provided Python.
-    ...(requireBundledRuntime ? { PATH: cleanSystemPath } : {}),
+    ...(requireBundledRuntime ? {
+      PATH: cleanSystemPath,
+      // An unrelated Python installation must not break private Python startup.
+      PYTHONHOME: path.join(temporaryDirectory, 'nonexistent-system-python'),
+      PYTHONPATH: path.join(temporaryDirectory, 'unrelated-packages'),
+      PYTHONIOENCODING: 'cp1252',
+    } : {}),
   },
 })
 
 try {
   const window = await packagedApp.firstWindow()
-  window.on('pageerror', (error) => console.error(`Renderer error: ${error.message}`))
+  const rendererErrors = []
+  window.on('pageerror', (error) => rendererErrors.push(error.message))
   await window.waitForLoadState('domcontentloaded')
   const startupOutcome = await Promise.race([
     window.getByRole('heading', { name: 'Welcome to Expletive Deleted', exact: true }).waitFor().then(() => 'ready'),
@@ -54,9 +65,15 @@ try {
 
   const freshSettings = await window.evaluate(() => window.expletiveDeleted.invoke('settings.get'))
   if (freshSettings.onboarding.completed) throw new Error('Fresh packaged settings should require onboarding')
+  const unicodeInput = path.join(appDataDirectory, 'Ready caf\u00e9 \u5bb6\u5ead')
+  const savedSettings = await window.evaluate(({ settings, input }) => window.expletiveDeleted.invoke('settings.update', {
+    settings: { ...settings, directories: { ...settings.directories, input } },
+  }), { settings: freshSettings, input: unicodeInput })
+  if (savedSettings.directories.input !== unicodeInput) throw new Error('Bridge corrupted the Unicode media directory')
+  await access(unicodeInput)
   await window.evaluate((settings) => window.expletiveDeleted.invoke('settings.update', {
     settings: { ...settings, onboarding: { completed: true } },
-  }), freshSettings)
+  }), savedSettings)
   const launchUrl = new URL(window.url())
   launchUrl.searchParams.set('launch', 'completed')
   launchUrl.hash = '#/'
@@ -117,6 +134,7 @@ try {
       throw new Error(`Packaged settings directory ${name} is inside installed resources: ${directory}`)
     }
   }
+  if (rendererErrors.length) throw new Error(`Packaged renderer errors: ${rendererErrors.join('; ')}`)
   console.log(`Packaged Electron smoke passed: ${await window.title()}`)
 } finally {
   await packagedApp.close()
