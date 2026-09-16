@@ -50,12 +50,20 @@ export function backendEnvironment(
   const managedPythonPackages = appDataRoot
     ? path.join(appDataRoot, 'dependencies', 'python')
     : undefined
+  // A system Python installation must not redirect the app's private runtime.
+  const inheritedEnvironment = { ...environment }
+  if (bundledPythonRuntime) {
+    for (const key of Object.keys(inheritedEnvironment)) {
+      if (key.toUpperCase().startsWith('PYTHON')) delete inheritedEnvironment[key]
+    }
+  }
 
   return {
-    ...environment,
+    ...inheritedEnvironment,
     CENSOR_PROJECT_ROOT: '',
     ...(appDataRoot ? { CENSOR_APP_DATA_DIR: appDataRoot } : {}),
-    ...(bundledPythonRuntime ? { CENSOR_BUNDLED_RUNTIME: '1' } : {}),
+    // Startup and setup subprocesses must leave the hashed installation unchanged.
+    ...(bundledPythonRuntime ? { CENSOR_BUNDLED_RUNTIME: '1', PYTHONDONTWRITEBYTECODE: '1' } : {}),
     ...(bundledPythonRuntime && managedPythonPackages
       ? {
           CENSOR_PYTHON_PACKAGES_DIR: managedPythonPackages,
@@ -113,8 +121,9 @@ export function findPythonRuntime(
   const configured = environment.CENSOR_PYTHON?.trim()
   const versionCheck = 'import sys; raise SystemExit(0 if sys.version_info >= (3, 9) else 1)'
   if (bundledPython) {
-    if (probe(bundledPython, ['-c', versionCheck])) {
-      return { command: bundledPython, args: ['-m', 'scripts.desktop_bridge'] }
+    // Probe without ambient Python configuration before the sanitized bridge starts.
+    if (probe(bundledPython, ['-I', '-B', '-c', versionCheck])) {
+      return { command: bundledPython, args: ['-B', '-m', 'scripts.desktop_bridge'] }
     }
     throw new Error('The installed private Python runtime could not start. Reinstall Expletive Deleted.')
   }

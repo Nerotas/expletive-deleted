@@ -68,6 +68,7 @@ describe('backend runtime resolution', () => {
     )).toMatchObject({
       CENSOR_APP_DATA_DIR: path.join(localAppData, 'ExpletiveDeleted'),
       CENSOR_BUNDLED_RUNTIME: '1',
+      PYTHONDONTWRITEBYTECODE: '1',
       CENSOR_PYTHON_PACKAGES_DIR: path.join(localAppData, 'ExpletiveDeleted', 'dependencies', 'python'),
       PYTHONPATH: path.join(localAppData, 'ExpletiveDeleted', 'dependencies', 'python'),
       PYTHONNOUSERSITE: '1',
@@ -78,11 +79,25 @@ describe('backend runtime resolution', () => {
     const bundledPython = path.resolve('installed', 'resources', 'app-runtime', 'python', 'python.exe')
     const probes: string[] = []
 
-    expect(findPythonRuntime(path.resolve('.'), 'win32', { CENSOR_PYTHON: 'system-python' }, bundledPython, (command) => {
+    expect(findPythonRuntime(path.resolve('.'), 'win32', { CENSOR_PYTHON: 'system-python' }, bundledPython, (command, args) => {
       probes.push(command)
+      expect(args[0]).toBe('-I')
+      expect(args[1]).toBe('-B')
       return true
-    })).toEqual({ command: bundledPython, args: ['-m', 'scripts.desktop_bridge'] })
+    })).toEqual({ command: bundledPython, args: ['-B', '-m', 'scripts.desktop_bridge'] })
     expect(probes).toEqual([bundledPython])
+  })
+
+  it('isolates private Python from inherited system Python configuration', () => {
+    const environment = { LOCALAPPDATA: path.resolve('test-data'), PYTHONHOME: 'broken-python',
+      PythonPath: 'unrelated-packages', PYTHONIOENCODING: 'cp1252', PYTHONSAFEPATH: '1' }
+    const result = backendEnvironment(environment, { python: 'private-python.exe' })
+    expect(result.PYTHONHOME).toBeUndefined()
+    expect(result.PythonPath).toBeUndefined()
+    expect(result.PYTHONIOENCODING).toBeUndefined()
+    expect(result.PYTHONSAFEPATH).toBeUndefined()
+    expect(result.PYTHONPATH).toContain(path.join('dependencies', 'python'))
+    expect(environment.PYTHONHOME).toBe('broken-python')
   })
 
   it('fails closed when the bundled Python cannot start', () => {
