@@ -93,13 +93,13 @@ class ComponentResolutionTests(unittest.TestCase):
             external_ytdlp, external_deno = root / "external-ytdlp.exe", root / "external-deno.exe"
             external_deno.touch()
             with patch.dict("os.environ", {"CENSOR_YTDLP": str(external_ytdlp), "CENSOR_DENO": str(external_deno)}):
-                self.assertEqual(get_managed_ytdlp_path(root), root / "dependencies/yt-dlp/yt-dlp.exe")
-                self.assertEqual(get_managed_deno_path(root), root / "dependencies/deno/deno.exe")
-                self.assertEqual(resolve_ytdlp_path(), external_ytdlp)
-                self.assertEqual(resolve_ytdlp_path(root / "custom.exe"), root / "custom.exe")
-                self.assertEqual(resolve_deno_path(), external_deno)
-                self.assertEqual(_default_js_runtime_executable(), str(external_deno))
-                self.assertEqual(_javascript_runtime_arguments(), ("--js-runtimes", f"deno:{external_deno}"))
+                self.assertEqual(get_managed_ytdlp_path(root), (root / "dependencies/yt-dlp/yt-dlp.exe").resolve())
+                self.assertEqual(get_managed_deno_path(root), (root / "dependencies/deno/deno.exe").resolve())
+                self.assertEqual(resolve_ytdlp_path(), external_ytdlp.resolve())
+                self.assertEqual(resolve_ytdlp_path(root / "custom.exe"), (root / "custom.exe").resolve())
+                self.assertEqual(resolve_deno_path(), external_deno.resolve())
+                self.assertEqual(_default_js_runtime_executable(), str(external_deno.resolve()))
+                self.assertEqual(_javascript_runtime_arguments(), ("--js-runtimes", f"deno:{external_deno.resolve()}"))
 
     def test_install_verifies_approved_destinations_despite_runtime_overrides(self):
         ready = lambda name: DependencyStatus(name, name, "ready", None, None, None, "fixture", False)
@@ -115,7 +115,7 @@ class ComponentResolutionTests(unittest.TestCase):
                 plan = build_install_plan(["ytdlp", "js_runtime"], runtime_root=root, platform_name="Windows")
                 execute_install_plan(plan, approved_plan_id=plan.id)
                 for action in plan.actions:
-                    self.assertEqual(action.command[action.command.index("--root") + 1], str(root))
+                    self.assertEqual(action.command[action.command.index("--root") + 1], str(root.resolve()))
                 self.assertEqual(inspect.call_args_list[0].kwargs["ytdlp_bin"], plan.actions[0].destination / "yt-dlp.exe")
                 self.assertEqual(inspect.call_args_list[1].kwargs["js_runtime_bin"], plan.actions[1].destination / "deno.exe")
 

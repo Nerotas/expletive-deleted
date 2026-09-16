@@ -99,7 +99,7 @@ class ModelCacheConsistencyTests(unittest.TestCase):
                 self.assertFalse(any(settings.directories.output.iterdir()))
                 self.assertEqual(len(lookup.call_args_list), 2)
                 for call in lookup.call_args_list:
-                    self.assertEqual(Path(call.kwargs["cache_dir"]), configured or managed)
+                    self.assertEqual(Path(call.kwargs["cache_dir"]), (configured or managed).resolve())
                     self.assertTrue(call.kwargs["local_files_only"])
                     self.assertEqual(call.kwargs["revision"], WHISPER_MODEL_REVISION)
                 if expected_ready:
@@ -127,6 +127,6 @@ class ModelCacheConsistencyTests(unittest.TestCase):
                     patch("backend.jobs.batch.process_file", return_value=("ok", set(), False, 0)) as process,
                 ):
                     self.assertEqual(batch_main(["--report-only"]), 0)
-                    expected = configured or root / "runtime" / "models" / "whisper"
+                    expected = (configured or root / "runtime" / "models" / "whisper").resolve()
                     self.assertEqual(load.call_args.args[2], expected)
                     self.assertEqual(process.call_args.kwargs["whisper_cache_dir"], expected)
