@@ -7,7 +7,7 @@ from threading import Event
 from typing import Callable
 from uuid import uuid4
 
-from backend.runtime import FFMPEG_VERSION, inspect_executable
+from backend.runtime import FFMPEG_VERSION, inspect_executable, resolve_whisper_cache_dir
 from backend.settings import AppSettings
 
 from .media import archive_path, output_path, transcript_path
@@ -138,7 +138,7 @@ class JobRuntime:
                 cancellation=cancellation,
                 ffmpeg_bin=ffmpeg_bin,
                 ffprobe_bin=ffprobe_bin,
-                whisper_cache_dir=self.settings.runtime.whisper_cache,
+                whisper_cache_dir=resolve_whisper_cache_dir(self.settings.runtime.whisper_cache),
             )
             if job.mode == "report_only":
                 self._on_status(job_id=job_id, status="transcribing", percent=0.0, error=None, message=None)

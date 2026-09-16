@@ -22,7 +22,7 @@ from backend.runtime import (
     execute_install_plan,
     get_application_runtime_root,
     get_managed_ffmpeg_paths,
-    get_managed_whisper_cache_dir,
+    resolve_whisper_cache_dir,
     inspect_executable,
     inspect_whisper_model,
 )
@@ -229,10 +229,7 @@ class DesktopBridge:
             return {"source": str(source), "candidates": candidates, "censored": censored}
         if method == "dependencies.plan":
             runtime_root = get_application_runtime_root()
-            cache_dir = (
-                self.service.settings.runtime.whisper_cache
-                or get_managed_whisper_cache_dir(runtime_root)
-            )
+            cache_dir = resolve_whisper_cache_dir(self.service.settings.runtime.whisper_cache)
             plan = build_install_plan(
                 list(params["components"]),
                 cache_dir=cache_dir,
@@ -291,10 +288,7 @@ class DesktopBridge:
                 install_id,
                 plan_id,
                 plan,
-                (
-                    self.service.settings.runtime.whisper_cache
-                    or get_managed_whisper_cache_dir(get_application_runtime_root())
-                ),
+                resolve_whisper_cache_dir(self.service.settings.runtime.whisper_cache),
             )
             return snapshot
         if method == "dependencies.status":

@@ -110,6 +110,39 @@ describe('desktop application renderer', () => {
     expect(await screen.findByText('Processing ready')).toBeInTheDocument()
   })
 
+  it('refreshes readiness once per failed processing job without reloading settings', async () => {
+    const { queryClient } = renderApp('/')
+    expect(await screen.findByText('Processing ready')).toBeInTheDocument()
+    await waitFor(() => expect(desktopClient.getSettings).toHaveBeenCalled())
+    const settingsReads = vi.mocked(desktopClient.getSettings).mock.calls.length
+    const initialChecks = vi.mocked(desktopClient.getCapabilities).mock.calls.length
+    vi.mocked(desktopClient.getCapabilities).mockResolvedValue({
+      ...readyCapabilities,
+      ready: false,
+      processing_ready: false,
+      speech_model: 'missing',
+      whisper_model_ready: false,
+    })
+    const failedJob = {
+      id: 'failed-model-job', source: 'C:/Media/movie.mkv', mode: 'report_only' as const,
+      status: 'failed' as const, progress_percent: null,
+      error: { code: 'processing_failed', message: 'Media processing failed', detail: 'Model missing', retryable: true, diagnostic: null },
+    }
+    vi.mocked(desktopClient.listJobs).mockResolvedValue([failedJob])
+    await act(async () => { await queryClient.refetchQueries({ queryKey: ['queue'] }) })
+    expect(await screen.findByText('Download speech model')).toBeInTheDocument()
+    expect(desktopClient.getCapabilities).toHaveBeenCalledTimes(initialChecks + 1)
+
+    // Repeated queue polls must neither recheck the same failure nor overwrite drafts.
+    await act(async () => { await queryClient.refetchQueries({ queryKey: ['queue'] }) })
+    expect(desktopClient.getCapabilities).toHaveBeenCalledTimes(initialChecks + 1)
+    expect(desktopClient.getSettings).toHaveBeenCalledTimes(settingsReads)
+
+    vi.mocked(desktopClient.listJobs).mockResolvedValue([failedJob, { ...failedJob, id: 'retry-model-job' }])
+    await act(async () => { await queryClient.refetchQueries({ queryKey: ['queue'] }) })
+    await waitFor(() => expect(desktopClient.getCapabilities).toHaveBeenCalledTimes(initialChecks + 2))
+  })
+
   it('identifies a missing bundled speech model in the header and setup band', async () => {
     vi.mocked(desktopClient.getCapabilities).mockResolvedValueOnce({
       ...readyCapabilities,

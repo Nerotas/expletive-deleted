@@ -67,7 +67,11 @@ Do not switch to a smaller model. The current censorship pipeline enforces `larg
 
 ## Whisper Model or Cache Problems
 
-Show cache locations and sizes:
+In **Settings > Runtime components**, a blank **Whisper model location** uses the application-managed cache (normally `%LOCALAPPDATA%\ExpletiveDeleted\models\whisper`). System checks, setup, and processing use the same location. A saved custom location takes precedence; a missing custom cache does not silently fall back to another folder. Processing failures trigger a fresh system check.
+
+If an older version reports **Processing ready** but fails with "Whisper model is not prepared," select the existing cache root in **Whisper model location**, save, and retry. Select the cache root rather than its nested snapshot folder. This reuses the existing download.
+
+For advanced standalone cache-management commands, show cache locations and sizes:
 
 ```powershell
 .\.venv\Scripts\python.exe manage_whisper_cache.py status
@@ -75,7 +79,7 @@ Show cache locations and sizes:
 
 In the desktop app, choose **Get Components** only when you are ready to review and approve the model source, destination, and approximate size. Choose **Locate existing** to verify an existing faster-whisper cache instead. Processing never starts a model download implicitly.
 
-Override the cache location when needed:
+Override the legacy standalone tools' cache location when needed (desktop and settings-driven batch processing use the saved setting above):
 
 ```powershell
 $env:CENSOR_WHISPER_CACHE_DIR = 'D:\model-cache\whisper'

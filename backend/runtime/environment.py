@@ -123,6 +123,12 @@ def get_managed_whisper_cache_dir(root: Path | None = None) -> Path:
     return runtime_root / "models" / "whisper"
 
 
+def resolve_whisper_cache_dir(configured: Path | None = None) -> Path:
+    """Resolve settings-driven model storage without changing legacy CLI defaults."""
+    # Always pass this path to processing so readiness and model loading agree.
+    return (configured if configured is not None else get_managed_whisper_cache_dir()).expanduser().resolve()
+
+
 def get_managed_python_packages_directory(root: Path | None = None) -> Path:
     """Return the writable per-user target for approved Python packages."""
     runtime_root = (root or get_application_runtime_root()).expanduser().resolve()

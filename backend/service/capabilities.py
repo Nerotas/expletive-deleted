@@ -6,7 +6,7 @@ import os
 
 from backend.runtime import (
     available_encoders,
-    get_managed_whisper_cache_dir,
+    resolve_whisper_cache_dir,
     get_whisper_device_status,
     inspect_dependencies,
 )
@@ -43,7 +43,7 @@ def _app_runtime_status(inventory) -> tuple[str, str, str]:
 
 def get_capabilities(settings: AppSettings) -> dict[str, object]:
     settings.validate()
-    cache_dir = settings.runtime.whisper_cache or get_managed_whisper_cache_dir()
+    cache_dir = resolve_whisper_cache_dir(settings.runtime.whisper_cache)
     inventory = inspect_dependencies(
         cache_dir,
         ffmpeg_bin=settings.runtime.ffmpeg_path,

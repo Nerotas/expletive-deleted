@@ -1,5 +1,5 @@
-import { useEffect } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useEffect, useRef } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { desktopClient, type DesktopClient } from '../../services/desktop-client'
 import type { ArchiveItem, ImportResult, Job, JobEvent, JobSubmissionOptions, JobSubmissionResult } from '../../types/domain'
 import { errorMessage, fileName } from '../../utils/format'
@@ -67,6 +67,8 @@ export function useQueue({
   onNotice,
   pollInterval = 1_500,
 }: QueueOptions) {
+  const queryClient = useQueryClient()
+  const checkedFailures = useRef(new Set<string>())
   const query = useQuery({
     queryKey: ['queue'],
     queryFn: () => loadQueue(client),
@@ -77,6 +79,17 @@ export function useQueue({
   useEffect(() => {
     if (query.error) onError(errorMessage(query.error))
   }, [onError, query.error])
+
+  useEffect(() => {
+    let needsCheck = false
+    for (const job of query.data?.jobs ?? []) {
+      if (job.status !== 'failed' || job.error?.code !== 'processing_failed' || checkedFailures.current.has(job.id)) continue
+      checkedFailures.current.add(job.id)
+      needsCheck = true
+    }
+    // Processing errors can hide a missing runtime component; check once per failed job.
+    if (needsCheck) void queryClient.invalidateQueries({ queryKey: ['capabilities'] })
+  }, [query.data, queryClient])
 
   const actionMutation = useMutation<unknown, unknown, () => Promise<unknown>>({
     mutationFn: (action) => action(),
