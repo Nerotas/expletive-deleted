@@ -1,8 +1,8 @@
 # Windows build audit — 2026-09-16
 
-Release recommendation: **hold for the two lifecycle findings below**. Building and opening successfully does not establish safe behavior when a user closes the app during processing or changes settings during a download.
+Follow-up status: **both lifecycle findings are fixed**. See [the lifecycle follow-up](WINDOWS_LIFECYCLE_FOLLOWUP_2026-09-16.md) for changes, regression coverage, and the replacement verification artifact. The original findings and validation below are retained as historical evidence; clean-machine release qualification remains outstanding.
 
-## Remaining findings
+## Original lifecycle findings (resolved in follow-up)
 
 ### High: closing the app bypasses processing cleanup
 
@@ -64,9 +64,9 @@ The installer was built, but it was not installed/uninstalled or upgraded on a c
 
 The initial audit installer was **NotSigned** according to Windows Authenticode inspection. Builder messages saying “signing with signtool.exe” do not establish that an installer received a trusted signature. Final signature status is recorded with the artifact below.
 
-At the initial audit handoff, no commits, pushes, publication, installer execution, or user-media processing had been performed. The subsequent request authorizes adding inline comments and committing and pushing these audited changes. The two remaining lifecycle findings above are still unresolved.
+At the initial audit handoff, no commits, pushes, publication, installer execution, or user-media processing had been performed. The subsequent request authorized adding inline comments and committing and pushing those audited changes. A further explicit request authorized fixing, committing, and pushing the two lifecycle findings; their resolution is recorded in the linked follow-up.
 
-## Final local verification artifact
+## Original local verification artifact (superseded)
 
 - Installer: `frontend/release/windows-build-verified/Expletive-Deleted-Setup-1.0.1-x64.exe`
 - Size: 149,283,541 bytes.

@@ -7,6 +7,8 @@ Expletive Deleted has two ways to work:
 
 Normal users should follow the desktop application workflow. Do not start `backend_app.py` or `scripts/desktop_bridge.py` in a second terminal when using the desktop app.
 
+Before changing settings, finish or cancel active jobs and downloads. Closing the app cancels ongoing work and can take up to 15 seconds while cleanup finishes. Interrupted processing does not publish a new finished copy; reopen the app to retry from the retained original.
+
 ## Installed Windows application (recommended)
 
 1. Run `Expletive-Deleted-Setup-<version>-x64.exe` and choose the installation directory.

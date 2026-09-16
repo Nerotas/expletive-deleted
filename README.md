@@ -30,6 +30,8 @@ Expletive Deleted is free to use. [Ko-fi support](https://ko-fi.com/nicholaserot
 
 Automated transcription and censorship are not perfect. Always review the transcript and finished media before sharing it.
 
+Closing the desktop app cancels active work and allows up to 15 seconds for cleanup. New censored copies appear in Finished only after output verification succeeds. Settings cannot be saved while a local job or YouTube download is active; your draft remains available to save afterward.
+
 ## How it works
 
 1. Add media by placing it in the configured **Ready** folder, dragging it into the Queue, or importing an individual YouTube video you are authorized to download.
