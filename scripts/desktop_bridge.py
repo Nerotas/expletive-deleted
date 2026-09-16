@@ -64,9 +64,8 @@ class DesktopBridge:
             }
 
     def _run_install_task(self, install_id: str, plan_id: str, plan: object, cache_dir: Path | None) -> None:
-        cancellation = Event()
         with self._install_lock:
-            self._install_jobs[install_id]["cancel_event"] = cancellation
+            cancellation = self._install_jobs[install_id]["cancel_event"]
         try:
             def callback(progress: object) -> None:
                 action_index = next(
@@ -75,11 +74,9 @@ class DesktopBridge:
                 )
                 with self._install_lock:
                     state = self._install_jobs[install_id]
-                    state["status"] = (
-                        "completed" if progress.phase == "completed"
-                        else "cancelled" if progress.phase == "cancelled"
-                        else "running"
-                    )
+                    # A completed component is not a completed plan. Keep polling
+                    # until all components verify and settings have been saved.
+                    state["status"] = "canceling" if cancellation.is_set() else "running"
                     state["action_id"] = progress.action_id
                     state["phase"] = progress.phase
                     state["message"] = progress.message
@@ -137,7 +134,7 @@ class DesktopBridge:
         except Exception as exc:
             with self._install_lock:
                 state = self._install_jobs[install_id]
-                state["status"] = "failed"
+                state["status"] = "cancelled" if cancellation.is_set() else "failed"
                 if cancellation.is_set():
                     state["phase"] = "cancelled"
                 state["message"] = "Installation failed"
@@ -146,11 +143,11 @@ class DesktopBridge:
     def _cancel_install(self, install_id: str) -> dict[str, Any]:
         with self._install_lock:
             state = self._install_jobs[install_id]
-            cancel_event = state.get("cancel_event")
-            if cancel_event is not None:
-                cancel_event.set()
-            state["status"] = "canceling"
-            state["message"] = "Cancelling installation"
+            # A late cancel request must not revive an already settled install.
+            if state["status"] not in {"completed", "failed", "cancelled"}:
+                state["cancel_event"].set()
+                state["status"] = "canceling"
+                state["message"] = "Cancelling installation"
         return self._serialize_install_state(install_id)
 
     def handle(self, method: str, params: Mapping[str, Any] | None = None) -> object:
@@ -203,7 +200,12 @@ class DesktopBridge:
             return {"path": str(exported)}
         if method == "reviews.list":
             source = Path(params["source"]).expanduser().resolve()
-            transcript = transcript_path(source, self.service.settings.directories.transcripts)
+            # Match job artifact naming and reject sources outside the input root.
+            transcript = transcript_path(
+                source,
+                self.service.settings.directories.transcripts,
+                self.service.settings.directories.input,
+            )
             if not transcript.is_file():
                 raise ValueError("No transcript is available for this file. Run Report only first.")
             try:
@@ -279,7 +281,8 @@ class DesktopBridge:
                 "error": None,
                 "plan_id": plan_id,
                 "plan": plan,
-                "cancel_event": None,
+                # Allocate before scheduling so an immediate cancellation is retained.
+                "cancel_event": Event(),
             }
             self._install_jobs[install_id] = state
             snapshot = self._serialize_install_state(install_id)
@@ -543,6 +546,10 @@ def serve(
 
 
 def main() -> int:
+    # Electron sends UTF-8 JSON even when Windows uses a legacy pipe code page.
+    sys.stdin.reconfigure(encoding="utf-8")
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8", errors="backslashreplace")
     protocol_output = sys.stdout
     sys.stdout = sys.stderr
     return serve(output_stream=protocol_output)

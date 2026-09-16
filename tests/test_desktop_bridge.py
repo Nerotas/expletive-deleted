@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from threading import Event
+from types import SimpleNamespace
 from time import perf_counter
 from unittest.mock import MagicMock, patch
 
@@ -15,7 +16,8 @@ from backend.runtime import (
     load_profanity_censor_words,
     load_profanity_exclusions,
 )
-from scripts.desktop_bridge import DesktopBridge, serve
+from scripts.desktop_bridge import DesktopBridge, main, serve
+from backend.runtime.dependencies import InstallProgress, DependencyInstallError
 
 
 class DesktopBridgeTests(unittest.TestCase):
@@ -283,6 +285,7 @@ class DesktopBridgeTests(unittest.TestCase):
                 encoding="utf-8",
             )
             service = MagicMock()
+            service.settings.directories.input = root
             service.settings.directories.transcripts = root
             policy_store = MagicMock()
             policy_store.load.return_value = self.policy(root, {"fuck"}, set())
@@ -292,6 +295,71 @@ class DesktopBridgeTests(unittest.TestCase):
 
         self.assertEqual(result["candidates"], [{"word": "weirdo", "start": 3.0, "end": 3.4}])
         self.assertEqual(result["censored"], [{"word": "fuck", "start": 4.0, "end": 4.4}])
+
+    def test_review_uses_source_relative_transcript_and_rejects_outside_source(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            service = MagicMock()
+            service.settings.directories.input = root / "Ready"
+            service.settings.directories.transcripts = root / "Transcripts"
+            nested = root / "Transcripts" / "family"
+            nested.mkdir(parents=True)
+            (nested / "movie-transcript.json").write_text('{"words":[]}', encoding="utf-8")
+            # An identically named top-level transcript must not be reviewed.
+            (root / "Transcripts" / "movie-transcript.json").write_text('invalid', encoding="utf-8")
+            bridge = DesktopBridge(service, MagicMock())
+            result = bridge.handle("reviews.list", {"source": str(root / "Ready" / "family" / "movie.mkv")})
+            self.assertEqual(result["candidates"], [])
+            with self.assertRaisesRegex(ValueError, "outside"):
+                bridge.handle("reviews.list", {"source": str(root / "elsewhere" / "movie.mkv")})
+
+    def test_main_reads_utf8_requests_with_legacy_windows_pipe_encoding(self):
+        value = "C:/Family/caf\u00e9/\u5bb6\u5ead/movie.mkv"
+        request = json.dumps({"id": 1, "method": "echo", "params": {"source": value}}, ensure_ascii=False)
+        input_stream = io.TextIOWrapper(io.BytesIO(request.encode("utf-8")), encoding="cp1252")
+        output_stream = io.TextIOWrapper(io.BytesIO(), encoding="cp1252")
+        error_stream = io.TextIOWrapper(io.BytesIO(), encoding="cp1252")
+        bridge = MagicMock()
+        bridge.handle.side_effect = lambda method, params: params
+        with patch("scripts.desktop_bridge.DesktopBridge", return_value=bridge), \
+                patch("sys.stdin", input_stream), patch("sys.stdout", output_stream), patch("sys.stderr", error_stream):
+            self.assertEqual(main(), 0)
+        response = json.loads(output_stream.buffer.getvalue().decode("utf-8"))
+        self.assertEqual(response["result"]["source"], value)
+
+    def prepare_install(self):
+        service = MagicMock()
+        service.settings.runtime.whisper_cache = None
+        service.get_settings.return_value = {"runtime": {}}
+        bridge = DesktopBridge(service, MagicMock())
+        bridge._install_executor.shutdown()
+        bridge._install_executor = MagicMock()
+        plan = SimpleNamespace(id="approved", actions=[SimpleNamespace(id="first"), SimpleNamespace(id="second")])
+        bridge._install_plans[plan.id] = plan
+        state = bridge.handle("dependencies.install", {"plan_id": plan.id})
+        return bridge, plan, state["install_id"]
+
+    def test_component_completion_does_not_finish_install_plan(self):
+        bridge, plan, install_id = self.prepare_install()
+        def execute(*args, progress_callback, **kwargs):
+            for action in plan.actions:
+                progress_callback(InstallProgress(action.id, "completed", "Verified"))
+                self.assertEqual(bridge.handle("dependencies.status", {"install_id": install_id})["status"], "running")
+            return []
+        with patch("scripts.desktop_bridge.execute_install_plan", side_effect=execute):
+            bridge._run_install_task(install_id, plan.id, plan, None)
+        self.assertEqual(bridge.handle("dependencies.status", {"install_id": install_id})["status"], "completed")
+        self.assertEqual(bridge.handle("dependencies.cancel", {"install_id": install_id})["status"], "completed")
+
+    def test_cancel_before_install_worker_starts_is_retained(self):
+        bridge, plan, install_id = self.prepare_install()
+        bridge.handle("dependencies.cancel", {"install_id": install_id})
+        def execute(*args, cancellation, **kwargs):
+            self.assertTrue(cancellation.is_set())
+            raise DependencyInstallError("cancelled")
+        with patch("scripts.desktop_bridge.execute_install_plan", side_effect=execute):
+            bridge._run_install_task(install_id, plan.id, plan, None)
+        self.assertEqual(bridge.handle("dependencies.status", {"install_id": install_id})["status"], "cancelled")
 
     def test_dictionary_discovered_reads_only_its_own_store(self):
         policy_store = MagicMock()
