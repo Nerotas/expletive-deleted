@@ -16,8 +16,8 @@ from threading import Event, RLock
 from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
 
-from backend.runtime import available_encoders, find_ffmpeg, find_ffprobe, select_working_video_encoder
-from backend.runtime.environment import get_managed_deno_path, get_managed_ffmpeg_paths, get_managed_ytdlp_path
+from backend.runtime import available_encoders, resolve_media_tools, select_working_video_encoder
+from backend.runtime.environment import resolve_deno_path, resolve_ytdlp_path
 from backend.settings import AppSettings
 
 from .events import JobEvent
@@ -70,13 +70,9 @@ def validate_youtube_url(value: str) -> tuple[str, str]:
 
 
 def _javascript_runtime_arguments() -> tuple[str, ...]:
-    """Point every yt-dlp probe at the verified managed Deno executable."""
-    deno = get_managed_deno_path()
-    if not deno.is_file():
-        deno_on_path = shutil.which("deno")
-        if deno_on_path:
-            deno = Path(deno_on_path).resolve()
-    return ("--js-runtimes", f"deno:{deno}") if deno.is_file() else ()
+    """Use the same Deno executable selected by runtime checks."""
+    deno = resolve_deno_path()
+    return ("--js-runtimes", f"deno:{deno}") if deno else ()
 
 
 @dataclass(frozen=True)
@@ -114,7 +110,7 @@ class DownloadManager:
         url, video_id = validate_youtube_url(url)
         if cookie_browser is not None and cookie_browser not in SUPPORTED_COOKIE_BROWSERS:
             raise ValueError("Choose a supported browser session")
-        ytdlp = self.settings.runtime.ytdlp_path or get_managed_ytdlp_path()
+        ytdlp = resolve_ytdlp_path(self.settings.runtime.ytdlp_path)
         if not ytdlp.is_file():
             raise RuntimeError("yt-dlp is not installed. Get it from System Requirements before importing YouTube videos.")
         title = self._resolve_title(ytdlp, url, cookie_browser)
@@ -160,12 +156,18 @@ class DownloadManager:
     def _run(self, job_id: str) -> None:
         staging = self.settings.directories.input.resolve() / ".downloads" / job_id
         try:
-            ytdlp = self.settings.runtime.ytdlp_path or get_managed_ytdlp_path()
+            ytdlp = resolve_ytdlp_path(self.settings.runtime.ytdlp_path)
             if not ytdlp.is_file(): raise RuntimeError("yt-dlp is not installed. Get it from System Requirements before importing YouTube videos.")
             record = self._records[job_id]
             self._set(job_id, "downloading", 0, message="Starting download")
             ffmpeg, ffprobe = self._runtime_media_tools()
             if not ffmpeg or not ffprobe: raise RuntimeError("FFmpeg and FFprobe must be ready before importing YouTube videos")
+            # yt-dlp accepts one media-tool directory, not independent executable paths.
+            if ffmpeg.parent.resolve() != ffprobe.parent.resolve():
+                raise RuntimeError(
+                    "YouTube imports require FFmpeg and FFprobe in the same folder. "
+                    "Choose a matching pair in Settings > Runtime components, then retry."
+                )
             staging.mkdir(parents=True, exist_ok=True)
             record, cancellation = self._records[job_id], self._cancellations[job_id]
             command = [str(ytdlp), "--ignore-config"]
@@ -353,18 +355,11 @@ class DownloadManager:
         return error
 
     def _runtime_media_tools(self) -> tuple[Path | None, Path | None]:
-        """Use configured tools first, then the verified managed FFmpeg pair."""
-        configured_ffmpeg = self.settings.runtime.ffmpeg_path
-        configured_ffprobe = self.settings.runtime.ffprobe_path
-        if configured_ffmpeg and configured_ffprobe:
-            return configured_ffmpeg, configured_ffprobe
-        managed_ffmpeg, managed_ffprobe = get_managed_ffmpeg_paths()
-        if managed_ffmpeg and managed_ffprobe:
-            return Path(managed_ffmpeg), Path(managed_ffprobe)
-        return (
-            Path(find_ffmpeg()) if find_ffmpeg() else None,
-            Path(find_ffprobe()) if find_ffprobe() else None,
+        """Use the exact per-tool selection inspected by the system check."""
+        ffmpeg, ffprobe = resolve_media_tools(
+            self.settings.runtime.ffmpeg_path, self.settings.runtime.ffprobe_path,
         )
+        return Path(ffmpeg) if ffmpeg else None, Path(ffprobe) if ffprobe else None
 
 
 def _float(value: str) -> float | None:

@@ -15,6 +15,7 @@ from backend.runtime import (
     get_whisper_cache_dir,
     get_whisper_device_status,
     require_whisper_model_path,
+    resolve_whisper_cache_dir,
 )
 from backend.settings import (
     DirectoryAccessError,
@@ -306,11 +307,12 @@ def main(argv: list[str] | None = None, store: SettingsStore | None = None) -> i
         )
         for file in files
     )
+    model_cache = resolve_whisper_cache_dir(settings.runtime.whisper_cache)
     whisper_model = (
         load_whisper_model(
             model_name,
             settings.processing.device,
-            settings.runtime.whisper_cache,
+            model_cache,
         )
         if needs_transcription
         else None
@@ -347,7 +349,7 @@ def main(argv: list[str] | None = None, store: SettingsStore | None = None) -> i
                 video_mode=settings.video.mode,
                 ffmpeg_bin=str(settings.runtime.ffmpeg_path) if settings.runtime.ffmpeg_path else None,
                 ffprobe_bin=ffprobe_bin,
-                whisper_cache_dir=settings.runtime.whisper_cache,
+                whisper_cache_dir=model_cache,
                 whisper_library=whisper_library,
                 whisper_device=settings.processing.device,
             )

@@ -118,7 +118,7 @@ class BackendServiceTests(unittest.TestCase):
             try:
                 with (
                     patch(
-                        "backend.service.capabilities.get_managed_whisper_cache_dir",
+                        "backend.runtime.environment.get_managed_whisper_cache_dir",
                         return_value=managed_cache,
                     ),
                     patch(
@@ -131,7 +131,8 @@ class BackendServiceTests(unittest.TestCase):
             finally:
                 service.close()
 
-        self.assertEqual(inspect.call_args.args[0], managed_cache)
+        # Windows temporary roots can use 8.3 aliases; runtime paths are canonical.
+        self.assertEqual(inspect.call_args.args[0], managed_cache.resolve())
 
     def test_library_uses_configured_directories(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

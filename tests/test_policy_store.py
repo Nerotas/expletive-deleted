@@ -134,8 +134,8 @@ class PolicyStoreTests(unittest.TestCase):
                 dictionary_path=root / "dictionary",
             )
             with (
-                patch("backend.censor.engine.find_ffmpeg", return_value="ffmpeg"),
-                patch("backend.censor.engine.find_ffprobe", return_value="ffprobe"),
+                patch("backend.runtime.environment.find_ffmpeg", return_value="ffmpeg"),
+                patch("backend.runtime.environment.find_ffprobe", return_value="ffprobe"),
                 patch("backend.censor.engine.available_encoders") as available_encoders,
             ):
                 censor = ProfanityCensor(

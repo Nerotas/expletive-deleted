@@ -6,11 +6,10 @@ import os
 
 from backend.runtime import (
     available_encoders,
-    get_managed_whisper_cache_dir,
+    resolve_whisper_cache_dir,
     get_whisper_device_status,
     inspect_dependencies,
 )
-from backend.runtime.environment import get_managed_ytdlp_path
 from backend.settings import AppSettings
 
 
@@ -43,14 +42,14 @@ def _app_runtime_status(inventory) -> tuple[str, str, str]:
 
 def get_capabilities(settings: AppSettings) -> dict[str, object]:
     settings.validate()
-    cache_dir = settings.runtime.whisper_cache or get_managed_whisper_cache_dir()
+    cache_dir = resolve_whisper_cache_dir(settings.runtime.whisper_cache)
     inventory = inspect_dependencies(
         cache_dir,
         ffmpeg_bin=settings.runtime.ffmpeg_path,
         ffprobe_bin=settings.runtime.ffprobe_path,
         whisper_library=settings.whisper.library,
         whisper_model=settings.whisper.model,
-        ytdlp_bin=settings.runtime.ytdlp_path or get_managed_ytdlp_path(),
+        ytdlp_bin=settings.runtime.ytdlp_path,
     )
     app_runtime, app_runtime_source, app_runtime_detail = _app_runtime_status(inventory)
     python_ready = all(status.ready for status in inventory.python)

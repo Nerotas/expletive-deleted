@@ -20,6 +20,8 @@ Run the backend regression suite separately:
 
 In the desktop app, use **Get ready → Locate existing** to select `ffmpeg.exe`; the backend also locates and verifies the adjacent `ffprobe.exe`. Or choose **Get Components**, review the source and destination disclosure, and select **Continue**. The managed copy is stored below `%LOCALAPPDATA%\ExpletiveDeleted\dependencies\ffmpeg\` and does not modify the global `PATH`.
 
+Each saved FFmpeg or FFprobe override is honored independently during system checks and processing. YouTube imports require the selected executables to be in the same folder; use **Locate existing** to select a matching pair.
+
 For advanced command-line use, install FFmpeg and rerun diagnostics.
 
 ```powershell
@@ -50,7 +52,7 @@ python setup.py
 .\.venv\Scripts\python.exe diagnostics.py
 ```
 
-The required packages are defined in `requirements.txt`.
+The required packages are defined in `requirements.txt`. Readiness verifies both pinned versions and imports in a separate process using the processing interpreter and its search path. An import failure or a check that exceeds 30 seconds is reported as unavailable, even when package metadata is present.
 
 ## Whisper Uses CPU
 
@@ -67,7 +69,11 @@ Do not switch to a smaller model. The current censorship pipeline enforces `larg
 
 ## Whisper Model or Cache Problems
 
-Show cache locations and sizes:
+In **Settings > Runtime components**, a blank **Whisper model location** uses the application-managed cache (normally `%LOCALAPPDATA%\ExpletiveDeleted\models\whisper`). System checks, setup, and processing use the same location. A saved custom location takes precedence; a missing custom cache does not silently fall back to another folder. Processing failures trigger a fresh system check.
+
+If an older version reports **Processing ready** but fails with "Whisper model is not prepared," select the existing cache root in **Whisper model location**, save, and retry. Select the cache root rather than its nested snapshot folder. This reuses the existing download.
+
+For advanced standalone cache-management commands, show cache locations and sizes:
 
 ```powershell
 .\.venv\Scripts\python.exe manage_whisper_cache.py status
@@ -75,7 +81,7 @@ Show cache locations and sizes:
 
 In the desktop app, choose **Get Components** only when you are ready to review and approve the model source, destination, and approximate size. Choose **Locate existing** to verify an existing faster-whisper cache instead. Processing never starts a model download implicitly.
 
-Override the cache location when needed:
+Override the legacy standalone tools' cache location when needed (desktop and settings-driven batch processing use the saved setting above):
 
 ```powershell
 $env:CENSOR_WHISPER_CACHE_DIR = 'D:\model-cache\whisper'
@@ -156,3 +162,7 @@ ffprobe -version
 ```
 
 Include the failing command, the final error text, the media container and stream metadata, and whether the problem reproduces in report-only mode.
+
+## Managed Download Destinations
+
+Approved yt-dlp and Deno installs write to the managed destination shown in the setup plan and verify that copy. The advanced `CENSOR_YTDLP` and `CENSOR_DENO` environment variables select existing executables for use; they do not redirect installation or overwrite those external executables.

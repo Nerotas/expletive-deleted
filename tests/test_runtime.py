@@ -112,8 +112,8 @@ class RuntimeTests(unittest.TestCase):
 
     def test_censor_requires_ffmpeg_and_ffprobe_before_processing(self):
         with (
-            patch("backend.censor.engine.find_ffmpeg", return_value=None),
-            patch("backend.censor.engine.find_ffprobe", return_value="ffprobe"),
+            patch("backend.runtime.environment.find_ffmpeg", return_value=None),
+            patch("backend.runtime.environment.find_ffprobe", return_value="ffprobe"),
             self.assertRaisesRegex(RuntimeError, "FFmpeg and FFprobe"),
         ):
             ProfanityCensor("input.mkv", "output.mkv")

@@ -123,6 +123,12 @@ def get_managed_whisper_cache_dir(root: Path | None = None) -> Path:
     return runtime_root / "models" / "whisper"
 
 
+def resolve_whisper_cache_dir(configured: Path | None = None) -> Path:
+    """Resolve settings-driven model storage without changing legacy CLI defaults."""
+    # Always pass this path to processing so readiness and model loading agree.
+    return (configured if configured is not None else get_managed_whisper_cache_dir()).expanduser().resolve()
+
+
 def get_managed_python_packages_directory(root: Path | None = None) -> Path:
     """Return the writable per-user target for approved Python packages."""
     runtime_root = (root or get_application_runtime_root()).expanduser().resolve()
@@ -137,20 +143,30 @@ def get_managed_ffmpeg_directory(root: Path | None = None) -> Path:
 
 def get_managed_ytdlp_path(root: Path | None = None) -> Path:
     """Return the approved per-user yt-dlp location without downloading it."""
-    bundled = os.environ.get("CENSOR_YTDLP", "").strip()
-    if bundled:
-        return Path(bundled).expanduser().resolve()
     runtime_root = (root or get_application_runtime_root()).expanduser().resolve()
     return runtime_root / "dependencies" / "yt-dlp" / "yt-dlp.exe"
 
 
 def get_managed_deno_path(root: Path | None = None) -> Path:
     """Return the approved per-user Deno location without downloading it."""
-    bundled = os.environ.get("CENSOR_DENO", "").strip()
-    if bundled:
-        return Path(bundled).expanduser().resolve()
     runtime_root = (root or get_application_runtime_root()).expanduser().resolve()
     return runtime_root / "dependencies" / "deno" / "deno.exe"
+
+
+def resolve_ytdlp_path(configured: Path | None = None) -> Path:
+    """Runtime overrides select existing tools, never installation destinations."""
+    override = configured or os.environ.get("CENSOR_YTDLP", "").strip()
+    return Path(override).expanduser().resolve() if override else get_managed_ytdlp_path()
+
+
+def resolve_deno_path() -> Path | None:
+    """Use the same Deno selection for readiness and every yt-dlp invocation."""
+    override = os.environ.get("CENSOR_DENO", "").strip()
+    candidate = Path(override).expanduser().resolve() if override else get_managed_deno_path()
+    if candidate.is_file():
+        return candidate
+    on_path = shutil.which("deno")
+    return Path(on_path).resolve() if on_path else None
 
 
 def get_managed_ffmpeg_manifest_path(root: Path | None = None) -> Path:
@@ -414,6 +430,17 @@ def find_ffprobe() -> str | None:
     if configured:
         return _find_executable("ffprobe", "CENSOR_FFPROBE")
     return get_managed_ffmpeg_paths()[1] or _find_executable("ffprobe", "CENSOR_FFPROBE")
+
+
+def resolve_media_tools(
+    ffmpeg: str | Path | None = None,
+    ffprobe: str | Path | None = None,
+) -> tuple[str | None, str | None]:
+    """Honor each configured tool independently before automatic discovery."""
+    return (
+        str(ffmpeg) if ffmpeg is not None else find_ffmpeg(),
+        str(ffprobe) if ffprobe is not None else find_ffprobe(),
+    )
 
 
 def ensure_executable_directory_on_path(executable_path: str | None) -> None:

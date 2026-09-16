@@ -8,7 +8,6 @@ import hashlib
 import json
 import os
 import platform
-import shutil
 import subprocess
 import sys
 import time
@@ -19,15 +18,15 @@ from typing import Callable, Literal
 
 from .environment import (
     PROJECT_ROOT,
-    find_ffmpeg,
-    find_ffprobe,
+    resolve_media_tools,
+    resolve_ytdlp_path,
+    resolve_deno_path,
     get_application_runtime_root,
     get_directory_size,
-    get_managed_deno_path,
     get_managed_ffmpeg_directory,
-    get_managed_ytdlp_path,
     get_whisper_cache_dir,
 )
+from .python_imports import inspect_python_imports
 
 
 DependencyState = Literal["ready", "missing", "invalid"]
@@ -548,11 +547,18 @@ def execute_install_plan(
         output = _run_action(action, cancellation, progress_callback)
         importlib.invalidate_caches()
         _emit(progress_callback, InstallProgress(action.id, "verifying", "Verifying installation"))
+        # Verify the approved output, not a runtime override pointing elsewhere.
+        verification_paths: dict[str, Path] = {}
+        if action.component == "ytdlp" and action.destination is not None:
+            verification_paths["ytdlp_bin"] = action.destination / "yt-dlp.exe"
+        if action.component == "js_runtime" and action.destination is not None:
+            verification_paths["js_runtime_bin"] = action.destination / "deno.exe"
         statuses = _status_by_id(
             inspect_dependencies(
                 cache_dir,
                 whisper_library=plan.whisper_library,
                 whisper_model=plan.whisper_model,
+                **verification_paths,
             )
         )
         failures = [
@@ -714,7 +720,15 @@ def inspect_python_dependencies(
                 install_supported=True,
             )
         )
-    return tuple(statuses)
+    import_errors = inspect_python_imports([status.name for status in statuses if status.ready])
+    return tuple(
+        replace(
+            status,
+            state="invalid",
+            detail=f"{status.name} could not load: {import_errors[status.name]}. Repair Python packages from setup.",
+        ) if status.ready and import_errors.get(status.name) else status
+        for status in statuses
+    )
 
 
 def inspect_whisper_model(
@@ -787,17 +801,18 @@ def inspect_dependencies(
     js_runtime_bin: str | Path | None = None,
 ) -> DependencyInventory:
     """Return dependency state without installing or downloading anything."""
+    ffmpeg_bin, ffprobe_bin = resolve_media_tools(ffmpeg_bin, ffprobe_bin)
     return DependencyInventory(
         ffmpeg=inspect_executable(
             "ffmpeg",
             "FFmpeg",
-            str(ffmpeg_bin) if ffmpeg_bin else find_ffmpeg(),
+            ffmpeg_bin,
             FFMPEG_VERSION,
         ),
         ffprobe=inspect_executable(
             "ffprobe",
             "FFprobe",
-            str(ffprobe_bin) if ffprobe_bin else find_ffprobe(),
+            ffprobe_bin,
             FFMPEG_VERSION,
         ),
         python=inspect_python_dependencies(whisper_library),
@@ -806,17 +821,15 @@ def inspect_dependencies(
             library=whisper_library,
             model=whisper_model,
         ),
-        ytdlp=inspect_ytdlp(str(ytdlp_bin or get_managed_ytdlp_path())),
+        ytdlp=inspect_ytdlp(str(resolve_ytdlp_path(Path(ytdlp_bin) if ytdlp_bin else None))),
         js_runtime=inspect_js_runtime(str(js_runtime_bin) if js_runtime_bin else _default_js_runtime_executable()),
     )
 
 
 def _default_js_runtime_executable() -> str | None:
     """Prefer the app-managed Deno download, falling back to one already on PATH."""
-    managed = get_managed_deno_path()
-    if managed.is_file():
-        return str(managed)
-    return shutil.which("deno")
+    resolved = resolve_deno_path()
+    return str(resolved) if resolved else None
 
 
 def require_whisper_model_path(
