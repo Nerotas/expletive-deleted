@@ -37,7 +37,8 @@ const verification = [
   "assert installed == ['pip'], f'unexpected bundled Python distributions: {installed}'",
   "print('Private Python and pip bootstrap verified')",
 ].join('; ')
-run('Private Python bootstrap check', ['-I', '-c', verification])
-run('Private pip check', ['-I', '-m', 'pip', '--version'])
+// Verification itself must not introduce unmanifested bytecode into the payload.
+run('Private Python bootstrap check', ['-I', '-B', '-c', verification])
+run('Private pip check', ['-I', '-B', '-m', 'pip', '--version'])
 
 console.log(`Private Python runtime executable verification passed: ${runtimeRoot}`)

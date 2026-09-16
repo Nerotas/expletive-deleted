@@ -1,5 +1,11 @@
 # Troubleshooting
 
+## Closing During Processing or Downloading
+
+Closing the desktop app requests cancellation and waits up to 15 seconds for cleanup. If a processing component does not respond, Windows terminates the backend and its child processes. A forced shutdown can leave a temporary `.partial` output file, but it is not listed as a finished copy. Original media is retained; reopen the app to retry. Existing completed output is replaced only after its replacement passes verification.
+
+Settings saves are rejected while local jobs or YouTube downloads are active. Finish or cancel that work, then save the retained draft. This keeps download progress and cancellation attached to the current queue.
+
 ## Start Here
 
 Run the tracked readiness check from the repository root:

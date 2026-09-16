@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 import traceback
 from pathlib import Path
@@ -95,11 +96,11 @@ class JobRuntime:
             self.settings.directories.input,
         )
         output_existed = destination.exists()
-        processing_destination = destination
-        if job.overwrite_output and output_existed:
-            processing_destination = destination.with_name(
-                f".{destination.stem}.{uuid4().hex}.partial{destination.suffix}"
-            )
+        # Never expose a new or replacement output until processing has succeeded.
+        # Preserve the suffix so FFmpeg can select the correct container.
+        processing_destination = destination.with_name(
+            f".{destination.stem}.{uuid4().hex}.partial{destination.suffix}"
+        )
         try:
             if cancellation.is_set():
                 self._on_status(job_id=job_id, status="cancelled", percent=None, error=None, message="Job cancelled")
@@ -162,10 +163,21 @@ class JobRuntime:
                 return
 
             self._on_status(job_id=job_id, status="verifying", percent=100.0, error=None, message=None)
-            if not processing_destination.is_file():
+            if not processing_destination.is_file() or processing_destination.stat().st_size == 0:
                 raise RuntimeError(f"Expected output was not created: {processing_destination}")
-            if processing_destination != destination:
+            censor.verify_output()
+            if cancellation.is_set():
+                raise InterruptedError("Job cancelled")
+            if job.overwrite_output:
                 processing_destination.replace(destination)
+            else:
+                # Windows rename refuses collisions atomically, including on FAT.
+                # POSIX rename overwrites, so use a same-volume link there instead.
+                if os.name == "nt":
+                    processing_destination.rename(destination)
+                else:
+                    os.link(processing_destination, destination)
+                    processing_destination.unlink()
             if self.settings.source.archive_after_success:
                 archive = archive_path(
                     source,

@@ -3,7 +3,8 @@ import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 
-const packageRoot = path.resolve('release', 'win-unpacked')
+// Allow isolated verification builds without replacing the normal release output.
+const packageRoot = path.resolve(process.env.PACKAGE_AUDIT_ROOT || path.join('release', 'win-unpacked'))
 const bundledRuntimeRoot = path.join(packageRoot, 'resources', 'app-runtime')
 const bundledRuntimeManifest = path.join(bundledRuntimeRoot, 'runtime-manifest.json')
 const requireBundledRuntime = process.argv.includes('--require-bundled-runtime') || process.env.REQUIRE_BUNDLED_RUNTIME === '1'
@@ -15,7 +16,11 @@ if (existsSync(bundledRuntimeManifest)) {
     cwd: process.cwd(),
     encoding: 'utf8',
   })
-  if (audit.status !== 0) violations.push(`Bundled runtime audit failed: ${(audit.stderr || audit.stdout).trim()}`)
+  if (audit.status !== 0) {
+    // A spawn failure has no stdout/stderr; preserve its actual diagnostic.
+    const detail = audit.error?.message || audit.stderr || audit.stdout || `exit code ${audit.status}`
+    violations.push(`Bundled runtime audit failed: ${detail.trim()}`)
+  }
 } else if (requireBundledRuntime) {
   violations.push('Expected an audited runtime manifest at resources/app-runtime/runtime-manifest.json')
 }

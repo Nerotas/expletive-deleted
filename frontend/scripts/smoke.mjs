@@ -27,7 +27,8 @@ const app = await electron.launch({
 })
 try {
   const window = await app.firstWindow()
-  window.on('pageerror', (error) => console.error(`Renderer error: ${error.message}`))
+  const rendererErrors = []
+  window.on('pageerror', (error) => rendererErrors.push(error.message))
   window.on('console', (message) => {
     if (message.type() === 'error') console.error(`Renderer console: ${message.text()}`)
   })
@@ -156,6 +157,7 @@ try {
   await window.getByRole('heading', { name: 'Queue', exact: true }).waitFor()
 
   await window.screenshot({ path: path.join(results, 'desktop-queue.png'), fullPage: true })
+  if (rendererErrors.length) throw new Error(`Renderer errors: ${rendererErrors.join('; ')}`)
   console.log(`Electron smoke passed: ${await window.title()}`)
 } finally {
   await app.close()

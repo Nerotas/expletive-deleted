@@ -10,6 +10,8 @@ The Windows installer bundles only private CPython and its pip bootstrap. The co
 
 ## Working Pipeline
 
+Desktop shutdown requests cancellation before ending Python and waits up to 15 seconds. A Windows Job Object contains the bridge's process tree for forced-exit cleanup. Censor jobs publish staged output atomically after FFprobe verification; settings changes share a lock with submissions and reject active downloads, including their handoff to local processing.
+
 ```text
 Media file
     -> faster-whisper large-v3 transcription
