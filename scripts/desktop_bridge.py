@@ -12,10 +12,11 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from threading import Event, Lock
+from threading import Event, Lock, RLock
 from typing import Any, TextIO
 
 from backend.policy import PolicyStore, ProfanityPolicy
+from backend.process_lifetime import contain_process_tree
 from backend.runtime import (
     FFMPEG_VERSION,
     build_install_plan,
@@ -43,7 +44,8 @@ class DesktopBridge:
         self.policy_store = policy_store or PolicyStore()
         self._install_plans = {}
         self._install_jobs = {}
-        self._install_lock = Lock()
+        self._install_lock = RLock()
+        self._closing = False
         self._install_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="desktop-install")
 
     def _serialize_install_state(self, install_id: str) -> dict[str, Any]:
@@ -262,38 +264,41 @@ class DesktopBridge:
                 ],
             }
         if method == "dependencies.install":
-            plan_id = params["plan_id"]
-            plan = self._install_plans.get(plan_id)
-            if plan is None:
-                raise ValueError("Dependency plan is unknown or expired; review it again")
-            install_id = uuid.uuid4().hex
-            started_at = datetime.now(timezone.utc).isoformat()
-            state = {
-                "status": "running",
-                "action_id": None,
-                "action_index": 0,
-                "action_count": len(plan.actions),
-                "phase": "starting",
-                "message": "Preparing required components",
-                "completed_bytes": None,
-                "total_bytes": None,
-                "started_at": started_at,
-                "error": None,
-                "plan_id": plan_id,
-                "plan": plan,
-                # Allocate before scheduling so an immediate cancellation is retained.
-                "cancel_event": Event(),
-            }
-            self._install_jobs[install_id] = state
-            snapshot = self._serialize_install_state(install_id)
-            self._install_executor.submit(
-                self._run_install_task,
-                install_id,
-                plan_id,
-                plan,
-                resolve_whisper_cache_dir(self.service.settings.runtime.whisper_cache),
-            )
-            return snapshot
+            with self._install_lock:
+                if self._closing:
+                    raise RuntimeError("The local processing service is closing")
+                plan_id = params["plan_id"]
+                plan = self._install_plans.get(plan_id)
+                if plan is None:
+                    raise ValueError("Dependency plan is unknown or expired; review it again")
+                install_id = uuid.uuid4().hex
+                started_at = datetime.now(timezone.utc).isoformat()
+                state = {
+                    "status": "running",
+                    "action_id": None,
+                    "action_index": 0,
+                    "action_count": len(plan.actions),
+                    "phase": "starting",
+                    "message": "Preparing required components",
+                    "completed_bytes": None,
+                    "total_bytes": None,
+                    "started_at": started_at,
+                    "error": None,
+                    "plan_id": plan_id,
+                    "plan": plan,
+                    # Allocate before scheduling so an immediate cancellation is retained.
+                    "cancel_event": Event(),
+                }
+                self._install_jobs[install_id] = state
+                snapshot = self._serialize_install_state(install_id)
+                self._install_executor.submit(
+                    self._run_install_task,
+                    install_id,
+                    plan_id,
+                    plan,
+                    resolve_whisper_cache_dir(self.service.settings.runtime.whisper_cache),
+                )
+                return snapshot
         if method == "dependencies.status":
             install_id = params["install_id"]
             if install_id not in self._install_jobs:
@@ -432,7 +437,12 @@ class DesktopBridge:
         raise ValueError(f"Unknown desktop bridge method: {method}")
 
     def close(self) -> None:
+        with self._install_lock:
+            self._closing = True
+            for state in self._install_jobs.values():
+                state["cancel_event"].set()
         self.service.close()
+        self._install_executor.shutdown(wait=True, cancel_futures=True)
 
     @staticmethod
     def _dictionary_result(policy: ProfanityPolicy) -> dict[str, object]:
@@ -535,17 +545,19 @@ def serve(
             output_stream.write(json.dumps(response, separators=(",", ":")) + "\n")
             output_stream.flush()
 
-    try:
-        with ThreadPoolExecutor(max_workers=4, thread_name_prefix="desktop-bridge") as executor:
+    with ThreadPoolExecutor(max_workers=4, thread_name_prefix="desktop-bridge") as executor:
+        try:
             for line in input_stream:
                 if line.strip():
                     executor.submit(dispatch, line)
-    finally:
-        bridge.close()
+        finally:
+            # Cancel active work before waiting for outstanding IPC requests.
+            bridge.close()
     return 0
 
 
 def main() -> int:
+    contain_process_tree()
     # Electron sends UTF-8 JSON even when Windows uses a legacy pipe code page.
     sys.stdin.reconfigure(encoding="utf-8")
     sys.stdout.reconfigure(encoding="utf-8")

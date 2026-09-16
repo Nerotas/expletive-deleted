@@ -321,7 +321,7 @@ class DesktopBridgeTests(unittest.TestCase):
         error_stream = io.TextIOWrapper(io.BytesIO(), encoding="cp1252")
         bridge = MagicMock()
         bridge.handle.side_effect = lambda method, params: params
-        with patch("scripts.desktop_bridge.DesktopBridge", return_value=bridge), \
+        with patch("scripts.desktop_bridge.contain_process_tree"), patch("scripts.desktop_bridge.DesktopBridge", return_value=bridge), \
                 patch("sys.stdin", input_stream), patch("sys.stdout", output_stream), patch("sys.stderr", error_stream):
             self.assertEqual(main(), 0)
         response = json.loads(output_stream.buffer.getvalue().decode("utf-8"))
@@ -360,6 +360,15 @@ class DesktopBridgeTests(unittest.TestCase):
         with patch("scripts.desktop_bridge.execute_install_plan", side_effect=execute):
             bridge._run_install_task(install_id, plan.id, plan, None)
         self.assertEqual(bridge.handle("dependencies.status", {"install_id": install_id})["status"], "cancelled")
+
+    def test_close_cancels_setup_and_rejects_new_installs(self):
+        bridge, plan, install_id = self.prepare_install()
+        bridge.close()
+        self.assertTrue(bridge._install_jobs[install_id]["cancel_event"].is_set())
+        bridge._install_executor.shutdown.assert_called_once_with(wait=True, cancel_futures=True)
+        bridge.service.close.assert_called_once_with()
+        with self.assertRaisesRegex(RuntimeError, "closing"):
+            bridge.handle("dependencies.install", {"plan_id": plan.id})
 
     def test_dictionary_discovered_reads_only_its_own_store(self):
         policy_store = MagicMock()

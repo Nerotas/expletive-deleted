@@ -3,6 +3,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { existsSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { backendEnvironment, findBackendRoot, findPythonRuntime, requireBundledRuntime } from './backend-runtime.js'
+import { stopBridge } from './bridge-shutdown.js'
 
 type BridgeResponse = { id: number; ok: true; result: unknown } | { id: number; ok: false; error: { message?: string; code?: string; diagnostic?: string } }
 type RendererResponse = { result: unknown } | { error: { message: string; code?: string; diagnostic?: string } }
@@ -11,6 +12,8 @@ let window: BrowserWindow | undefined
 let bridge: ChildProcessWithoutNullStreams | undefined
 let requestId = 0
 let bridgeFailure: string | undefined
+let shuttingDown = false
+let shutdownComplete = false
 const pending = new Map<number, { resolve: (value: unknown) => void; reject: (reason: Error) => void }>()
 const APPLICATION_ID = 'com.expletive-deleted.desktop'
 const APPLICATION_ICON = 'expletive-deleted-icon.ico'
@@ -104,6 +107,7 @@ function startBridge(): void {
 }
 
 function invoke(method: string, params?: Record<string, unknown>): Promise<unknown> {
+  if (shuttingDown) return Promise.reject(new Error('The desktop application is closing.'))
   if (!bridge?.stdin.writable) return Promise.reject(new Error(bridgeFailure ?? 'The local processing service is unavailable. Restart the desktop application.'))
   const id = ++requestId
   return new Promise((resolve, reject) => {
@@ -210,4 +214,14 @@ app.whenReady().then(() => {
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })
 })
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })
-app.on('before-quit', () => { bridge?.kill(); bridge = undefined; rejectPending('The desktop application is closing.') })
+app.on('before-quit', (event) => {
+  if (shutdownComplete || !bridge) return
+  event.preventDefault()
+  if (shuttingDown) return
+  shuttingDown = true
+  rejectPending('The desktop application is closing.')
+  void stopBridge(bridge).finally(() => {
+    shutdownComplete = true
+    app.quit()
+  })
+})

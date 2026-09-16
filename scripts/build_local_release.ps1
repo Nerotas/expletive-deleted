@@ -182,6 +182,8 @@ try {
         Assert-NativeSuccess 'Frontend lint'
         & npm run smoke
         Assert-NativeSuccess 'Development Electron smoke test'
+        & node scripts/smoke-shutdown.mjs
+        Assert-NativeSuccess 'Electron shutdown smoke test'
 
         & (Join-Path $frontendRoot 'scripts\build-audited-runtime.ps1') `
             -PythonRuntimeDirectory $privatePythonRoot `
