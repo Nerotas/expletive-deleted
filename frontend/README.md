@@ -11,6 +11,8 @@ npm run dev
 
 `npm run dev` launches Electron. Vite is used only as Electron's renderer build and hot-reload tool.
 
+The Python child starts through `scripts.desktop_bridge`, a thin entrypoint for `backend.desktop.protocol`. Request routing, dictionary responses, and setup workers have separate backend modules; see the [Python module guide](../backend/README.md).
+
 Production validation:
 
 ```powershell

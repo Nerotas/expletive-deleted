@@ -44,10 +44,11 @@ The current desktop and backend application supports:
 
 ```text
 backend/
-  censor/engine.py       Proven transcription, detection, and censor engine
+  censor/                Processing coordinator, transcripts, audio metadata, FFmpeg, and CLI
+  desktop/               Private protocol, request routing, dictionary and setup controllers
   jobs/                  Serial job manager, records, events, and batch compatibility
   service/               Library, import, archive, settings, and capability boundary
-  runtime/environment.py Dependency, hardware, cache, and encoder discovery
+  runtime/               Dependency contracts/inspection/plans/install, devices, encoders, timing
   runtime/paths.py       Runtime folder ownership
   policy/                Versioned, atomic user dictionary
   settings/              Validated schema, atomic store, and path checks
@@ -65,6 +66,8 @@ setup.py                 Legacy-compatible bootstrap entry point
 ```
 
 The root compatibility files remain intentionally thin. New backend code should import from `backend`, not from those wrappers.
+
+The [backend module guide](backend/README.md) documents ownership and import boundaries. Runtime compatibility facades retain established imports; optional speech packages load when capabilities or processing require them.
 
 ## Persistent Settings
 

@@ -183,6 +183,8 @@ npm run smoke
 
 ## Architecture
 
+The [Python backend module guide](backend/README.md) describes runtime inspection, approved setup, processing, and desktop protocol ownership. The desktop Python entrypoint delegates to `backend/desktop/`; compatibility exports preserve existing CLI imports.
+
 ```text
 backend/                  Python source of truth for settings, jobs, policy, and media safety
 frontend/electron/        Native window, lifecycle, preload API, and Python child process
