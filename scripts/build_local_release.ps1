@@ -182,6 +182,8 @@ try {
         Assert-NativeSuccess 'Frontend lint'
         & npm run smoke
         Assert-NativeSuccess 'Development Electron smoke test'
+        & npm run smoke:security
+        Assert-NativeSuccess 'Renderer security smoke test'
         & node scripts/smoke-shutdown.mjs
         Assert-NativeSuccess 'Electron shutdown smoke test'
 

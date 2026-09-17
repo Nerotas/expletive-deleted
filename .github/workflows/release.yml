@@ -162,6 +162,11 @@ jobs:
         working-directory: frontend
         run: npm run smoke
 
+      - name: Check renderer security in production and Vite development
+        if: steps.version.outputs.published != 'true'
+        working-directory: frontend
+        run: npm run smoke:security
+
       - name: Smoke-test graceful and forced shutdown
         if: steps.version.outputs.published != 'true'
         working-directory: frontend

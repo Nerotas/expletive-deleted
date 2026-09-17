@@ -2,6 +2,8 @@
 
 Electron hosts the React renderer in this directory. This is an installed desktop application, not a browser-hosted application.
 
+Native IPC handlers must use `trustedIpcHandlers` from `electron/ipc-security.ts`. The sandboxed preload is bundled; `renderer-policy.ts` owns trusted document matching and the separate production/development CSPs. After building, run `npm run smoke:security` for real Electron and Vite/HMR boundary tests. Packaged smoke runs the same production checks. See [HP-01 implementation](../docs/HP-01_IMPLEMENTATION_2026-09-17.md).
+
 From `frontend/`:
 
 ```powershell

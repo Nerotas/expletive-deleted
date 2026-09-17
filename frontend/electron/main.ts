@@ -1,14 +1,16 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, shell, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { existsSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { backendEnvironment, findBackendRoot, findPythonRuntime, requireBundledRuntime } from './backend-runtime.js'
 import { stopBridge } from './bridge-shutdown.js'
+import { secureRendererWindow, trustedIpcHandlers, type TrustedRenderer } from './ipc-security.js'
+import { createRendererPolicy } from './renderer-policy.js'
 
 type BridgeResponse = { id: number; ok: true; result: unknown } | { id: number; ok: false; error: { message?: string; code?: string; diagnostic?: string } }
 type RendererResponse = { result: unknown } | { error: { message: string; code?: string; diagnostic?: string } }
 
-let window: BrowserWindow | undefined
+let trustedRenderer: TrustedRenderer | undefined
 let bridge: ChildProcessWithoutNullStreams | undefined
 let requestId = 0
 let bridgeFailure: string | undefined
@@ -17,7 +19,8 @@ let shutdownComplete = false
 const pending = new Map<number, { resolve: (value: unknown) => void; reject: (reason: Error) => void }>()
 const APPLICATION_ID = 'com.expletive-deleted.desktop'
 const APPLICATION_ICON = 'expletive-deleted-icon.ico'
-const developmentLogging = Boolean(process.env.ELECTRON_RENDERER_URL)
+const rendererPolicy = createRendererPolicy(path.join(__dirname, '../renderer/index.html'), app.isPackaged, process.env.ELECTRON_RENDERER_URL)
+const developmentLogging = Boolean(rendererPolicy.development)
 
 function logDevelopmentError(context: string, error: unknown): void {
   if (developmentLogging) console.error(`[Expletive Deleted] ${context}`, error)
@@ -140,21 +143,21 @@ function createWindow(): void {
   const browserWindow = new BrowserWindow({
     width: 1440, height: 940, minWidth: 1060, minHeight: 720, show: false,
     ...(icon ? { icon } : {}),
-    webPreferences: { preload: path.join(__dirname, '../preload/preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: false },
+    webPreferences: { preload: path.join(__dirname, '../preload/preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true },
   })
-  window = browserWindow
+  trustedRenderer = secureRendererWindow(browserWindow, rendererPolicy)
   browserWindow.once('ready-to-show', () => browserWindow.show())
-  browserWindow.on('closed', () => { window = undefined })
-  if (process.env.ELECTRON_RENDERER_URL) void browserWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
-  else void browserWindow.loadFile(path.join(__dirname, '../renderer/index.html'))
+  browserWindow.on('closed', () => { trustedRenderer = undefined })
+  void browserWindow.loadURL(rendererPolicy.entryUrl)
 }
 
 if (process.platform === 'win32') app.setAppUserModelId(APPLICATION_ID)
 
 app.whenReady().then(() => {
-  if (!process.env.ELECTRON_RENDERER_URL) Menu.setApplicationMenu(null)
+  if (!rendererPolicy.development) Menu.setApplicationMenu(null)
   startBridge()
-  ipcMain.handle('expletive-deleted:invoke', async (_event: IpcMainInvokeEvent, method: string, params?: Record<string, unknown>): Promise<RendererResponse> => {
+  const handle = trustedIpcHandlers(ipcMain, () => trustedRenderer)
+  handle('expletive-deleted:invoke', async (_request, method: string, params?: Record<string, unknown>): Promise<RendererResponse> => {
     try {
       return { result: await invoke(method, params) }
     } catch (reason) {
@@ -168,12 +171,12 @@ app.whenReady().then(() => {
       }
     }
   })
-  ipcMain.handle('expletive-deleted:select-directory', async (_event: IpcMainInvokeEvent, defaultPath?: string) => {
-    const result = await dialog.showOpenDialog(window!, { defaultPath, properties: ['openDirectory', 'createDirectory'] })
+  handle('expletive-deleted:select-directory', async ({ window }, defaultPath?: string) => {
+    const result = await dialog.showOpenDialog(window, { defaultPath, properties: ['openDirectory', 'createDirectory'] })
     return result.canceled ? undefined : result.filePaths[0]
   })
-  ipcMain.handle('expletive-deleted:select-file', async (_event: IpcMainInvokeEvent, defaultPath?: string) => {
-    const result = await dialog.showOpenDialog(window!, {
+  handle('expletive-deleted:select-file', async ({ window }, defaultPath?: string) => {
+    const result = await dialog.showOpenDialog(window, {
       defaultPath,
       properties: ['openFile'],
       filters: process.platform === 'win32'
@@ -182,31 +185,32 @@ app.whenReady().then(() => {
     })
     return result.canceled ? undefined : result.filePaths[0]
   })
-  ipcMain.handle('expletive-deleted:select-dictionary-import', async () => {
-    const result = await dialog.showOpenDialog(window!, {
+  handle('expletive-deleted:select-dictionary-import', async ({ window }) => {
+    const result = await dialog.showOpenDialog(window, {
       properties: ['openFile'],
       filters: [{ name: 'Expletive Deleted dictionary', extensions: ['json'] }],
     })
     return result.canceled ? undefined : result.filePaths[0]
   })
-  ipcMain.handle('expletive-deleted:select-dictionary-export', async () => {
-    const result = await dialog.showSaveDialog(window!, {
+  handle('expletive-deleted:select-dictionary-export', async ({ window }) => {
+    const result = await dialog.showSaveDialog(window, {
       defaultPath: 'expletive-deleted-dictionary.json',
       filters: [{ name: 'Expletive Deleted dictionary', extensions: ['json'] }],
     })
     return result.canceled ? undefined : result.filePath
   })
-  ipcMain.handle('expletive-deleted:open-external', async (_event: IpcMainInvokeEvent, value: string) => {
+  handle('expletive-deleted:open-external', async (_request, value: string) => {
     const url = new URL(value)
     if (url.protocol !== 'https:') throw new Error('Only secure project links can be opened')
     await shell.openExternal(url.toString())
   })
-  ipcMain.handle('expletive-deleted:open-transcode-folder', async () => {
+  handle('expletive-deleted:open-transcode-folder', async ({ assertCurrent }) => {
     const folderPath = outputDirectory(await invoke('settings.get'))
+    assertCurrent()
     const error = await shell.openPath(folderPath)
     if (error) throw new Error(`Could not open the transcode folder: ${error}`)
   })
-  ipcMain.handle('expletive-deleted:open-file', async (_event: IpcMainInvokeEvent, filePath: string) => {
+  handle('expletive-deleted:open-file', async (_request, filePath: string) => {
     const error = await shell.openPath(filePath)
     if (error) throw new Error(`Could not open the censored file: ${error}`)
   })

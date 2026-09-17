@@ -21,6 +21,16 @@ export default defineConfig([
     },
   },
   {
+    files: ['electron/**/*.ts'],
+    ignores: ['electron/ipc-security.ts', 'electron/**/*.test.ts'],
+    rules: {
+      'no-restricted-syntax': ['error', {
+        selector: 'CallExpression[callee.object.name="ipcMain"][callee.property.name="handle"]',
+        message: 'Register privileged operations through trustedIpcHandlers so every caller is validated.',
+      }],
+    },
+  },
+  {
     files: ['src/**/*.{ts,tsx}'],
     rules: {
       // Native capabilities belong to Electron, never to renderer feature modules.

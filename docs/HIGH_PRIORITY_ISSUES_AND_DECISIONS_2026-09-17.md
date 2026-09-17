@@ -11,11 +11,13 @@ The earlier reports contain nine distinct open high-priority issues after overla
 
 **Accepted decisions are not completed fixes.** This document does not implement repairs or newly reproduce the audit findings. Evidence and validation limits remain in the linked source reports. Detailed implementation choices, sequencing, regression tests, and release qualification belong in the second document.
 
+Implementation updates are linked in the status table; the original decisions below remain the approved scope.
+
 ## Decision register
 
 | ID | Issue | Decision | Status |
 | --- | --- | --- | --- |
-| HP-01 | Untrusted documents retain desktop bridge access | Restrict the app window to its own interface, validate every IPC caller, and open external links in the default browser | Accepted direction; open |
+| HP-01 | Untrusted documents retain desktop bridge access | Restrict the app window to its own interface, validate every IPC caller, and open external links in the default browser | [Implemented; Windows/package checks passed](HP-01_IMPLEMENTATION_2026-09-17.md) |
 | HP-02 | File opening and dictionary export accept unrestricted paths | Restrict playback to verified media within the configured output root; bind JSON exports and overwrite consent to the native Save dialog | Accepted direction; open |
 | HP-03 | Concurrent dictionary edits can lose acknowledged changes | Serialize complete dictionary changes and allow one desktop instance per user | Accepted direction; open |
 | HP-04 | Component setup can overwrite newer settings | Update only verified component fields, preserve unrelated settings, and surface conflicts with manual path edits | Accepted direction; open |
