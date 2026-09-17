@@ -469,6 +469,7 @@ class PolicyStore:
                 temporary_path = Path(temporary_file.name)
 
             validate(temporary_path)
+            # Atomic replacement protects this file, not a multi-file policy transaction.
             os.replace(temporary_path, path)
             temporary_path = None
         except PolicyFileError:

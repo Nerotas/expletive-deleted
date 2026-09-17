@@ -81,6 +81,7 @@ class SettingsStore:
                 temporary_file.flush()
                 os.fsync(temporary_file.fileno())
                 temporary_path = Path(temporary_file.name)
+            # Flush the complete draft before atomically replacing persisted settings.
             os.replace(temporary_path, self.path)
             temporary_path = None
             return self.path

@@ -54,7 +54,7 @@ class RuntimeTests(unittest.TestCase):
 
     def test_store_python_virtualized_local_app_data_uses_stable_runtime_root(self):
         with (
-            patch("backend.runtime.environment.platform.system", return_value="Windows"),
+            patch("backend.runtime.locations.platform.system", return_value="Windows"),
             patch.dict(
                 "os.environ",
                 {
@@ -75,8 +75,8 @@ class RuntimeTests(unittest.TestCase):
                 encoding="utf-8",
             )
             with (
-                patch("backend.runtime.environment.platform.system", return_value="Windows"),
-                patch("backend.runtime.environment.sys.prefix", str(prefix)),
+                patch("backend.runtime.locations.platform.system", return_value="Windows"),
+                patch("backend.runtime.locations.sys.prefix", str(prefix)),
                 patch.dict("os.environ", {"LOCALAPPDATA": r"C:\Users\User\AppData\Local"}, clear=False),
             ):
                 root = get_application_runtime_root()
@@ -112,8 +112,8 @@ class RuntimeTests(unittest.TestCase):
 
     def test_censor_requires_ffmpeg_and_ffprobe_before_processing(self):
         with (
-            patch("backend.runtime.environment.find_ffmpeg", return_value=None),
-            patch("backend.runtime.environment.find_ffprobe", return_value="ffprobe"),
+            patch("backend.runtime.locations.find_ffmpeg", return_value=None),
+            patch("backend.runtime.locations.find_ffprobe", return_value="ffprobe"),
             self.assertRaisesRegex(RuntimeError, "FFmpeg and FFprobe"),
         ):
             ProfanityCensor("input.mkv", "output.mkv")
@@ -159,7 +159,7 @@ class RuntimeTests(unittest.TestCase):
             stdout=" V..... = Video\n V....D libx264 H.264\n A....D aac AAC\n",
             stderr="",
         )
-        with patch("backend.runtime.environment.subprocess.run", return_value=completed):
+        with patch("backend.runtime.locations.subprocess.run", return_value=completed):
             encoders = available_encoders("ffmpeg")
 
         self.assertEqual(encoders, {"libx264"})
@@ -508,7 +508,7 @@ class RuntimeTests(unittest.TestCase):
             transcript_path = Path(temporary_directory) / "episode-transcript.json"
             transcript_path.write_text('{"text": "", "words": []}')
 
-            with patch("backend.censor.engine.probe_audio_stream", return_value=(6, "5.1")):
+            with patch("backend.censor.transcripts.probe_audio_stream", return_value=(6, "5.1")):
                 self.assertFalse(
                     transcript_cache_is_compatible("episode.mkv", str(transcript_path), "ffprobe")
                 )
@@ -516,7 +516,7 @@ class RuntimeTests(unittest.TestCase):
             transcript_path.write_text(
                 '{"text": "", "words": [], "audio_source": "front_center"}'
             )
-            with patch("backend.censor.engine.probe_audio_stream", return_value=(6, "5.1")):
+            with patch("backend.censor.transcripts.probe_audio_stream", return_value=(6, "5.1")):
                 self.assertTrue(
                     transcript_cache_is_compatible("episode.mkv", str(transcript_path), "ffprobe")
                 )
@@ -693,7 +693,7 @@ class RuntimeTests(unittest.TestCase):
 
     def test_working_encoder_preserves_preference(self):
         with patch(
-            "backend.runtime.environment.video_encoder_runtime_available",
+            "backend.runtime.encoders.video_encoder_runtime_available",
             side_effect=lambda *arguments: arguments[1] in {"h264_qsv", "libx264"},
         ):
             encoder = select_working_video_encoder(
@@ -704,7 +704,7 @@ class RuntimeTests(unittest.TestCase):
 
     def test_working_encoder_skips_unusable_hardware(self):
         with patch(
-            "backend.runtime.environment.video_encoder_runtime_available",
+            "backend.runtime.encoders.video_encoder_runtime_available",
             side_effect=lambda *arguments: arguments[1] == "libx264",
         ):
             encoder = select_working_video_encoder(
@@ -727,8 +727,8 @@ class RuntimeTests(unittest.TestCase):
     def test_private_python_runtime_still_discovers_user_managed_media_tools(self):
         with (
             patch.dict(os.environ, {"CENSOR_BUNDLED_RUNTIME": "1"}, clear=False),
-            patch("backend.runtime.environment.get_managed_ffmpeg_paths", return_value=("managed-ffmpeg", "managed-ffprobe")) as managed,
-            patch("backend.runtime.environment._find_executable", return_value="path-tool") as discover,
+            patch("backend.runtime.locations.get_managed_ffmpeg_paths", return_value=("managed-ffmpeg", "managed-ffprobe")) as managed,
+            patch("backend.runtime.locations._find_executable", return_value="path-tool") as discover,
         ):
             self.assertEqual(find_ffmpeg(), "managed-ffmpeg")
             self.assertEqual(find_ffprobe(), "managed-ffprobe")
@@ -755,10 +755,10 @@ class RuntimeTests(unittest.TestCase):
                 os.environ,
                 {"LOCALAPPDATA": temporary_directory, "CENSOR_RUNTIME_ASSETS_DIR": ""},
                 clear=False,
-            ), patch("backend.runtime.environment.get_managed_ffmpeg_paths", return_value=(None, None)):
-                with patch("backend.runtime.environment.shutil.which", return_value=None):
+            ), patch("backend.runtime.locations.get_managed_ffmpeg_paths", return_value=(None, None)):
+                with patch("backend.runtime.locations.shutil.which", return_value=None):
                     with patch(
-                        "backend.runtime.environment.subprocess.run",
+                        "backend.runtime.locations.subprocess.run",
                         return_value=MagicMock(returncode=0, stdout="ffmpeg version 9.0.1", stderr=""),
                     ):
                         self.assertEqual(find_ffmpeg(), str(package_root / "ffmpeg.exe"))
@@ -798,7 +798,7 @@ class RuntimeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             with patch(
-                "backend.runtime.environment.get_whisper_profile_key",
+                "backend.runtime.timing.get_whisper_profile_key",
                 return_value="large:cpu:int8",
             ):
                 record_transcription_timing(100.0, 200.0, root=root)
@@ -817,12 +817,12 @@ class RuntimeTests(unittest.TestCase):
                     {"LOCALAPPDATA": str(local_app_data), "CENSOR_RUNTIME_ASSETS_DIR": ""},
                     clear=False,
                 ),
-                patch("backend.runtime.environment.sys.executable", r"C:\Python\python.exe"),
-                patch("backend.runtime.environment.sys.prefix", temporary_directory),
-                patch("backend.runtime.environment.Path.home", return_value=Path("C:/Users/Test")),
-                patch("backend.runtime.environment.platform.system", return_value="Windows"),
+                patch("backend.runtime.locations.sys.executable", r"C:\Python\python.exe"),
+                patch("backend.runtime.locations.sys.prefix", temporary_directory),
+                patch("backend.runtime.locations.Path.home", return_value=Path("C:/Users/Test")),
+                patch("backend.runtime.locations.platform.system", return_value="Windows"),
                 patch(
-                    "backend.runtime.environment.get_whisper_profile_key",
+                    "backend.runtime.timing.get_whisper_profile_key",
                     return_value="large:cpu:int8",
                 ),
             ):
@@ -835,7 +835,7 @@ class RuntimeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary_directory:
             with (
                 patch(
-                    "backend.runtime.environment.get_whisper_profile_key",
+                    "backend.runtime.timing.get_whisper_profile_key",
                     return_value="large:cpu:int8",
                 ),
                 patch("pathlib.Path.write_text", side_effect=PermissionError("read only")),
@@ -848,8 +848,8 @@ class RuntimeTests(unittest.TestCase):
 
     def test_whisper_uses_cpu_when_cuda_is_unavailable(self):
         with (
-            patch("backend.runtime.environment.ctranslate2", None),
-            patch("backend.runtime.environment.importlib.import_module", side_effect=ImportError),
+            patch("backend.runtime.devices.ctranslate2", None),
+            patch("backend.runtime.devices.importlib.import_module", side_effect=ImportError),
         ):
             status = get_whisper_device_status()
         self.assertEqual(status.selected, "cpu")
@@ -858,8 +858,8 @@ class RuntimeTests(unittest.TestCase):
     def test_persisted_whisper_device_is_used_without_environment_override(self):
         with (
             patch.dict(os.environ, {}, clear=True),
-            patch("backend.runtime.environment.ctranslate2", None),
-            patch("backend.runtime.environment.importlib.import_module", side_effect=ImportError),
+            patch("backend.runtime.devices.ctranslate2", None),
+            patch("backend.runtime.devices.importlib.import_module", side_effect=ImportError),
         ):
             status = get_whisper_device_status(requested_device="cuda")
         self.assertEqual(status.requested, "cuda")
@@ -868,7 +868,7 @@ class RuntimeTests(unittest.TestCase):
     def test_whisper_device_environment_override_takes_precedence(self):
         with (
             patch.dict(os.environ, {"CENSOR_WHISPER_DEVICE": "cpu"}, clear=False),
-            patch("backend.runtime.environment.ctranslate2", None),
+            patch("backend.runtime.devices.ctranslate2", None),
         ):
             status = get_whisper_device_status(requested_device="cuda")
         self.assertEqual(status.requested, "cpu")
@@ -878,9 +878,9 @@ class RuntimeTests(unittest.TestCase):
         ctranslate2.get_cuda_device_count.return_value = 1
         ctranslate2.get_supported_compute_types.return_value = {"float16", "int8"}
         with (
-            patch("backend.runtime.environment.ctranslate2", None),
-            patch("backend.runtime.environment.importlib.import_module", return_value=ctranslate2) as import_module,
-            patch("backend.runtime.environment.get_cuda_memory_mib", return_value=12288),
+            patch("backend.runtime.devices.ctranslate2", None),
+            patch("backend.runtime.devices.importlib.import_module", return_value=ctranslate2) as import_module,
+            patch("backend.runtime.devices.get_cuda_memory_mib", return_value=12288),
         ):
             status = get_whisper_device_status("large")
 
@@ -899,8 +899,8 @@ class RuntimeTests(unittest.TestCase):
         ctranslate2.get_cuda_device_count.return_value = 1
         ctranslate2.get_supported_compute_types.return_value = {"float16", "int8"}
         with (
-            patch("backend.runtime.environment.ctranslate2", ctranslate2),
-            patch("backend.runtime.environment.get_cuda_memory_mib", return_value=12288),
+            patch("backend.runtime.devices.ctranslate2", ctranslate2),
+            patch("backend.runtime.devices.get_cuda_memory_mib", return_value=12288),
         ):
             status = get_whisper_device_status("large")
         self.assertEqual(status.selected, "cuda")
@@ -911,8 +911,8 @@ class RuntimeTests(unittest.TestCase):
         ctranslate2.get_cuda_device_count.return_value = 1
         ctranslate2.get_supported_compute_types.return_value = {"int8_float32", "int8"}
         with (
-            patch("backend.runtime.environment.ctranslate2", ctranslate2),
-            patch("backend.runtime.environment.get_cuda_memory_mib", return_value=4096),
+            patch("backend.runtime.devices.ctranslate2", ctranslate2),
+            patch("backend.runtime.devices.get_cuda_memory_mib", return_value=4096),
         ):
             status = get_whisper_device_status("large")
         self.assertEqual(status.selected, "cpu")

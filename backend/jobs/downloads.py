@@ -17,7 +17,10 @@ from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
 
 from backend.runtime import available_encoders, resolve_media_tools, select_working_video_encoder
-from backend.runtime.environment import resolve_deno_path, resolve_ytdlp_path
+from backend.runtime.locations import (
+    resolve_deno_path,
+    resolve_ytdlp_path,
+)
 from backend.settings import AppSettings
 
 from .events import JobEvent

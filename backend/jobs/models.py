@@ -100,7 +100,7 @@ class JobRecord:
             "error": self.error.to_dict() if self.error else None,
             "force_transcribe": self.force_transcribe,
             "overwrite_output": self.overwrite_output,
-                "auto_censor_after_transcription": self.auto_censor_after_transcription,
+            "auto_censor_after_transcription": self.auto_censor_after_transcription,
         }
 
 

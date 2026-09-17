@@ -172,7 +172,7 @@ class BackendServiceTests(unittest.TestCase):
             try:
                 with (
                     patch(
-                        "backend.runtime.environment.get_managed_whisper_cache_dir",
+                        "backend.runtime.locations.get_managed_whisper_cache_dir",
                         return_value=managed_cache,
                     ),
                     patch(
