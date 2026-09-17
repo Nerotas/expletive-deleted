@@ -10,6 +10,7 @@ from backend.runtime.paths import RuntimePaths, get_runtime_paths
 
 from .models import AppSettings, DirectorySettings
 from .store import SettingsStore
+from .directories import bind_directories
 
 
 def _directory_settings(paths: RuntimePaths) -> DirectorySettings:
@@ -27,7 +28,8 @@ def load_effective_settings(
     legacy_root: Path | None = None,
 ) -> AppSettings:
     """Load settings, honoring an explicit or environment legacy workflow root."""
-    settings = (store or SettingsStore()).load()
+    selected_store = store or SettingsStore()
+    settings = selected_store.load()
     configured_root = legacy_root or os.environ.get("CENSOR_PROJECT_ROOT")
     if configured_root:
         settings = replace(
@@ -35,6 +37,11 @@ def load_effective_settings(
             directories=_directory_settings(get_runtime_paths(Path(configured_root))),
         )
     settings.validate()
+    bound = bind_directories(settings.directories)
+    if bound.bindings != settings.directories.bindings:
+        settings = replace(settings, directories=bound)
+        if not configured_root:
+            selected_store.save(settings)
     return settings
 
 

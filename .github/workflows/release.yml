@@ -162,6 +162,13 @@ jobs:
         working-directory: frontend
         run: npm run smoke
 
+      - name: Verify filesystem safety under private release Python
+        if: steps.version.outputs.published != 'true'
+        shell: pwsh
+        run: |
+          & (Join-Path $env:PRIVATE_PYTHON_DIR 'python.exe') -m unittest tests.test_filesystem_paths tests.test_windows_destination_guards
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Check renderer security in production and Vite development
         if: steps.version.outputs.published != 'true'
         working-directory: frontend

@@ -23,7 +23,7 @@ Implementation updates are linked in the status table; the original decisions be
 | HP-04 | Component setup can overwrite newer settings | Update only verified component fields, preserve unrelated settings, and surface conflicts with manual path edits | Accepted direction; open |
 | HP-05 | Artifact names collide and legacy transcripts lack reliable source identity | Retain as a future issue; defer the identity scheme and legacy migration decision | Deferred; risk remains open |
 | HP-06 | Publication safeguards differ across processing entrypoints | Use shared staging, verification, and safe publication; stop on unexpected collisions | Accepted direction; open |
-| HP-07 | Destination links can escape configured roots | Allow a configured root to resolve elsewhere, enforce that resolved boundary, and stop on escapes or unexpected target changes | Accepted direction; open |
+| HP-07 | Destination links can escape configured roots | Allow a configured root to resolve elsewhere, enforce that resolved boundary, and stop on escapes or unexpected target changes | [Implemented Windows guards; publication integration in HP-06](HP-07_IMPLEMENTATION_2026-09-17.md) |
 | HP-08 | Setup progress hides communication failures | Provide serialized polling and a visible 30-second reconnection phase, followed by explicit recovery when necessary | Accepted direction; open |
 | HP-09 | Onboarding can save an obsolete settings snapshot | Save only intended wizard changes and progress; preserve newer settings and pause on same-field conflicts | Accepted direction; open |
 

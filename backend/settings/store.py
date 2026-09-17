@@ -5,10 +5,13 @@ from __future__ import annotations
 import configparser
 import os
 import tempfile
+import json
+from dataclasses import replace, asdict
 from collections.abc import Mapping
 from pathlib import Path
 
 from backend.application_identity import get_app_data_root, prepare_app_data_root
+from backend.filesystem.paths import RootBinding
 
 from .models import AppSettings, SettingsValidationError
 from .serialization import settings_from_dict, settings_to_dict
@@ -55,7 +58,12 @@ class SettingsStore:
             parser = configparser.ConfigParser(interpolation=None)
             with self.path.open(encoding="utf-8") as settings_file:
                 parser.read_file(settings_file)
-            return settings_from_dict(_settings_from_ini(parser), self.defaults)
+            settings = settings_from_dict(_settings_from_ini(parser), self.defaults)
+            if parser.has_section("root_bindings"):
+                bindings = tuple(RootBinding(Path(item["configured"]), Path(item["resolved"]), int(item["device"]), int(item["inode"]))
+                                 for item in json.loads(parser.get("root_bindings", "identities")))
+                settings = replace(settings, directories=replace(settings.directories, bindings=bindings))
+            return settings
         except SettingsValidationError as exc:
             raise SettingsFileError(self.path, str(exc)) from exc
         except (configparser.Error, ValueError) as exc:
@@ -77,6 +85,12 @@ class SettingsStore:
                 delete=False,
             ) as temporary_file:
                 parser = _settings_to_ini(payload)
+                if settings.directories.bindings:
+                    # Identities and selected paths share the same atomic settings transaction.
+                    parser["root_bindings"] = {"identities": json.dumps([
+                        {**asdict(binding), "configured": str(binding.configured), "resolved": str(binding.resolved)}
+                        for binding in settings.directories.bindings
+                    ])}
                 parser.write(temporary_file)
                 temporary_file.flush()
                 os.fsync(temporary_file.fileno())
@@ -121,7 +135,7 @@ _INI_INTEGER_FIELDS = {("censoring", "padding_before_ms"), ("censoring", "paddin
 
 
 def _settings_from_ini(parser: configparser.ConfigParser) -> dict[str, object]:
-    allowed_sections = {"settings", *_INI_SECTIONS}
+    allowed_sections = {"settings", "root_bindings", *_INI_SECTIONS}
     unknown_sections = sorted(set(parser.sections()) - allowed_sections)
     if unknown_sections:
         raise ValueError(f"unknown section(s): {', '.join(unknown_sections)}")
