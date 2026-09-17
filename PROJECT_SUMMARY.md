@@ -108,6 +108,8 @@ Package entry points are also available for backend development:
 
 ## Current Architecture Guarantees
 
+Renderer module ownership, state rules, and validation commands are documented in the [frontend developer guide](frontend/src/README.md). The [frontend review](docs/FRONTEND_REVIEW_2026-09-16.md) records the page modularization and remaining setup/error-recovery risks.
+
 1. Jobs, statuses, structured events, and cancellation are owned by the backend.
 2. Queue execution is session-only. Copy and download work use separate lanes; transcription and censor work are independently queued but share one heavy-processing resource slot.
 3. Electron exposes a narrow validated bridge; the renderer uses the typed desktop client.

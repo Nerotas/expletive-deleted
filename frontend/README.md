@@ -29,11 +29,15 @@ The package audit requires private Python and rejects processing packages, FFmpe
 
 ## Renderer architecture
 
+See the [renderer developer guide](src/README.md) for module ownership, state rules, and extension guidance, and the [frontend review](../docs/FRONTEND_REVIEW_2026-09-16.md) for completed improvements and remaining findings.
+
 - `src/App.tsx` composes the shell, global status, and routes.
 - `src/features/` owns Queue, Dictionary, Settings, Onboarding, and capability state.
+- Queue calculations and snapshot loading live in `queue-model.ts` and `queue-data.ts`; page, table, row, archive, and dialogs have separate owners. Settings sections, dictionary table rendering, and setup progress are also separate components.
 - `src/features/onboarding/` keeps each walkthrough section in its own component: Welcome, Components, Initial Settings, Add Media, Process Media, Finish, and backend-startup recovery. `OnboardingPage.tsx` owns only composition, saved-step navigation, and the temporary settings draft.
 - `src/components/ui/` contains reusable controls and presentation primitives.
 - `src/services/desktop-client.ts` is the typed boundary around Electron IPC.
+- ESLint prevents renderer Node/Electron imports and direct preload access outside the typed client. This development guard does not replace runtime IPC validation.
 - React Router handles renderer navigation, TanStack Query owns backend state, and React Hook Form owns the persisted/draft settings lifecycle.
 
 ## Queue behavior
