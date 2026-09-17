@@ -68,4 +68,4 @@ def prepare_output(service, source: str, resources: ExitStack):
             raise PathSafetyError('Media folders changed. Select the Queue item again.')
         root.target(destination)
     check()
-    return canonical, check
+    return canonical, check, destination

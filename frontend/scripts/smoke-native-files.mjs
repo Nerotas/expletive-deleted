@@ -37,7 +37,7 @@ try {
     dialog.showOpenDialog = async () => ({ canceled: !globalThis.__nativeFiles.selected, filePaths: [globalThis.__nativeFiles.selected] })
     dialog.showMessageBox = async () => {
       if (globalThis.__nativeFiles.replaceDuringConfirmation) {
-        const fs = await import('node:fs/promises')
+        const fs = process.getBuiltinModule('node:fs/promises')
         await fs.writeFile(globalThis.__nativeFiles.selected, 'competing result')
       }
       return { response: globalThis.__nativeFiles.confirmation }

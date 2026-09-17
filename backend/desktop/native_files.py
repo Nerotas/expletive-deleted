@@ -71,17 +71,18 @@ class NativeFiles:
                 resources = ExitStack()
                 try:
                     if method == 'native.output.prepare':
-                        path, check = prepare_output(self.service, params.get('source'), resources)
-                        token = self._remember(resources, kind='output', path=path, check=check)
+                        path, check, response_path = prepare_output(self.service, params.get('source'), resources)
+                        token = self._remember(resources, kind='output', path=path, response_path=response_path, check=check)
                         return {'token': token}
                     path = self._json_path(params.get('destination'))
+                    response_path = path
                     root = RootBinding.capture(path.parent)
                     path = resources.enter_context(root.lease(path))
                     expected = None
                     if path.exists():
                         with locked_file(root, path):
                             expected = version(path)
-                    token = self._remember(resources, kind='export', path=path, root=root, expected=expected)
+                    token = self._remember(resources, kind='export', path=path, response_path=response_path, root=root, expected=expected)
                     return {'token': token, 'exists': expected is not None}
                 except BaseException:
                     resources.close()
@@ -97,7 +98,7 @@ class NativeFiles:
                 raise NativeFileError('This file selection expired. Choose the file again.')
             if method == 'native.output.check' and lease['kind'] == 'output':
                 lease['check']()
-                return {'path': str(lease['path'])}
+                return {'path': str(lease['response_path'])}
             if method == 'native.dictionary.export' and lease['kind'] == 'export':
                 try:
                     if lease['expected'] is not None and params.get('overwrite') is not True:
@@ -110,7 +111,7 @@ class NativeFiles:
                             if json.loads(path.read_text(encoding='utf-8')) != payload:
                                 raise NativeFileError('The exported dictionary could not be verified.')
                         publication.publish(verify)
-                    return {'path': str(lease['path'])}
+                    return {'path': str(lease['response_path'])}
                 finally:
                     self.release(token)
             raise NativeFileError('Unsupported native file operation.')
