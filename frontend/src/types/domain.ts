@@ -237,3 +237,6 @@ export type InstallStatus = {
   started_at: string | null
   error: string | null
 }
+
+// Native pickers return cancellation as data; failures remain typed IPC errors.
+export type NativeFileResult<T> = { canceled: true } | ({ canceled: false } & T)

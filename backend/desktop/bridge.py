@@ -9,6 +9,7 @@ from backend.policy import PolicyStore
 from backend.service import BackendService
 from .dictionary import DictionaryController
 from .installation import InstallationController
+from .native_files import NativeFiles
 
 
 class DesktopBridge:
@@ -19,9 +20,12 @@ class DesktopBridge:
         self.policy_store = policy_store or PolicyStore()
         self.installations = InstallationController(self.service)
         self.dictionary = DictionaryController(self.service, self.policy_store)
+        self.native_files = NativeFiles(self.service, self.policy_store)
 
     def handle(self, method: str, params: Mapping[str, Any] | None = None) -> object:
         params = params or {}
+        if method.startswith('native.'):
+            return self.native_files.handle(method, params)
         if method.startswith("dependencies."):
             return self.installations.handle(method, params)
         if method.startswith("dictionary.") or method == "reviews.list":
@@ -118,6 +122,7 @@ class DesktopBridge:
         raise ValueError(f"Unknown desktop bridge method: {method}")
 
     def close(self) -> None:
+        self.native_files.close()
         self.installations.cancel_pending()
         # Do not wait for setup before giving media jobs their cancellation signal.
         try:

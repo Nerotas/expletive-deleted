@@ -53,6 +53,10 @@ jobs:
         working-directory: frontend
         run: npm run smoke:security
 
+      - name: Verify native playback and dictionary file authorization
+        working-directory: frontend
+        run: npm run smoke:native-files
+
       - name: Smoke-test graceful and forced shutdown
         # Run the native shutdown regressions against the already built entrypoint.
         working-directory: frontend

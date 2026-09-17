@@ -10,10 +10,10 @@ contextBridge.exposeInMainWorld('expletiveDeleted', {
   invoke,
   selectDirectory: (defaultPath?: string) => ipcRenderer.invoke('expletive-deleted:select-directory', defaultPath) as Promise<string | undefined>,
   selectFile: (defaultPath?: string) => ipcRenderer.invoke('expletive-deleted:select-file', defaultPath) as Promise<string | undefined>,
-  selectDictionaryImport: () => ipcRenderer.invoke('expletive-deleted:select-dictionary-import') as Promise<string | undefined>,
-  selectDictionaryExport: () => ipcRenderer.invoke('expletive-deleted:select-dictionary-export') as Promise<string | undefined>,
+  importDictionary: async () => unwrapInvokeResponse(await ipcRenderer.invoke('expletive-deleted:import-dictionary')),
+  exportDictionary: async () => unwrapInvokeResponse(await ipcRenderer.invoke('expletive-deleted:export-dictionary')),
   openExternal: (url: string) => ipcRenderer.invoke('expletive-deleted:open-external', url) as Promise<void>,
   openTranscodeFolder: () => ipcRenderer.invoke('expletive-deleted:open-transcode-folder') as Promise<void>,
-  openFile: (filePath: string) => ipcRenderer.invoke('expletive-deleted:open-file', filePath) as Promise<void>,
+  openOutput: async (source: string) => unwrapInvokeResponse<void>(await ipcRenderer.invoke('expletive-deleted:open-output', source)),
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
 })

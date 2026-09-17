@@ -59,10 +59,8 @@ export const desktopClient = {
   updateDictionary: (action: DictionaryAction, target: DictionaryTarget, word: string) =>
     invoke<DictionaryMutationResult>(`dictionary.${action}`, { target, word }),
   restoreDictionaryDefaults: () => invoke<DictionaryMutationResult>('dictionary.restore_defaults'),
-  importDictionary: (source: string) =>
-    invoke<DictionaryMutationResult>('dictionary.import', { source }),
-  exportDictionary: (destination: string) =>
-    invoke<{ path: string }>('dictionary.export', { destination }),
+  importDictionary: () => bridge().importDictionary(),
+  exportDictionary: () => bridge().exportDictionary(),
   getReview: (source: string) => invoke<ReviewResult>('reviews.list', { source }),
   planDependencies: (components: string[]) =>
     invoke<InstallPlan>('dependencies.plan', { components }),
@@ -103,11 +101,9 @@ export const desktopClient = {
   cancelJob: (jobId: string) => invoke<Job>('jobs.cancel', { job_id: jobId }),
   selectDirectory: (defaultPath?: string) => bridge().selectDirectory(defaultPath),
   selectFile: (defaultPath?: string) => bridge().selectFile(defaultPath),
-  selectDictionaryImport: () => bridge().selectDictionaryImport(),
-  selectDictionaryExport: () => bridge().selectDictionaryExport(),
   openExternal: (url: string) => bridge().openExternal(url),
   openTranscodeFolder: () => bridge().openTranscodeFolder(),
-  openFile: (filePath: string) => bridge().openFile(filePath),
+  openOutput: (source: string) => bridge().openOutput(source),
   getDroppedFilePath: (file: File) => bridge().getPathForFile(file),
 }
 

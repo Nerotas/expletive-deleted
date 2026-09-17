@@ -18,7 +18,7 @@ export function QueueRow({
   onToggleSelection,
   onReview,
   onArchive,
-  onOpenFile,
+  onOpenOutput,
   onRetry,
   onAuthenticationRequired,
   onDownloadJavaScriptRuntime,
@@ -39,7 +39,7 @@ export function QueueRow({
   onToggleSelection: (source: string) => void
   onReview: (source: string) => void
   onArchive: (source: string) => Promise<unknown>
-  onOpenFile: (filePath: string) => Promise<void>
+  onOpenOutput: (filePath: string) => Promise<void>
   onRetry: (job: Job) => Promise<unknown>
   onAuthenticationRequired: (job: Job) => void
   onDownloadJavaScriptRuntime: (job: Job) => void
@@ -109,7 +109,7 @@ export function QueueRow({
       </details>}
       <div className="row-actions" aria-label={`Actions for ${fileName(item.source)}`}>
         {item.transcript && <button className="review-action" onClick={() => onReview(item.source)}>Review words</button>}
-        {outputFile && <button className="play-action" title="Open the verified censored file in your default media player" onClick={() => void onOpenFile(outputFile)}><Play size={13} />Play</button>}
+        {outputFile && <button className="play-action" title="Open the verified censored file in your default media player" onClick={() => void onOpenOutput(item.source)}><Play size={13} />Play</button>}
         {active && displayJob && <button disabled={busy} title="Cancel this running job and keep the source file" onClick={() => void onCancelRunning(displayJob)}><CircleStop size={13} />Cancel job</button>}
         {pendingJob?.status === 'queued' && <button disabled={busy} title="Remove this waiting job without cancelling the active job" onClick={() => void onRemoveQueued(pendingJob)}><X size={13} />Remove from queue</button>}
         {!remote && item.status === 'transcribed' && <button

@@ -75,28 +75,13 @@ class DesktopBridgeTests(unittest.TestCase):
             ):
                 bridge.handle(method)
 
-    def test_dictionary_portability_methods_use_policy_store(self):
-        service = MagicMock()
-        policy_store = MagicMock()
-        policy = self.policy(Path("C:/policy"), {"word"}, {"allowed"})
-        policy_store.restore_defaults.return_value = policy
-        policy_store.import_dictionary.return_value = policy
-        policy_store.export_dictionary.return_value = Path("C:/backup/dictionary.json")
-        bridge = DesktopBridge(service, policy_store)
-
-        restored = bridge.handle("dictionary.restore_defaults")
-        imported = bridge.handle("dictionary.import", {"source": "C:/backup/import.json"})
-        exported = bridge.handle(
-            "dictionary.export",
-            {"destination": "C:/backup/dictionary.json"},
-        )
-
-        policy_store.restore_defaults.assert_called_once_with()
-        policy_store.import_dictionary.assert_called_once_with(Path("C:/backup/import.json"))
-        policy_store.export_dictionary.assert_called_once_with(Path("C:/backup/dictionary.json"))
-        self.assertEqual(restored["words_count"], 1)
-        self.assertEqual(imported["exclusions_count"], 1)
-        self.assertEqual(exported, {"path": str(Path("C:/backup/dictionary.json"))})
+    def test_dictionary_paths_require_native_operations(self):
+        bridge = DesktopBridge(MagicMock(), MagicMock())
+        for method in ('dictionary.import', 'dictionary.export'):
+            with self.subTest(method=method), self.assertRaisesRegex(ValueError, 'Unknown desktop bridge method'):
+                bridge.handle(method, {'source': 'C:/outside.json', 'destination': 'C:/outside.json'})
+        bridge.policy_store.import_dictionary.assert_not_called()
+        bridge.policy_store.export_dictionary.assert_not_called()
 
     def test_dictionary_update_persists_through_policy_store(self):
         service = MagicMock()

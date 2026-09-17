@@ -80,6 +80,11 @@ class BackendService:
         return settings_to_dict(self.settings)
 
     @_while_open
+    def output_context(self):
+        """Snapshot current output ownership without holding a settings lock during probing."""
+        return self.settings, tuple(self.jobs.list())
+
+    @_while_open
     def update_settings(self, payload: Mapping[str, Any]) -> dict[str, object]:
         active = tuple(
             job for job in self.jobs.list()

@@ -128,7 +128,7 @@ export function QueueView({
     onToggleSelection={onToggleSelection}
     onReview={onReview}
     onArchive={queue.archiveSource}
-    onOpenFile={queue.openFile}
+    onOpenOutput={queue.openOutput}
     onRetry={queue.retryJob}
     onAuthenticationRequired={onAuthenticationRequired}
     onDownloadJavaScriptRuntime={() => onReviewInstall(['js_runtime'])}

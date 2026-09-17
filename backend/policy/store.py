@@ -243,6 +243,10 @@ class PolicyStore:
         self._write_payload(destination, self._payload(policy))
         return destination
 
+    def export_payload(self) -> dict:
+        """Give a guarded publisher the same portable document as the explicit CLI export."""
+        return self._payload(self.load())
+
     def _ensure_split_stores(self) -> None:
         self._ensure_entry_store("censor")
         self._ensure_entry_store("exclude")

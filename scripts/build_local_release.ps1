@@ -186,6 +186,8 @@ try {
         Assert-NativeSuccess 'Development Electron smoke test'
         & npm run smoke:security
         Assert-NativeSuccess 'Renderer security smoke test'
+        & npm run smoke:native-files
+        Assert-NativeSuccess 'Native file authorization smoke'
         & node scripts/smoke-shutdown.mjs
         Assert-NativeSuccess 'Electron shutdown smoke test'
 

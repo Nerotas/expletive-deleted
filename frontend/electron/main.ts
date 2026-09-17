@@ -6,9 +6,10 @@ import { backendEnvironment, findBackendRoot, findPythonRuntime, requireBundledR
 import { stopBridge } from './bridge-shutdown.js'
 import { secureRendererWindow, trustedIpcHandlers, type TrustedRenderer } from './ipc-security.js'
 import { createRendererPolicy } from './renderer-policy.js'
+import { nativeFileOperations, assertRendererMethod } from './native-files.js'
+import { respond } from './ipc-response.js'
 
 type BridgeResponse = { id: number; ok: true; result: unknown } | { id: number; ok: false; error: { message?: string; code?: string; diagnostic?: string } }
-type RendererResponse = { result: unknown } | { error: { message: string; code?: string; diagnostic?: string } }
 
 let trustedRenderer: TrustedRenderer | undefined
 let bridge: ChildProcessWithoutNullStreams | undefined
@@ -147,7 +148,10 @@ function createWindow(): void {
   })
   trustedRenderer = secureRendererWindow(browserWindow, rendererPolicy)
   browserWindow.once('ready-to-show', () => browserWindow.show())
-  browserWindow.on('closed', () => { trustedRenderer = undefined })
+  browserWindow.on('closed', () => {
+    trustedRenderer = undefined
+    void invoke('native.release_all').catch(() => {})
+  })
   void browserWindow.loadURL(rendererPolicy.entryUrl)
 }
 
@@ -157,20 +161,11 @@ app.whenReady().then(() => {
   if (!rendererPolicy.development) Menu.setApplicationMenu(null)
   startBridge()
   const handle = trustedIpcHandlers(ipcMain, () => trustedRenderer)
-  handle('expletive-deleted:invoke', async (_request, method: string, params?: Record<string, unknown>): Promise<RendererResponse> => {
-    try {
-      return { result: await invoke(method, params) }
-    } catch (reason) {
-      const error = reason as Error & { code?: unknown; diagnostic?: unknown }
-      return {
-        error: {
-          message: error instanceof Error ? error.message : 'The local processing service rejected the request.',
-          ...(typeof error.code === 'string' ? { code: error.code } : {}),
-          ...(typeof error.diagnostic === 'string' ? { diagnostic: error.diagnostic } : {}),
-        },
-      }
-    }
-  })
+  const nativeFiles = nativeFileOperations(invoke, dialog, shell)
+  handle('expletive-deleted:invoke', (_request, method: string, params?: Record<string, unknown>) => respond(async () => {
+    assertRendererMethod(method)
+    return invoke(method, params)
+  }))
   handle('expletive-deleted:select-directory', async ({ window }, defaultPath?: string) => {
     const result = await dialog.showOpenDialog(window, { defaultPath, properties: ['openDirectory', 'createDirectory'] })
     return result.canceled ? undefined : result.filePaths[0]
@@ -185,20 +180,8 @@ app.whenReady().then(() => {
     })
     return result.canceled ? undefined : result.filePaths[0]
   })
-  handle('expletive-deleted:select-dictionary-import', async ({ window }) => {
-    const result = await dialog.showOpenDialog(window, {
-      properties: ['openFile'],
-      filters: [{ name: 'Expletive Deleted dictionary', extensions: ['json'] }],
-    })
-    return result.canceled ? undefined : result.filePaths[0]
-  })
-  handle('expletive-deleted:select-dictionary-export', async ({ window }) => {
-    const result = await dialog.showSaveDialog(window, {
-      defaultPath: 'expletive-deleted-dictionary.json',
-      filters: [{ name: 'Expletive Deleted dictionary', extensions: ['json'] }],
-    })
-    return result.canceled ? undefined : result.filePath
-  })
+  handle('expletive-deleted:import-dictionary', (request) => respond(() => nativeFiles.importDictionary(request)))
+  handle('expletive-deleted:export-dictionary', (request) => respond(() => nativeFiles.exportDictionary(request)))
   handle('expletive-deleted:open-external', async (_request, value: string) => {
     const url = new URL(value)
     if (url.protocol !== 'https:') throw new Error('Only secure project links can be opened')
@@ -210,10 +193,7 @@ app.whenReady().then(() => {
     const error = await shell.openPath(folderPath)
     if (error) throw new Error(`Could not open the transcode folder: ${error}`)
   })
-  handle('expletive-deleted:open-file', async (_request, filePath: string) => {
-    const error = await shell.openPath(filePath)
-    if (error) throw new Error(`Could not open the censored file: ${error}`)
-  })
+  handle('expletive-deleted:open-output', (request, source: string) => respond(() => nativeFiles.openOutput(request, source)))
   createWindow()
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })
 })

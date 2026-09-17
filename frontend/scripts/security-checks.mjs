@@ -40,13 +40,15 @@ export async function assertRendererSecurity(app, page, { development = false } 
     const api = window.expletiveDeleted
     const requests = [
       () => api.invoke('settings.get'), () => api.selectDirectory(), () => api.selectFile(),
-      () => api.selectDictionaryImport(), () => api.selectDictionaryExport(),
+      () => api.importDictionary(), () => api.exportDictionary(),
       () => api.openExternal('https://example.invalid/security-fixture'),
-      () => api.openTranscodeFolder(), () => api.openFile('security-fixture.txt'),
+      () => api.openTranscodeFolder(), () => api.openOutput('security-fixture.txt'),
     ]
-    return Promise.all(requests.map(async (request) => {
-      try { await request(); return 'allowed' } catch (error) { return error.message }
-    }))
+    const results = []
+    for (const request of requests) {
+      try { await request(); results.push('allowed') } catch (error) { results.push(error.message) }
+    }
+    return results
   })
   const assertDenied = (results) => {
     assert.equal(results.length, 8)
@@ -101,8 +103,13 @@ export async function assertRendererSecurity(app, page, { development = false } 
     }
 
     console.log('Checking authorized IPC channels')
-    assert.deepEqual(await exerciseChannels(page), Array(8).fill('allowed'))
-    assert.equal(await app.evaluate(() => globalThis.__securitySmoke.calls.length), 7)
+    const trustedResults = await exerciseChannels(page)
+    assert.deepEqual(trustedResults.slice(0, 7), Array(7).fill('allowed'))
+    assert.match(trustedResults[7], /absolute path/)
+    for (const method of ['dictionary.import', 'dictionary.export', 'native.output.prepare', 'native.output.check', 'native.export.prepare', 'native.dictionary.export', 'native.dictionary.import', 'native.release']) {
+      await assert.rejects(page.evaluate((method) => window.expletiveDeleted.invoke(method, {}), method), /approved native file selection/)
+    }
+    assert.equal(await app.evaluate(() => globalThis.__securitySmoke.calls.length), 6)
     await assert.rejects(page.evaluate(() => window.expletiveDeleted.openExternal('http://example.invalid/')), /secure project links/)
 
     // Observe the prevention event instead of relying on a timing delay.
@@ -152,7 +159,7 @@ export async function assertRendererSecurity(app, page, { development = false } 
     const extraPage = await extraPagePromise
     await extraPage.waitForLoadState('domcontentloaded')
     assertDenied(await exerciseChannels(extraPage))
-    assert.equal(await app.evaluate(() => globalThis.__securitySmoke.calls.length), 7)
+    assert.equal(await app.evaluate(() => globalThis.__securitySmoke.calls.length), 6)
     console.log(`Renderer security checks passed (${development ? 'Vite development' : 'production'}): all 8 IPC channels, CSP, sandbox, navigation, redirects, popups, foreign documents and windows.`)
   } finally {
     await app.evaluate(({ shell, dialog }) => {

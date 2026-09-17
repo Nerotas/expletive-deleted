@@ -107,11 +107,12 @@ export function useDictionary({
   })
 
   const replaceMutation = useMutation({
-    mutationFn: ({ operation, source }: { operation: 'restore' | 'import'; source?: string }) =>
+    mutationFn: async ({ operation }: { operation: 'restore' | 'import' }) =>
       operation === 'restore'
         ? client.restoreDictionaryDefaults()
-        : client.importDictionary(source!),
-    onSuccess: async (_summary, { operation }) => {
+        : client.importDictionary(),
+    onSuccess: async (summary, { operation }) => {
+      if ('canceled' in summary && summary.canceled) return
       setPage(1)
       await refreshDictionary()
       onNotice(operation === 'restore' ? 'Restored the default dictionary' : 'Imported dictionary')
@@ -120,8 +121,8 @@ export function useDictionary({
   })
 
   const exportMutation = useMutation({
-    mutationFn: (destination: string) => client.exportDictionary(destination),
-    onSuccess: ({ path }) => onNotice(`Exported dictionary to ${path}`),
+    mutationFn: () => client.exportDictionary(),
+    onSuccess: (result) => { if (!result.canceled) onNotice(`Exported dictionary to ${result.path}`) },
     onError: (reason) => onError(errorMessage(reason)),
   })
 
@@ -179,18 +180,15 @@ export function useDictionary({
       }
     },
     importDictionary: async () => {
-      const source = await client.selectDictionaryImport()
-      if (!source) return false
       try {
-        await replaceMutation.mutateAsync({ operation: 'import', source })
-        return true
+        const result = await replaceMutation.mutateAsync({ operation: 'import' })
+        return !('canceled' in result && result.canceled)
       } catch {
         return false
       }
     },
     exportDictionary: async () => {
-      const destination = await client.selectDictionaryExport()
-      if (destination) await exportMutation.mutateAsync(destination).catch(() => undefined)
+      await exportMutation.mutateAsync().catch(() => undefined)
     },
     openReview: async (source: string) => {
       await reviewMutation.mutateAsync(source).catch(() => undefined)

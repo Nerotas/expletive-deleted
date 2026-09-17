@@ -98,7 +98,7 @@ export function useQueue({
     refresh: async () => { await query.refetch() },
     openTranscodeFolder: () => run(() => client.openTranscodeFolder()).then(() => undefined),
     openExternal: (url: string) => run(() => client.openExternal(url)).then(() => undefined),
-    openFile: (filePath: string) => run(() => client.openFile(filePath)).then(() => undefined),
+    openOutput: (filePath: string) => run(() => client.openOutput(filePath)).then(() => undefined),
     submitFile: (source: string, mode: Job['mode'], options?: JobSubmissionOptions) => run(async () => {
       if (options) await client.submitJob(source, mode, options)
       else await client.submitJob(source, mode)

@@ -52,17 +52,6 @@ class DictionaryController:
             return result
         if method == "dictionary.restore_defaults":
             return self._dictionary_result(self.policy_store.restore_defaults())
-        if method == "dictionary.import":
-            source = params.get("source")
-            if not isinstance(source, str) or not source.strip():
-                raise ValueError("Dictionary import requires a source file")
-            return self._dictionary_result(self.policy_store.import_dictionary(Path(source)))
-        if method == "dictionary.export":
-            destination = params.get("destination")
-            if not isinstance(destination, str) or not destination.strip():
-                raise ValueError("Dictionary export requires a destination file")
-            exported = self.policy_store.export_dictionary(Path(destination))
-            return {"path": str(exported)}
         if method == "reviews.list":
             source = Path(params["source"]).expanduser().resolve()
             # Match job artifact naming and reject sources outside the input root.
