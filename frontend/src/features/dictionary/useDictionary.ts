@@ -54,6 +54,7 @@ export function useDictionary({
     queryFn: () => withLoadTimeout(target === 'exclude'
       ? client.getDictionaryExclusions(page, DICTIONARY_PAGE_SIZE, sort, direction, search)
       : client.getCensoredWords(page, DICTIONARY_PAGE_SIZE, sort, direction, search)),
+    // Fetch potentially sensitive entries only after the user chooses to reveal them.
     enabled: enabled && (target === 'exclude' || censoredWordsRevealed),
     placeholderData: keepPreviousData,
   })

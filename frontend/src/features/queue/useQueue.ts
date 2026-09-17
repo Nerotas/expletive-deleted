@@ -1,12 +1,11 @@
 import { useEffect, useRef } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { desktopClient, type DesktopClient } from '../../services/desktop-client'
-import type { ArchiveItem, ImportResult, Job, JobEvent, JobSubmissionOptions, JobSubmissionResult } from '../../types/domain'
+import type { ArchiveItem, ImportResult, Job, JobSubmissionOptions, JobSubmissionResult } from '../../types/domain'
 import { errorMessage, fileName } from '../../utils/format'
 
-const TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled', 'transcribed'])
-const RUNNING_STATUSES = new Set(['copying', 'transcribing', 'censoring', 'verifying', 'downloading', 'preparing'])
-const copyJobDates = new Map<string, string>()
+import { RUNNING_STATUSES, TERMINAL_STATUSES } from './queue-model'
+import { loadQueue } from './queue-data'
 
 type QueueOptions = {
   client?: DesktopClient
@@ -37,29 +36,6 @@ function diagnosticOf(reason: unknown): string | undefined {
   return typeof diagnostic === 'string' ? diagnostic : undefined
 }
 
-async function loadQueue(client: DesktopClient) {
-  const [library, archive, localJobs, downloads] = await Promise.all([client.listLibrary(), client.listArchive(), client.listJobs(), client.listDownloads()])
-  const jobs = [...localJobs, ...downloads]
-  const eventGroups = await Promise.all(jobs.map((job) => job.source_type === 'youtube' ? client.listDownloadEvents(job.id) : client.listJobEvents(job.id)))
-  const jobEvents: Record<string, JobEvent> = Object.fromEntries(
-    eventGroups.flatMap((events) =>
-      events.length ? [[events.at(-1)!.job_id, events.at(-1)!]] : [],
-    ),
-  )
-  const activeCopyJobIds = new Set(
-    jobs
-      .filter((job) => job.mode === 'copy' && !TERMINAL_STATUSES.has(job.status))
-      .map((job) => job.id),
-  )
-  for (const jobId of copyJobDates.keys()) {
-    if (!activeCopyJobIds.has(jobId)) copyJobDates.delete(jobId)
-  }
-  for (const jobId of activeCopyJobIds) {
-    copyJobDates.set(jobId, copyJobDates.get(jobId) ?? new Date().toISOString())
-  }
-  return { library, archive, jobs, jobEvents, copyJobDates: Object.fromEntries(copyJobDates) }
-}
-
 export function useQueue({
   client = desktopClient,
   enabled = true,
@@ -68,10 +44,11 @@ export function useQueue({
   pollInterval = 1_500,
 }: QueueOptions) {
   const queryClient = useQueryClient()
+  const copyJobDates = useRef(new Map<string, string>())
   const checkedFailures = useRef(new Set<string>())
   const query = useQuery({
     queryKey: ['queue'],
-    queryFn: () => loadQueue(client),
+    queryFn: () => loadQueue(client, copyJobDates.current),
     enabled,
     refetchInterval: enabled ? pollInterval : false,
   })
@@ -168,11 +145,11 @@ export function useQueue({
       onNotice(`${fileName(job.source)} removed from the queue`)
     }).then(() => undefined),
     retryJob: (job: Job) => run(async () => {
-            if (job.source_type === 'youtube') {
-              await client.submitYoutubeDownload(job.url ?? job.source, job.id, job.cookie_browser ?? undefined)
-              onNotice('YouTube download queued again')
-              return
-            }
+      if (job.source_type === 'youtube') {
+        await client.submitYoutubeDownload(job.url ?? job.source, job.id, job.cookie_browser ?? undefined)
+        onNotice('YouTube download queued again')
+        return
+      }
       const options: JobSubmissionOptions = {
         ...(job.force_transcribe ? { force_transcribe: true } : {}),
         ...(job.overwrite_output ? { overwrite_output: true } : {}),
