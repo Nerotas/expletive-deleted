@@ -127,13 +127,18 @@ export async function assertRendererSecurity(app, page, { development = false } 
 
     await app.evaluate(async (_, url) => {
       const contents = globalThis.__securitySmoke.window.webContents
+      globalThis.__securitySmoke.redirectEvents = []
+      for (const name of ['will-frame-navigate', 'will-redirect', 'did-fail-load']) {
+        contents.on(name, (event, ...args) => globalThis.__securitySmoke?.redirectEvents.push({ name, url: event.url, prevented: event.defaultPrevented, args }))
+      }
       globalThis.__securitySmoke.redirect = new Promise((resolve) => {
         const timeout = setTimeout(() => resolve(false), 5000)
         contents.once('will-redirect', (event) => { clearTimeout(timeout); resolve(event.defaultPrevented) })
       })
-      await contents.loadURL(url).catch(() => {})
+      await contents.loadURL(url).catch((error) => { globalThis.__securitySmoke.redirectError = error.message })
     }, foreignUrl.replace('/foreign', '/redirect'))
-    assert.equal(await app.evaluate(() => globalThis.__securitySmoke.redirect), true)
+    assert.equal(await app.evaluate(() => globalThis.__securitySmoke.redirect), true,
+      await app.evaluate(() => JSON.stringify({ error: globalThis.__securitySmoke.redirectError, events: globalThis.__securitySmoke.redirectEvents })))
     await app.evaluate(async (_, url) => { await globalThis.__securitySmoke.window.loadURL(url) }, entryUrl)
 
     // Even another window showing the exact trusted document must have no native authority.

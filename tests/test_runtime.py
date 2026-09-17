@@ -559,7 +559,7 @@ class RuntimeTests(unittest.TestCase):
             }
 
             with (
-                patch("backend.censor.engine.os.replace", side_effect=OSError("disk is read-only")),
+                patch("backend.filesystem.windows.Handle.rename", side_effect=OSError("disk is read-only")),
                 self.assertRaisesRegex(TranscriptValidationError, "saved and verified"),
             ):
                 write_transcript_atomic(

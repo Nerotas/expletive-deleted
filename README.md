@@ -217,4 +217,5 @@ See [QUICKSTART.md](QUICKSTART.md) for complete installed-app, source-build, and
 - [Issue tracker](https://github.com/Nerotas/expletive-deleted/issues)
 - [Support development on Ko-fi](https://ko-fi.com/nicholaserotas)
 - [Desktop developer notes](frontend/README.md)
+- [Windows path protections](docs/HP-07_IMPLEMENTATION_2026-09-17.md) and [verified publication](docs/HP-06_IMPLEMENTATION_2026-09-17.md)
 - [Troubleshooting](TROUBLESHOOTING.md)

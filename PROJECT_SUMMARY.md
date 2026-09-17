@@ -10,7 +10,9 @@ The Windows installer bundles only private CPython and its pip bootstrap. The co
 
 ## Working Pipeline
 
-Desktop shutdown requests cancellation before ending Python and waits up to 15 seconds. A Windows Job Object contains the bridge's process tree for forced-exit cleanup. Censor jobs publish staged output atomically after FFprobe verification; settings changes share a lock with submissions and reject active downloads, including their handoff to local processing.
+Desktop shutdown requests cancellation before ending Python and waits up to 15 seconds. A Windows Job Object contains the bridge's process tree for forced-exit cleanup. Shared publication verifies and flushes staged output before a collision-refusing rename. Authorized replacement retains the previous file for recovery until publication succeeds. Settings changes and archive operations share a lock with submissions and reject conflicting active work.
+
+HP-01 validates every IPC caller and restricts Electron navigation, sandboxing, and CSP. HP-07 binds configured folders to persistent filesystem identities and pins Windows paths during operations. HP-06 integrates those protections across jobs, imports/downloads, transcripts, and archive/restore. See the [implementation reports](docs/HP-06_IMPLEMENTATION_2026-09-17.md) for validation and platform limits. HP-05 source identity and legacy migration remain deferred.
 
 ```text
 Media file

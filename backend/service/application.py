@@ -26,7 +26,7 @@ from .capabilities import get_capabilities
 from .library import ArchiveItem, LibraryItem, scan_archive, scan_library
 from backend.settings.directories import bind_directories
 from backend.filesystem.operations import remove_file, remove_empty_parents
-from backend.filesystem.operations import move_file as move_verified
+from backend.filesystem.publication import move_verified
 from backend.filesystem.paths import identity, version
 
 

@@ -157,7 +157,7 @@ try {
     if ([IO.Path]::GetFullPath($copiedPrefix) -ne [IO.Path]::GetFullPath($privatePythonRoot)) {
         throw "The copied Python runtime is not relocatable: $copiedPrefix"
     }
-    & $privatePython -m unittest tests.test_filesystem_paths tests.test_windows_destination_guards
+    & $privatePython -B -m unittest tests.test_filesystem_paths tests.test_windows_destination_guards tests.test_publication
     Assert-NativeSuccess 'Private Python filesystem safety gates'
 
     & $approvedPython -m venv $testEnvironmentRoot

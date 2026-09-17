@@ -1,15 +1,16 @@
 from __future__ import annotations
 
-import os
-import shutil
+from contextlib import ExitStack
 import traceback
 from pathlib import Path
 from threading import Event
 from typing import Callable
-from uuid import uuid4
 
 from backend.runtime import FFMPEG_VERSION, inspect_executable, resolve_whisper_cache_dir
 from backend.settings import AppSettings
+from backend.filesystem.operations import locked_file
+from backend.filesystem.publication import Publication, copy_verified, move_verified
+from backend.filesystem.paths import version, PathSafetyError
 
 from .media import archive_path, output_path, transcript_path
 from .models import JobError, JobStatus
@@ -36,172 +37,91 @@ class JobRuntime:
         self._get_source = get_source
 
     def run(self, job_id: str, cancellation: Event) -> None:
-        source = self._current_source(job_id)
-        job = self._current_job(job_id)
-
-        if job.mode == "copy":
-            destination = self.settings.directories.input.resolve() / source.name
-            output_existed = destination.exists()
-            processing_destination = destination.with_name(f".{destination.name}.{uuid4().hex}.partial")
-            try:
-                if cancellation.is_set():
-                    self._on_status(job_id=job_id, status="cancelled", percent=None, error=None, message="Job cancelled")
-                    return
-                source_size = source.stat().st_size
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                self._on_status(job_id=job_id, status="copying", percent=0.0, error=None, message="Copying to Ready")
-                bytes_copied = 0
-                last_update = 0.0
-                with source.open("rb") as infile, processing_destination.open("wb") as outfile:
-                    while True:
-                        if cancellation.is_set():
-                            raise InterruptedError("Job cancelled")
-                        chunk = infile.read(1024 * 1024)
-                        if not chunk:
-                            break
-                        outfile.write(chunk)
-                        bytes_copied += len(chunk)
-                        percent = 100.0 if source_size == 0 else min(100.0, (bytes_copied / source_size) * 100.0)
-                        if percent >= last_update + 5.0 or percent >= 99.0:
-                            self._on_progress(job_id, {"event": "progress", "stage": "copying", "percent": percent})
-                            last_update = percent
-                shutil.copystat(source, processing_destination, follow_symlinks=False)
-                if destination.exists():
-                    raise RuntimeError(f"A file named {source.name} is already in Ready")
-                processing_destination.replace(destination)
-                self._on_status(job_id=job_id, status="completed", percent=100.0, error=None, message="Copy completed")
-            except InterruptedError:
-                self._remove_incomplete_output(processing_destination, destination, output_existed)
-                self._on_status(job_id=job_id, status="cancelled", percent=None, error=None, message="Job cancelled")
-            except Exception as exc:
-                self._remove_incomplete_output(processing_destination, destination, output_existed)
-                error = JobError(
-                    "copy_failed",
-                    "Copy failed",
-                    str(exc),
-                    retryable=True,
-                    diagnostic=traceback.format_exc(),
-                )
-                self._on_status(job_id=job_id, status="failed", percent=None, error=error, message=error.message)
-            return
-
-        destination = output_path(
-            source,
-            self.settings.directories.output,
-            self.settings.directories.input,
-        )
-        transcript = transcript_path(
-            source,
-            self.settings.directories.transcripts,
-            self.settings.directories.input,
-        )
-        output_existed = destination.exists()
-        # Never expose a new or replacement output until processing has succeeded.
-        # Preserve the suffix so FFmpeg can select the correct container.
-        processing_destination = destination.with_name(
-            f".{destination.stem}.{uuid4().hex}.partial{destination.suffix}"
-        )
+        source, job = self._current_source(job_id), self._current_job(job_id)
+        directories = self.settings.directories
+        published = False
         try:
-            if cancellation.is_set():
-                self._on_status(job_id=job_id, status="cancelled", percent=None, error=None, message="Job cancelled")
+            if job.mode == "copy":
+                destination = directories.input / source.name
+                with Publication(directories.binding(directories.input), destination, source=source,
+                                 cancellation=cancellation) as publication:
+                    self._on_status(job_id, "copying", 0.0, None, "Copying to Ready")
+                    copy_verified(source, publication, lambda copied, size: self._on_progress(job_id, {
+                        "event": "progress", "stage": "copying", "percent": 100.0 * copied / max(1, size),
+                    }), expected_version=job.source_version)
+                self._on_status(job_id, "completed", 100.0, None, "Copy completed")
                 return
-            if (
-                job.mode == "censor"
-                and destination.exists()
-                and not job.overwrite_output
-            ):
-                raise RuntimeError(f"Output already exists: {destination}")
-            if job.mode == "censor" and not transcript.is_file():
-                raise RuntimeError(
-                    f"A verified transcript is required before censoring: {transcript}. "
-                    "Queue a transcript-only job first."
+
+            destination = output_path(source, directories.output, directories.input)
+            transcript = transcript_path(source, directories.transcripts, directories.input)
+            with ExitStack() as resources:
+                resources.enter_context(locked_file(directories.binding(directories.input), source))
+                if job.source_version and version(source) != job.source_version:
+                    raise PathSafetyError('Source changed while queued; select it again before processing')
+                resources.enter_context(directories.binding(directories.transcripts).lease(transcript, create_parent=True))
+                if cancellation.is_set():
+                    raise InterruptedError("Job cancelled")
+                publication = None
+                if job.mode == "censor":
+                    if not transcript.is_file():
+                        raise RuntimeError(f"A verified transcript is required before censoring: {transcript}. Queue a transcript-only job first.")
+                    publication = resources.enter_context(Publication(
+                        directories.binding(directories.output), destination, source=source,
+                        overwrite=job.overwrite_output, cancellation=cancellation,
+                        expected_version=job.output_version,
+                    ))
+                censor = self._censor_factory(
+                    str(source), str(publication.stage if publication else destination),
+                    self.settings.whisper.model, str(transcript.parent),
+                    whisper_library=self.settings.whisper.library,
+                    whisper_device=self.settings.processing.device,
+                    censor_method="karaoke" if self.settings.censoring.stereo_method == "karaoke" else "mute",
+                    padding_before_ms=self.settings.censoring.padding_before_ms,
+                    padding_after_ms=self.settings.censoring.padding_after_ms,
+                    surround_output=self.settings.audio.surround_output,
+                    video_mode=self.settings.video.mode,
+                    progress_callback=lambda progress: self._on_progress(job_id, progress),
+                    cancellation=cancellation,
+                    ffmpeg_bin=self._configured_runtime_path("FFmpeg", self.settings.runtime.ffmpeg_path),
+                    ffprobe_bin=self._configured_runtime_path("FFprobe", self.settings.runtime.ffprobe_path),
+                    whisper_cache_dir=resolve_whisper_cache_dir(self.settings.runtime.whisper_cache),
                 )
-
-            ffmpeg_bin = self._configured_runtime_path("FFmpeg", self.settings.runtime.ffmpeg_path)
-            ffprobe_bin = self._configured_runtime_path("FFprobe", self.settings.runtime.ffprobe_path)
-            destination.parent.mkdir(parents=True, exist_ok=True)
-
-            censor = self._censor_factory(
-                str(source),
-                str(processing_destination),
-                self.settings.whisper.model,
-                str(transcript.parent),
-                whisper_library=self.settings.whisper.library,
-                whisper_device=self.settings.processing.device,
-                censor_method="karaoke"
-                if self.settings.censoring.stereo_method == "karaoke"
-                else "mute",
-                padding_before_ms=self.settings.censoring.padding_before_ms,
-                padding_after_ms=self.settings.censoring.padding_after_ms,
-                surround_output=self.settings.audio.surround_output,
-                video_mode=self.settings.video.mode,
-                progress_callback=lambda progress: self._on_progress(job_id, progress),
-                cancellation=cancellation,
-                ffmpeg_bin=ffmpeg_bin,
-                ffprobe_bin=ffprobe_bin,
-                whisper_cache_dir=resolve_whisper_cache_dir(self.settings.runtime.whisper_cache),
-            )
-            if job.mode == "report_only":
-                self._on_status(job_id=job_id, status="transcribing", percent=0.0, error=None, message=None)
-                process_options = {"report_only": True}
-                if job.force_transcribe:
-                    process_options["force_transcribe"] = True
-                success = censor.process(**process_options)
-            else:
-                self._on_status(job_id=job_id, status="censoring", percent=0.0, error=None, message="Using verified transcript")
-                success = censor.process_verified_transcript()
-            if cancellation.is_set():
-                raise InterruptedError("Job cancelled")
-            if not success:
-                detail = getattr(censor, "last_error", None)
-                raise RuntimeError(detail or "Processing engine reported failure")
-            if job.mode == "report_only" and not transcript.is_file():
-                raise RuntimeError(f"Processing completed without a verified transcript: {transcript}")
-
-            if job.mode == "report_only":
-                self._on_status(job_id=job_id, status="transcribed", percent=100.0, error=None, message="Report completed")
-                return
-
-            self._on_status(job_id=job_id, status="verifying", percent=100.0, error=None, message=None)
-            if not processing_destination.is_file() or processing_destination.stat().st_size == 0:
-                raise RuntimeError(f"Expected output was not created: {processing_destination}")
-            censor.verify_output()
-            if cancellation.is_set():
-                raise InterruptedError("Job cancelled")
-            if job.overwrite_output:
-                processing_destination.replace(destination)
-            else:
-                # Windows rename refuses collisions atomically, including on FAT.
-                # POSIX rename overwrites, so use a same-volume link there instead.
-                if os.name == "nt":
-                    processing_destination.rename(destination)
+                if job.mode == "report_only":
+                    self._on_status(job_id, "transcribing", 0.0, None, None)
+                    options = {"report_only": True}
+                    if job.force_transcribe:
+                        options["force_transcribe"] = True
+                    success = censor.process(**options)
                 else:
-                    os.link(processing_destination, destination)
-                    processing_destination.unlink()
+                    self._on_status(job_id, "censoring", 0.0, None, "Using verified transcript")
+                    success = censor.process_verified_transcript()
+                if cancellation.is_set():
+                    raise InterruptedError("Job cancelled")
+                if not success:
+                    raise RuntimeError(getattr(censor, "last_error", None) or "Processing engine reported failure")
+                if job.mode == "report_only":
+                    if not transcript.is_file():
+                        raise RuntimeError(f"Processing completed without a verified transcript: {transcript}")
+                else:
+                    self._on_status(job_id, "verifying", 100.0, None, None)
+                    publication.publish(lambda _: censor.verify_output())
+                    published = True
+            # Release the read lease before obtaining DELETE access for optional archiving.
+            if job.mode == "report_only":
+                self._on_status(job_id, "transcribed", 100.0, None, "Report completed")
+                return
             if self.settings.source.archive_after_success:
-                archive = archive_path(
-                    source,
-                    self.settings.directories.archive,
-                    self.settings.directories.input,
-                )
-                if archive.exists():
-                    raise RuntimeError(f"Archive destination already exists: {archive}")
-                archive.parent.mkdir(parents=True, exist_ok=True)
-                shutil.move(str(source), archive)
-            self._on_status(job_id=job_id, status="completed", percent=100.0, error=None, message="Processing completed")
+                archive = archive_path(source, directories.archive, directories.input)
+                move_verified(directories.binding(directories.input), source,
+                              directories.binding(directories.archive), archive, expected_version=job.source_version)
+            self._on_status(job_id, "completed", 100.0, None, "Processing completed")
         except InterruptedError:
-            self._remove_incomplete_output(processing_destination, destination, output_existed)
-            self._on_status(job_id=job_id, status="cancelled", percent=None, error=None, message="Job cancelled")
+            self._on_status(job_id, "cancelled", None, None, "Job cancelled")
         except Exception as exc:
-            self._remove_incomplete_output(processing_destination, destination, output_existed)
-            error = JobError(
-                "processing_failed",
-                "Media processing failed",
-                str(exc),
-                retryable=True,
-                diagnostic=traceback.format_exc(),
-            )
-            self._on_status(job_id=job_id, status="failed", percent=None, error=error, message=error.message)
+            code = "archive_failed" if published else getattr(exc, "code", "copy_failed" if job.mode == "copy" else "processing_failed")
+            message = "Output saved; original could not be archived" if published else "Copy failed" if job.mode == "copy" else "Media processing failed"
+            error = JobError(code, message, str(exc), retryable=True, diagnostic=traceback.format_exc())
+            self._on_status(job_id, "failed", None, error, error.message)
 
     def _current_job(self, job_id: str):
         return self._get_job(job_id)
@@ -219,14 +139,3 @@ class JobRuntime:
                 "Open Settings and choose a valid FFmpeg installation, then retry."
             )
         return str(status.path)
-
-    @staticmethod
-    def _remove_incomplete_output(
-        processing_destination: Path,
-        destination: Path,
-        output_existed: bool,
-    ) -> None:
-        if processing_destination != destination:
-            processing_destination.unlink(missing_ok=True)
-        elif not output_existed:
-            destination.unlink(missing_ok=True)

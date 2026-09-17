@@ -5,6 +5,7 @@ from __future__ import annotations
 import ctypes
 import os
 import msvcrt
+import time
 from ctypes import wintypes
 from pathlib import Path
 
@@ -58,16 +59,28 @@ class Handle:
             native.RtlNtStatusToDosError.argtypes = [wintypes.LONG]
             native.RtlNtStatusToDosError.restype = wintypes.ULONG
             io_status = (ctypes.c_void_p * 2)()
-            status = native.NtSetInformationFile(self.value, ctypes.byref(io_status), ctypes.byref(value), ctypes.sizeof(value), 10)
-            if status < 0:
-                raise ctypes.WinError(native.RtlNtStatusToDosError(status))
+            # Another publisher briefly denies child renames while pinning this
+            # directory. Retry only sharing conflicts with the same pinned handles.
+            for attempt in range(21):
+                status = native.NtSetInformationFile(self.value, ctypes.byref(io_status), ctypes.byref(value), ctypes.sizeof(value), 10)
+                if status >= 0:
+                    break
+                error = native.RtlNtStatusToDosError(status)
+                if error != 32 or attempt == 20:
+                    raise ctypes.WinError(error)
+                time.sleep(0.025)
         self.path = destination
 
     def delete(self):
         """Mark the pinned entry for deletion when its final handle closes."""
         value = wintypes.BOOLEAN(True)
-        if not _kernel.SetFileInformationByHandle(self.value, 4, ctypes.byref(value), ctypes.sizeof(value)):
-            raise ctypes.WinError(ctypes.get_last_error())
+        for attempt in range(21):
+            if _kernel.SetFileInformationByHandle(self.value, 4, ctypes.byref(value), ctypes.sizeof(value)):
+                return
+            error = ctypes.get_last_error()
+            if error != 32 or attempt == 20:
+                raise ctypes.WinError(error)
+            time.sleep(0.025)
 
     def reader(self):
         """Read a DELETE-capable source without reopening it with conflicting share flags."""

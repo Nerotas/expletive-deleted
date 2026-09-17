@@ -5,11 +5,12 @@ from __future__ import annotations
 import json
 import math
 import os
-import tempfile
 from pathlib import Path
 from typing import Dict
 
 from .media import probe_audio_stream, has_discrete_center_channel
+from backend.filesystem.paths import RootBinding
+from backend.filesystem.publication import Publication
 
 
 class TranscriptValidationError(RuntimeError):
@@ -81,37 +82,20 @@ def write_transcript_atomic(
         require_front_center=require_front_center,
     )
     validate(transcript_data)
-    transcript_path.parent.mkdir(parents=True, exist_ok=True)
-    temporary_path: Path | None = None
     try:
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            encoding="utf-8",
-            dir=transcript_path.parent,
-            prefix=f".{transcript_path.name}.",
-            suffix=".tmp",
-            delete=False,
-        ) as temporary_file:
-            json.dump(transcript_data, temporary_file, indent=2)
-            temporary_file.write("\n")
-            temporary_file.flush()
-            os.fsync(temporary_file.fileno())
-            temporary_path = Path(temporary_file.name)
-
-        with temporary_path.open(encoding="utf-8") as source:
-            validate(json.load(source))
-        # Publish only the flushed, re-read transcript; interrupted writes stay private.
-        os.replace(temporary_path, transcript_path)
-        temporary_path = None
-        with transcript_path.open(encoding="utf-8") as source:
-            return validate(json.load(source))
+        with Publication(RootBinding.capture(transcript_path.parent), transcript_path, overwrite=True) as publication:
+            with publication.stage.open('w', encoding='utf-8') as temporary_file:
+                json.dump(transcript_data, temporary_file, indent=2)
+                temporary_file.write('\n')
+            def verify(path):
+                with path.open(encoding='utf-8') as source:
+                    validate(json.load(source))
+            publication.publish(verify)
+        return transcript_data
     except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
         raise TranscriptValidationError(
             f"Transcript could not be saved and verified: {exc}"
         ) from exc
-    finally:
-        if temporary_path is not None:
-            temporary_path.unlink(missing_ok=True)
 
 
 def transcript_cache_is_compatible(
