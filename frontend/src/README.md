@@ -23,6 +23,8 @@ The renderer presents local backend state and collects user intent. Python owns 
 
 Follow a queue action from `QueueRow` through `useQueue`, `desktopClient`, Electron preload, and the Python bridge. Results return through TanStack Query into the pure queue model and the view. Components do not interpret human-formatted CLI output.
 
+Playback uses `desktopClient.openOutput(source)`; Python derives the output. Dictionary `importDictionary()` and `exportDictionary()` own their native picker flow and return cancellation as data. Do not introduce renderer-supplied launch/export paths or forward internal `native.*` methods through generic invoke.
+
 ## State ownership
 
 - **Backend state:** TanStack Query caches capabilities, settings, dictionary pages, and queue snapshots. Feature controllers coordinate mutations and refresh their affected queries.

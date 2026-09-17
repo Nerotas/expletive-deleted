@@ -218,4 +218,5 @@ See [QUICKSTART.md](QUICKSTART.md) for complete installed-app, source-build, and
 - [Support development on Ko-fi](https://ko-fi.com/nicholaserotas)
 - [Desktop developer notes](frontend/README.md)
 - [Windows path protections](docs/HP-07_IMPLEMENTATION_2026-09-17.md) and [verified publication](docs/HP-06_IMPLEMENTATION_2026-09-17.md)
+- [Verified playback and native dictionary file operations](docs/HP-02_IMPLEMENTATION_2026-09-17.md)
 - [Troubleshooting](TROUBLESHOOTING.md)

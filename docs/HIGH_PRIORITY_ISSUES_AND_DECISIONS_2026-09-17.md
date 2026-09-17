@@ -18,7 +18,7 @@ Implementation updates are linked in the status table; the original decisions be
 | ID | Issue | Decision | Status |
 | --- | --- | --- | --- |
 | HP-01 | Untrusted documents retain desktop bridge access | Restrict the app window to its own interface, validate every IPC caller, and open external links in the default browser | [Implemented; Windows/package checks passed](HP-01_IMPLEMENTATION_2026-09-17.md) |
-| HP-02 | File opening and dictionary export accept unrestricted paths | Restrict playback to verified media within the configured output root; bind JSON exports and overwrite consent to the native Save dialog | Accepted direction; open |
+| HP-02 | File opening and dictionary export accept unrestricted paths | Restrict playback to verified media within the configured output root; bind JSON exports and overwrite consent to the native Save dialog | [Implemented; Windows/package checks passed](HP-02_IMPLEMENTATION_2026-09-17.md) |
 | HP-03 | Concurrent dictionary edits can lose acknowledged changes | Serialize complete dictionary changes and allow one desktop instance per user | Accepted direction; open |
 | HP-04 | Component setup can overwrite newer settings | Update only verified component fields, preserve unrelated settings, and surface conflicts with manual path edits | Accepted direction; open |
 | HP-05 | Artifact names collide and legacy transcripts lack reliable source identity | Retain as a future issue; defer the identity scheme and legacy migration decision | Deferred; risk remains open |

@@ -14,6 +14,8 @@ Desktop shutdown requests cancellation before ending Python and waits up to 15 s
 
 HP-01 validates every IPC caller and restricts Electron navigation, sandboxing, and CSP. HP-07 binds configured folders to persistent filesystem identities and pins Windows paths during operations. HP-06 integrates those protections across jobs, imports/downloads, transcripts, and archive/restore. See the [implementation reports](docs/HP-06_IMPLEMENTATION_2026-09-17.md) for validation and platform limits. HP-05 source identity and legacy migration remain deferred.
 
+HP-02 restricts playback to backend-derived, verified outputs and binds dictionary import/export to native file selections. Expiring leases protect the playback handoff; exports reject changed destinations. See [HP-02 implementation](docs/HP-02_IMPLEMENTATION_2026-09-17.md).
+
 ```text
 Media file
     -> faster-whisper large-v3 transcription

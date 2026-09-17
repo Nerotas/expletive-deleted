@@ -8,6 +8,7 @@ The backend owns processing policy, settings, dependency readiness, jobs, and me
 | `desktop/protocol.py` | JSON-lines framing, concurrent dispatch, UTF-8 streams, process containment. |
 | `desktop/installation.py` | Approved setup plans, workers, cancellation, status, and located components. |
 | `desktop/dictionary.py` | Dictionary pagination and transcript-review responses. |
+| `desktop/native_files.py`, `service/outputs.py` | Main-only picker transactions, verified playback, expiring file leases, and guarded dictionary exports. |
 | `service/` | Application lifecycle, library/archive operations, and capabilities. |
 | `jobs/` | Job records/events, scheduling, local processing/copy workers, YouTube downloads, and batch CLI compatibility. |
 | `censor/engine.py` | Coordinate transcription, detection, and media rendering for one source. |

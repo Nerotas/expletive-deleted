@@ -10,6 +10,7 @@ from threading import Event
 from backend.filesystem.paths import RootBinding
 from backend.filesystem.publication import Publication
 from backend.runtime import find_ffmpeg, find_ffprobe
+from backend.service.outputs import verify_playback
 
 
 def main():
@@ -35,6 +36,7 @@ def main():
         with Publication(root, destination) as output:
             encode(output.stage)
             output.publish(verify)
+        verify_playback(destination, ffprobe)
         original = hashlib.sha256(destination.read_bytes()).digest()
         cancelled = Event()
         try:

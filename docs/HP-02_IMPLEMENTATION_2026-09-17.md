@@ -1,0 +1,22 @@
+# HP-02: Native playback and dictionary file authorization
+
+Queue playback now sends a source identifier to Electron. Python derives its censored output from the current settings and Queue source/job information, checks the configured output boundary, rejects aliases and unsupported paths, and verifies nonempty audio/video using a bounded FFprobe call. Missing FFprobe produces guidance without downloading anything. Moved files can still be opened through Explorer.
+
+`backend/service/outputs.py` owns resolution and media verification. `backend/desktop/native_files.py` retains file/directory leases across the OS handoff, rechecks settings and containment, and expires abandoned selections after 30 seconds. Leases close on completion, failure, window loss, or backend shutdown. Windows path spellings are retained in responses while leases protect the corresponding canonical objects.
+
+Dictionary Import and Export each use one native action. Electron owns the picker and backend request; the renderer cannot forward an arbitrary destination afterward. Export requires an ordinary JSON destination. Existing files receive explicit replacement confirmation after Python captures the selected version. The common publisher rejects a changed or newly occupied destination and preserves competing bytes. Cancellation writes nothing. Import reads the selected JSON under a file lease before the existing dictionary validation/import operation.
+
+`frontend/electron/native-files.ts` owns these actions and the exact generic-method allowlist. Internal `native.*` methods and obsolete `dictionary.import`/`dictionary.export` methods cannot be invoked through generic renderer forwarding. Preload and the typed desktop client expose `openOutput(source)`, `importDictionary()`, and `exportDictionary()`. Picker failures use the same error path as the operation, and cancelled selections do not produce success notices. Short inline comments explain the authorization and lease boundaries.
+
+## Validation and CI
+
+- Backend tests cover source-derived video/audio output, archived job sources, invalid extensions/streams/traversal, missing/empty media, hard-link aliases, junction escapes, root replacement, pinned reads, changed settings, lease expiration, JSON selection, explicit replacement, and competing export writes.
+- Electron unit tests cover the forwarding allowlist, cancellation, picker failures, document loss, serialization, replacement confirmation, checked playback paths, and release after OS errors. Dictionary UI tests cover native action calls, picker errors, and cancellation feedback.
+- `npm run smoke:native-files` runs the real built main/preload and Python service, intercepting only native dialogs/OS launches and substituting a controlled media verifier. It proves an approved output reaches the launcher while rejected paths do not; export races retain sentinel bytes. Its seven required cases are recorded in `frontend/test-results/native-files.json`.
+- `npm run smoke:security` and packaged smoke exercise all eight current IPC channels and reject generic native-method bypasses.
+- Backend CI explicitly includes `tests.test_output_access`; full frontend discovery includes the new tests. Electron CI, release validation, and both local validation scripts run the native file smoke. The private release Python also runs output-access tests with bytecode disabled.
+- `python -m scripts.qualify_media_publication` additionally runs the production playback verifier against real temporary FFmpeg-generated media, using already installed tools and downloading nothing.
+
+Final validation passed 300 backend tests, 147 frontend tests, typecheck, lint, build, the seven-case native file smoke, production/Vite security smoke, normal desktop smoke, graceful/forced shutdown smoke, and real-FFmpeg qualification. All 28 filesystem/publication/output-access tests passed under the packaged private Python. The Windows unpacked application passed packaged security smoke and dependency audits both before and after launch.
+
+Native smoke substitutes media verification; the separate FFmpeg exercise checks the real verifier. An unpacked package is not an installer installation/upgrade/uninstallation qualification. The existing Windows-only filesystem limits and HP-06 recovery-file behavior still apply. This does not resolve HP-03 dictionary transaction races or HP-05 source identity/legacy migration.

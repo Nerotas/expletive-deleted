@@ -166,7 +166,7 @@ jobs:
         if: steps.version.outputs.published != 'true'
         shell: pwsh
         run: |
-          & (Join-Path $env:PRIVATE_PYTHON_DIR 'python.exe') -B -m unittest tests.test_filesystem_paths tests.test_windows_destination_guards tests.test_publication
+          & (Join-Path $env:PRIVATE_PYTHON_DIR 'python.exe') -B -m unittest tests.test_filesystem_paths tests.test_windows_destination_guards tests.test_publication tests.test_output_access
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Check renderer security in production and Vite development
