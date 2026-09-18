@@ -42,3 +42,6 @@ jobs:
 
       - name: Report coverage
         run: python -m coverage report -m
+
+      - name: Require native Windows containment and publication gates
+        run: python -m unittest tests.test_filesystem_paths tests.test_windows_destination_guards tests.test_publication tests.test_output_access

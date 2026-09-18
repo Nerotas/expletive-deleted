@@ -9,6 +9,7 @@ from typing import Literal
 
 from backend.application_identity import get_documents_root
 from backend.runtime.paths import RuntimePaths
+from backend.filesystem.paths import RootBinding, PathSafetyError, validate_path
 
 
 ProcessingMode = Literal["report_only", "censor"]
@@ -40,6 +41,11 @@ class DirectorySettings:
     output: Path
     archive: Path
     transcripts: Path
+    # Private identities never enter the renderer settings contract.
+    bindings: tuple[RootBinding, ...] = field(default=(), repr=False, compare=False)
+
+    def binding(self, root: Path) -> RootBinding:
+        return next((binding for binding in self.bindings if binding.configured == root), None) or RootBinding.capture(root)
 
     @classmethod
     def defaults(cls, home: Path | None = None) -> DirectorySettings:
@@ -66,7 +72,11 @@ class DirectorySettings:
             elif not path.is_absolute():
                 issues.append(f"{name} must be an absolute path")
             else:
-                valid_paths[name] = path
+                try:
+                    validate_path(path)
+                    valid_paths[name] = path
+                except PathSafetyError as exc:
+                    issues.append(f"{name}: {exc}")
 
         normalized: dict[str, str] = {}
         for name, path in valid_paths.items():
@@ -87,6 +97,7 @@ class DirectorySettings:
             finished=self.output,
             processed=self.archive,
             transcripts=self.transcripts,
+            bindings=self.bindings,
         )
 
 

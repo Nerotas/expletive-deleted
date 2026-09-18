@@ -5,7 +5,11 @@ from __future__ import annotations
 from collections.abc import Callable
 import json
 import re
-import shutil
+from contextlib import ExitStack
+from backend.filesystem.paths import identity
+from backend.filesystem.operations import remove_tree, locked_file
+from backend.filesystem.publication import Publication
+from backend.settings.directories import bind_directories
 import subprocess
 import time
 import traceback
@@ -17,7 +21,10 @@ from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
 
 from backend.runtime import available_encoders, resolve_media_tools, select_working_video_encoder
-from backend.runtime.environment import resolve_deno_path, resolve_ytdlp_path
+from backend.runtime.locations import (
+    resolve_deno_path,
+    resolve_ytdlp_path,
+)
 from backend.settings import AppSettings
 
 from .events import JobEvent
@@ -96,7 +103,7 @@ class DownloadRecord:
 class DownloadManager:
     """One serial network/media lane, independent of transcription work."""
     def __init__(self, settings: AppSettings, on_completed: Callable[[Path], None] | None = None):
-        self.settings = settings
+        self.settings = replace(settings, directories=bind_directories(settings.directories))
         self._on_completed = on_completed
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="youtube-download")
         self._lock = RLock()
@@ -168,6 +175,9 @@ class DownloadManager:
     def _run(self, job_id: str) -> None:
         staging = self.settings.directories.input.resolve() / ".downloads" / job_id
         cancellation = self._cancellations[job_id]
+        resources = ExitStack()
+        root = self.settings.directories.binding(self.settings.directories.input)
+        staging_identity = None
         try:
             if cancellation.is_set():
                 raise InterruptedError
@@ -183,7 +193,8 @@ class DownloadManager:
                     "YouTube imports require FFmpeg and FFprobe in the same folder. "
                     "Choose a matching pair in Settings > Runtime components, then retry."
                 )
-            staging.mkdir(parents=True, exist_ok=True)
+            resources.enter_context(root.lease(staging / "source.mp4", create_parent=True))
+            staging_identity = identity(staging)
             record, cancellation = self._records[job_id], self._cancellations[job_id]
             command = [str(ytdlp), "--ignore-config"]
             if record.cookie_browser:
@@ -221,14 +232,14 @@ class DownloadManager:
             if returncode != 0: raise self._download_error("".join(output))
             source = next((item for item in staging.glob("source.*") if item.suffix != ".part"), None)
             if source is None: raise RuntimeError("yt-dlp completed without creating media")
-            final = staging / "final.mp4"
-            self._set(job_id, "preparing", message="Preparing downloaded media")
-            self._prepare(job_id, source, final, str(ffmpeg), str(ffprobe), cancellation)
-            if cancellation.is_set(): raise InterruptedError
             title = self._records[job_id].title or record.video_id
             destination = self._destination(title, record.video_id)
-            if destination.exists(): raise RuntimeError(f"A file named {destination.name} already exists in Ready")
-            final.replace(destination)
+            self._set(job_id, "preparing", message="Preparing downloaded media")
+            with locked_file(root, source):
+                with Publication(root, destination, source=source, cancellation=cancellation) as publication:
+                    self._prepare(job_id, source, publication.stage, str(ffmpeg), str(ffprobe), cancellation)
+                    publication.publish(lambda output: self._verify(output, str(ffprobe),
+                        require_h264=self.settings.video.mode == "h264"))
             # Remain active until the callback finishes, preventing settings from
             # replacing the managers in the gap between download and local work.
             if self.settings.processing.auto_transcode_youtube_downloads and self._on_completed:
@@ -257,7 +268,14 @@ class DownloadManager:
                     process.wait()
                 if process.stdout is not None:
                     process.stdout.close()
-            shutil.rmtree(staging, ignore_errors=True)
+            resources.close()
+            if staging_identity is not None and staging.exists():
+                try:
+                    if identity(staging) != staging_identity:
+                        raise RuntimeError("Download staging changed; cleanup was stopped")
+                    remove_tree(root, staging)
+                except Exception as exc:
+                    self._set(job_id, "failed", error=JobError("cleanup_failed", "Download cleanup stopped", str(exc), True), message="Download cleanup stopped")
 
     def _prepare(self, job_id: str, source: Path, final: Path, ffmpeg: str, ffprobe: str, cancellation: Event) -> None:
         duration_seconds = self._duration(source, ffprobe)
@@ -268,7 +286,7 @@ class DownloadManager:
                 self._verify(final, ffprobe, require_h264=h264_requested)
                 return
             except RuntimeError:
-                final.unlink(missing_ok=True)
+                final.write_bytes(b"")  # Preserve the publisher-owned staging identity for the fallback encode.
         if not h264_requested:
             raise RuntimeError(
                 "The downloaded streams cannot be copied into an MP4 file. "

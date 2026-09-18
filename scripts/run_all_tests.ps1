@@ -40,6 +40,9 @@ try {
         Invoke-TestStage 'Frontend typecheck' { npm run typecheck }
         Invoke-TestStage 'Frontend lint' { npm run lint }
         Invoke-TestStage 'Development Electron smoke' { npm run smoke }
+        Invoke-TestStage 'Electron renderer security' { npm run smoke:security }
+        Invoke-TestStage 'Native file authorization' { npm run smoke:native-files }
+        Invoke-TestStage 'Electron shutdown recovery' { node scripts/smoke-shutdown.mjs }
 
         if (-not $SkipPackaged) {
             Invoke-TestStage 'Setup-first package build and audit' { npm run package:dir }

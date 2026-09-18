@@ -157,6 +157,8 @@ try {
     if ([IO.Path]::GetFullPath($copiedPrefix) -ne [IO.Path]::GetFullPath($privatePythonRoot)) {
         throw "The copied Python runtime is not relocatable: $copiedPrefix"
     }
+    & $privatePython -B -m unittest tests.test_filesystem_paths tests.test_windows_destination_guards tests.test_publication tests.test_output_access
+    Assert-NativeSuccess 'Private Python filesystem safety gates'
 
     & $approvedPython -m venv $testEnvironmentRoot
     Assert-NativeSuccess 'Creating the backend test environment'
@@ -182,6 +184,10 @@ try {
         Assert-NativeSuccess 'Frontend lint'
         & npm run smoke
         Assert-NativeSuccess 'Development Electron smoke test'
+        & npm run smoke:security
+        Assert-NativeSuccess 'Renderer security smoke test'
+        & npm run smoke:native-files
+        Assert-NativeSuccess 'Native file authorization smoke'
         & node scripts/smoke-shutdown.mjs
         Assert-NativeSuccess 'Electron shutdown smoke test'
 

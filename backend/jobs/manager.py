@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import shutil
-import traceback
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import replace
 from pathlib import Path
@@ -14,6 +12,8 @@ from uuid import uuid4
 from backend.censor import ProfanityCensor
 from backend.runtime import FFMPEG_VERSION, inspect_executable
 from backend.settings import AppSettings
+from backend.settings.directories import bind_directories
+from backend.filesystem.paths import version
 
 from .events import JobEvent
 from .media import MEDIA_EXTENSIONS, output_path, relative_media_path
@@ -52,6 +52,7 @@ class JobManager:
         censor_factory: Callable[..., ProfanityCensor] = ProfanityCensor,
     ):
         settings.validate()
+        settings = replace(settings, directories=bind_directories(settings.directories))
         self.settings = settings
         self._censor_factory = censor_factory
         self._executors = {
@@ -85,12 +86,16 @@ class JobManager:
         overwrite_output: bool = False,
         auto_censor_after_transcription: bool = False,
     ) -> JobRecord:
-        source = source.expanduser().resolve()
+        raw_source = source.expanduser()
+        if raw_source.is_symlink():
+            raise JobSubmissionError("unavailable", "Select an original file rather than a symbolic link")
+        source = raw_source.resolve()
         selected_mode = mode or self.settings.processing.mode
         if selected_mode not in ("copy", "report_only", "censor"):
             raise JobSubmissionError("invalid_mode", f"Unsupported processing mode: {selected_mode}")
         if selected_mode != "copy":
             try:
+                self.settings.directories.binding(self.settings.directories.input).target(raw_source)
                 relative_media_path(source, self.settings.directories.input)
             except ValueError as exc:
                 raise JobSubmissionError("outside_input", str(exc)) from exc
@@ -111,6 +116,9 @@ class JobManager:
                 "invalid_mode",
                 "Output replacement can only be requested for a censor job",
             )
+        destination = output_path(source, self.settings.directories.output, self.settings.directories.input) if selected_mode == 'censor' else None
+        if destination:
+            self.settings.directories.binding(self.settings.directories.output).target(destination)
         job = JobRecord(
             uuid4().hex,
             source,
@@ -118,6 +126,8 @@ class JobManager:
             force_transcribe=force_transcribe,
             overwrite_output=overwrite_output,
             auto_censor_after_transcription=auto_censor_after_transcription,
+            source_version=version(source),
+            output_version=version(destination) if destination and destination.exists() else None,
         )
         cancellation = Event()
         with self._lock:
@@ -311,14 +321,3 @@ class JobManager:
         # Keep their queues distinct while allowing only one resource-heavy job at a time.
         with self._processing_slot:
             self._runtime.run(job_id, cancellation)
-
-    @staticmethod
-    def _remove_incomplete_output(
-        processing_destination: Path,
-        destination: Path,
-        output_existed: bool,
-    ) -> None:
-        if processing_destination != destination:
-            processing_destination.unlink(missing_ok=True)
-        elif not output_existed:
-            destination.unlink(missing_ok=True)

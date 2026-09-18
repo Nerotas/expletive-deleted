@@ -6,8 +6,15 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-from .dependencies import require_whisper_model_path
-from .environment import get_whisper_device_status, require_whisper_model
+from backend.runtime.dependency_inspection import (
+    require_whisper_model_path,
+)
+from backend.runtime.devices import (
+    get_whisper_device_status,
+)
+from backend.runtime.locations import (
+    require_whisper_model,
+)
 
 
 SUPPORTED_WHISPER_LIBRARIES = ("faster-whisper",)

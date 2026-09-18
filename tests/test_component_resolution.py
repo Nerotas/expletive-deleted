@@ -67,13 +67,13 @@ class ComponentResolutionTests(unittest.TestCase):
             for ffmpeg, ffprobe in ((None, None), (custom[0], None), (None, custom[1]), custom):
                 with (
                     self.subTest(ffmpeg=ffmpeg, ffprobe=ffprobe),
-                    patch("backend.runtime.environment.find_ffmpeg", return_value=defaults[0]),
-                    patch("backend.runtime.environment.find_ffprobe", return_value=defaults[1]),
-                    patch("backend.runtime.dependencies.inspect_executable") as inspect,
-                    patch("backend.runtime.dependencies.inspect_python_dependencies", return_value=()),
-                    patch("backend.runtime.dependencies.inspect_whisper_model"),
-                    patch("backend.runtime.dependencies.inspect_ytdlp"),
-                    patch("backend.runtime.dependencies.inspect_js_runtime"),
+                    patch("backend.runtime.locations.find_ffmpeg", return_value=defaults[0]),
+                    patch("backend.runtime.locations.find_ffprobe", return_value=defaults[1]),
+                    patch("backend.runtime.dependency_inspection.inspect_executable") as inspect,
+                    patch("backend.runtime.dependency_inspection.inspect_python_dependencies", return_value=()),
+                    patch("backend.runtime.dependency_inspection.inspect_whisper_model"),
+                    patch("backend.runtime.dependency_inspection.inspect_ytdlp"),
+                    patch("backend.runtime.dependency_inspection.inspect_js_runtime"),
                 ):
                     inspect_dependencies(ffmpeg_bin=ffmpeg, ffprobe_bin=ffprobe)
                     checked = tuple(call.args[2] for call in inspect.call_args_list)
@@ -110,9 +110,9 @@ class ComponentResolutionTests(unittest.TestCase):
             root = Path(temporary)
             with (
                 patch.dict("os.environ", {"CENSOR_YTDLP": str(root / "external.exe"), "CENSOR_DENO": str(root / "external-deno.exe")}),
-                patch("backend.runtime.dependencies.inspect_python_dependencies", return_value=()),
-                patch("backend.runtime.dependencies._run_action"),
-                patch("backend.runtime.dependencies.inspect_dependencies", return_value=inventory) as inspect,
+                patch("backend.runtime.dependency_inspection.inspect_python_dependencies", return_value=()),
+                patch("backend.runtime.dependency_install._run_action"),
+                patch("backend.runtime.dependency_install.inspect_dependencies", return_value=inventory) as inspect,
             ):
                 plan = build_install_plan(["ytdlp", "js_runtime"], runtime_root=root, platform_name="Windows")
                 execute_install_plan(plan, approved_plan_id=plan.id)
@@ -127,7 +127,7 @@ class ComponentResolutionTests(unittest.TestCase):
             (root / "better_profanity.py").write_text("raise ImportError('broken test package')\n")
             with (
                 patch.object(sys, "path", [str(root), *sys.path]),
-                patch("backend.runtime.dependencies.importlib.metadata.version", side_effect=lambda name: dict(PYTHON_DEPENDENCIES)[name] if name == "better-profanity" else "0"),
+                patch("backend.runtime.dependency_inspection.importlib.metadata.version", side_effect=lambda name: dict(PYTHON_DEPENDENCIES)[name] if name == "better-profanity" else "0"),
             ):
                 statuses = inspect_python_dependencies()
             status = next(item for item in statuses if item.name == "better-profanity")

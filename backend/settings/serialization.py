@@ -123,6 +123,7 @@ def settings_from_dict(data: object, defaults: AppSettings | None = None) -> App
 
     parsed = AppSettings(
         directories=DirectorySettings(
+            bindings=base.directories.bindings,
             input=Path(_string(directories, "input", str(base.directories.input), "directories.input")),
             output=Path(_string(directories, "output", str(base.directories.output), "directories.output")),
             archive=Path(_string(directories, "archive", str(base.directories.archive), "directories.archive")),

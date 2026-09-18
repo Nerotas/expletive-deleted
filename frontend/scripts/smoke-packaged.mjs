@@ -1,5 +1,6 @@
 import { access, mkdir, rm } from 'node:fs/promises'
 import path from 'node:path'
+import { assertRendererSecurity } from './security-checks.mjs'
 
 const executable = process.env.PACKAGED_EXECUTABLE
   ? path.resolve(process.env.PACKAGED_EXECUTABLE)
@@ -23,6 +24,8 @@ const packagedApp = await electron.launch({
   executablePath: executable,
   env: {
     ...cleanEnvironment,
+    // A packaged application must ignore even an explicitly supplied development URL.
+    ELECTRON_RENDERER_URL: 'http://127.0.0.1:9/foreign',
     CENSOR_PROJECT_ROOT: path.join(path.dirname(executable), 'resources', 'app-backend'),
     TMPDIR: temporaryDirectory,
     TMP: temporaryDirectory,
@@ -135,6 +138,8 @@ try {
     }
   }
   if (rendererErrors.length) throw new Error(`Packaged renderer errors: ${rendererErrors.join('; ')}`)
+  if (new URL(window.url()).protocol !== 'file:') throw new Error('Packaged app trusted an environment renderer URL')
+  await assertRendererSecurity(packagedApp, window)
   console.log(`Packaged Electron smoke passed: ${await window.title()}`)
 } finally {
   await packagedApp.close()

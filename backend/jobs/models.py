@@ -69,6 +69,9 @@ class JobRecord:
     force_transcribe: bool = False
     overwrite_output: bool = False
     auto_censor_after_transcription: bool = False
+    # Capture authorization at submission, not when a queued worker eventually starts.
+    source_version: tuple[int, int, int, int] | None = None
+    output_version: tuple[int, int, int, int] | None = None
 
     def __post_init__(self) -> None:
         if not self.id.strip():
@@ -100,7 +103,7 @@ class JobRecord:
             "error": self.error.to_dict() if self.error else None,
             "force_transcribe": self.force_transcribe,
             "overwrite_output": self.overwrite_output,
-                "auto_censor_after_transcription": self.auto_censor_after_transcription,
+            "auto_censor_after_transcription": self.auto_censor_after_transcription,
         }
 
 

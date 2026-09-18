@@ -3,10 +3,17 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from .models import DirectorySettings
+from backend.filesystem.paths import pinned_directory
+
+
+def bind_directories(settings: DirectorySettings) -> DirectorySettings:
+    """Capture new selections once; retain existing identities across settings edits."""
+    bindings = tuple(settings.binding(path) for _, path in _configured_paths(settings))
+    return replace(settings, bindings=bindings)
 
 
 @dataclass(frozen=True)
@@ -54,8 +61,10 @@ def inspect_directories(
         error: str | None = None
         if create:
             try:
-                path.mkdir(parents=True, exist_ok=True)
-            except OSError as exc:
+                binding = settings.binding(path)
+                with pinned_directory(path):
+                    binding.check()
+            except (OSError, ValueError, RuntimeError) as exc:
                 error = str(exc)
 
         exists = path.exists()

@@ -10,7 +10,11 @@ The Windows installer bundles only private CPython and its pip bootstrap. The co
 
 ## Working Pipeline
 
-Desktop shutdown requests cancellation before ending Python and waits up to 15 seconds. A Windows Job Object contains the bridge's process tree for forced-exit cleanup. Censor jobs publish staged output atomically after FFprobe verification; settings changes share a lock with submissions and reject active downloads, including their handoff to local processing.
+Desktop shutdown requests cancellation before ending Python and waits up to 15 seconds. A Windows Job Object contains the bridge's process tree for forced-exit cleanup. Shared publication verifies and flushes staged output before a collision-refusing rename. Authorized replacement retains the previous file for recovery until publication succeeds. Settings changes and archive operations share a lock with submissions and reject conflicting active work.
+
+HP-01 validates every IPC caller and restricts Electron navigation, sandboxing, and CSP. HP-07 binds configured folders to persistent filesystem identities and pins Windows paths during operations. HP-06 integrates those protections across jobs, imports/downloads, transcripts, and archive/restore. See the [implementation reports](docs/HP-06_IMPLEMENTATION_2026-09-17.md) for validation and platform limits. HP-05 source identity and legacy migration remain deferred.
+
+HP-02 restricts playback to backend-derived, verified outputs and binds dictionary import/export to native file selections. Expiring leases protect the playback handoff; exports reject changed destinations. See [HP-02 implementation](docs/HP-02_IMPLEMENTATION_2026-09-17.md).
 
 ```text
 Media file
@@ -44,10 +48,11 @@ The current desktop and backend application supports:
 
 ```text
 backend/
-  censor/engine.py       Proven transcription, detection, and censor engine
+  censor/                Processing coordinator, transcripts, audio metadata, FFmpeg, and CLI
+  desktop/               Private protocol, request routing, dictionary and setup controllers
   jobs/                  Serial job manager, records, events, and batch compatibility
   service/               Library, import, archive, settings, and capability boundary
-  runtime/environment.py Dependency, hardware, cache, and encoder discovery
+  runtime/               Dependency contracts/inspection/plans/install, devices, encoders, timing
   runtime/paths.py       Runtime folder ownership
   policy/                Versioned, atomic user dictionary
   settings/              Validated schema, atomic store, and path checks
@@ -65,6 +70,8 @@ setup.py                 Legacy-compatible bootstrap entry point
 ```
 
 The root compatibility files remain intentionally thin. New backend code should import from `backend`, not from those wrappers.
+
+The [backend module guide](backend/README.md) documents ownership and import boundaries. Runtime compatibility facades retain established imports; optional speech packages load when capabilities or processing require them.
 
 ## Persistent Settings
 
@@ -104,6 +111,8 @@ Package entry points are also available for backend development:
 ```
 
 ## Current Architecture Guarantees
+
+Renderer module ownership, state rules, and validation commands are documented in the [frontend developer guide](frontend/src/README.md). The [frontend review](docs/FRONTEND_REVIEW_2026-09-16.md) records the page modularization and remaining setup/error-recovery risks.
 
 1. Jobs, statuses, structured events, and cancellation are owned by the backend.
 2. Queue execution is session-only. Copy and download work use separate lanes; transcription and censor work are independently queued but share one heavy-processing resource slot.

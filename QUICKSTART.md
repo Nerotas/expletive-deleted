@@ -9,6 +9,8 @@ Normal users should follow the desktop application workflow. Do not start `backe
 
 Before changing settings, finish or cancel active jobs and downloads. Closing the app cancels ongoing work and can take up to 15 seconds while cleanup finishes. Interrupted processing does not publish a new finished copy; reopen the app to retry from the retained original.
 
+Queue **Play** opens a verified censored copy from the configured output folder and requires FFprobe. Use Explorer for files moved elsewhere. Dictionary **Import** and **Export** open native file pickers; replacing an existing JSON backup requires confirmation. Cancelling the picker leaves files unchanged.
+
 ## Installed Windows application (recommended)
 
 1. Run `Expletive-Deleted-Setup-<version>-x64.exe` and choose the installation directory.
@@ -147,3 +149,5 @@ To run the full Windows validation flow from the repository root:
 ```
 
 Use `-SkipPackaged` to omit the Electron package build and packaged smoke test when iterating on backend or renderer code.
+
+Advanced single-file CLI processing requires `--overwrite` to replace existing output. For an offline publication check using already installed FFmpeg/FFprobe, run `python -m scripts.qualify_media_publication` with the repository Python environment. It generates only temporary synthetic media and downloads nothing.

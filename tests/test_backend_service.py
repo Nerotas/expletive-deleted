@@ -32,6 +32,39 @@ class StubManager:
 
 
 class BackendServiceTests(unittest.TestCase):
+    def test_archive_and_submission_cannot_cross_the_source_mutation(self):
+        from backend.service.application import move_verified
+        from backend.jobs import JobSubmissionError
+        with tempfile.TemporaryDirectory() as temporary:
+            service = BackendService(self.create_store(Path(temporary)))
+            source = service.settings.directories.input / 'original.mp4'
+            source.write_bytes(b'original')
+            moving, release, submitting = Event(), Event(), Event()
+            def move(*args, **kwargs):
+                moving.set()
+                self.assertTrue(release.wait(5))
+                return move_verified(*args, **kwargs)
+            def submit():
+                submitting.set()
+                return service.submit_job(source, 'report_only')
+            item = LibraryItem(source, 'finished', datetime.now(timezone.utc))
+            try:
+                with patch.object(service, 'get_library', return_value=(item,)), patch('backend.service.application.move_verified', side_effect=move):
+                    with ThreadPoolExecutor(max_workers=2) as executor:
+                        archived = executor.submit(service.archive_source, source)
+                        self.assertTrue(moving.wait(5))
+                        submitted = executor.submit(submit)
+                        self.assertTrue(submitting.wait(5))
+                        self.assertFalse(submitted.done())
+                        release.set()
+                        archived.result(5)
+                        with self.assertRaises(JobSubmissionError):
+                            submitted.result(5)
+                self.assertEqual((service.settings.directories.archive / source.name).read_bytes(), b'original')
+            finally:
+                release.set()
+                service.close()
+
     def test_settings_preserve_active_download_manager_and_persisted_settings(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             service = BackendService(self.create_store(Path(temporary_directory)), manager_factory=StubManager)
@@ -172,7 +205,7 @@ class BackendServiceTests(unittest.TestCase):
             try:
                 with (
                     patch(
-                        "backend.runtime.environment.get_managed_whisper_cache_dir",
+                        "backend.runtime.locations.get_managed_whisper_cache_dir",
                         return_value=managed_cache,
                     ),
                     patch(

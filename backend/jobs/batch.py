@@ -4,7 +4,11 @@
 from __future__ import annotations
 
 import argparse
-import shutil
+from contextlib import ExitStack
+from backend.filesystem.operations import locked_file
+from backend.filesystem.publication import Publication, move_verified
+from backend.filesystem.discovery import files_within
+from backend.filesystem.paths import version
 import time
 from pathlib import Path
 
@@ -114,28 +118,35 @@ def process_file(
         print(f"[PROCESS] {input_file.name}")
 
     try:
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        censor = ProfanityCensor(
-            str(input_file),
-            str(destination),
-            model_name,
-            str(transcript.parent),
-            whisper_model=whisper_model,
-            whisper_library=whisper_library,
-            whisper_device=whisper_device,
-            censor_method=censor_method,
-            padding_before_ms=padding_before_ms,
-            padding_after_ms=padding_after_ms,
-            surround_output=surround_output,
-            video_mode=video_mode,
-            ffmpeg_bin=ffmpeg_bin,
-            ffprobe_bin=ffprobe_bin,
-            whisper_cache_dir=whisper_cache_dir,
-        )
-        success = censor.process(report_only=report_only, include_undiscovered=include_undiscovered)
-        discovered = {c["word"] for c in censor.review_candidates}
-        used_cached = censor.used_cached_transcript
-        profane_count = censor.profane_count
+        with ExitStack() as resources:
+            resources.enter_context(locked_file(paths.binding(paths.ready), input_file))
+            selected_source = version(input_file)
+            resources.enter_context(paths.binding(paths.transcripts).lease(transcript, create_parent=True))
+            publication = None if report_only else resources.enter_context(Publication(
+                paths.binding(paths.finished), destination, source=input_file, overwrite=overwrite))
+            censor = ProfanityCensor(
+                str(input_file),
+                str(publication.stage if publication else destination),
+                model_name,
+                str(transcript.parent),
+                whisper_model=whisper_model,
+                whisper_library=whisper_library,
+                whisper_device=whisper_device,
+                censor_method=censor_method,
+                padding_before_ms=padding_before_ms,
+                padding_after_ms=padding_after_ms,
+                surround_output=surround_output,
+                video_mode=video_mode,
+                ffmpeg_bin=ffmpeg_bin,
+                ffprobe_bin=ffprobe_bin,
+                whisper_cache_dir=whisper_cache_dir,
+            )
+            success = censor.process(report_only=report_only, include_undiscovered=include_undiscovered)
+            discovered = {c["word"] for c in censor.review_candidates}
+            used_cached = censor.used_cached_transcript
+            profane_count = censor.profane_count
+            if success and publication:
+                publication.publish(lambda _: censor.verify_output())
     except Exception as exc:
         print(f"[FAILED] {input_file.name}: {exc}")
         print(f"[FILE {index}/{total}] Elapsed: {format_seconds(time.perf_counter() - started)}")
@@ -163,9 +174,8 @@ def process_file(
             print(f"[FILE {index}/{total}] Elapsed: {format_seconds(time.perf_counter() - started)}")
             return "fail", discovered, used_cached, profane_count
         try:
-            archive_destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.move(str(input_file), archive_destination)
-        except OSError as exc:
+            move_verified(paths.binding(paths.ready), input_file, paths.binding(paths.processed), archive_destination, expected_version=selected_source)
+        except (OSError, ValueError, RuntimeError) as exc:
             print(f"[FAILED] Could not archive source; source retained: {exc}")
             print(f"[FILE {index}/{total}] Elapsed: {format_seconds(time.perf_counter() - started)}")
             return "fail", discovered, used_cached, profane_count
@@ -254,7 +264,7 @@ def main(argv: list[str] | None = None, store: SettingsStore | None = None) -> i
         parser.error("--overwrite cannot be used with --report-only")
 
     paths = settings.directories.to_runtime_paths()
-    candidates = paths.ready.rglob("*") if settings.source.scan_subdirectories else paths.ready.iterdir()
+    candidates = files_within(paths.binding(paths.ready), recursive=settings.source.scan_subdirectories)
     files = sorted(
         (
             path for path in candidates

@@ -38,14 +38,14 @@ from backend.runtime.environment import get_managed_ffmpeg_manifest_path, get_ma
 class DependencyInventoryTests(unittest.TestCase):
     def test_ytdlp_version_is_verified_without_affecting_core_readiness(self):
         completed = MagicMock(returncode=0, stdout=f"{YTDLP_VERSION}\n", stderr="")
-        with patch("backend.runtime.dependencies.subprocess.run", return_value=completed):
+        with patch("backend.runtime.dependency_inspection.subprocess.run", return_value=completed):
             status = inspect_ytdlp("C:\\Tools\\yt-dlp.exe")
         self.assertTrue(status.ready)
         self.assertEqual(status.installed_version, YTDLP_VERSION)
 
     def test_ytdlp_version_timeout_is_an_invalid_optional_component(self):
         with patch(
-            "backend.runtime.dependencies.subprocess.run",
+            "backend.runtime.dependency_inspection.subprocess.run",
             side_effect=subprocess.TimeoutExpired(["yt-dlp.exe", "--version"], 5),
         ):
             status = inspect_ytdlp("C:\\Tools\\yt-dlp.exe")
@@ -56,8 +56,8 @@ class DependencyInventoryTests(unittest.TestCase):
     def test_js_runtime_is_ready_without_affecting_core_readiness(self):
         completed = MagicMock(returncode=0, stdout=f"deno {DENO_VERSION} (stable, release, x86_64-pc-windows-msvc)\n", stderr="")
         with (
-            patch("backend.runtime.dependencies.subprocess.run", return_value=completed),
-            patch("backend.runtime.dependencies.Path.is_file", return_value=True),
+            patch("backend.runtime.dependency_inspection.subprocess.run", return_value=completed),
+            patch("backend.runtime.dependency_inspection.Path.is_file", return_value=True),
         ):
             status = inspect_js_runtime("C:\\Tools\\deno.exe")
         self.assertTrue(status.ready)
@@ -67,8 +67,8 @@ class DependencyInventoryTests(unittest.TestCase):
         old_version = ".".join(str(part) for part in (DENO_MINIMUM_VERSION[0], DENO_MINIMUM_VERSION[1] - 1, 0))
         completed = MagicMock(returncode=0, stdout=f"deno {old_version} (stable, release, x86_64-pc-windows-msvc)\n", stderr="")
         with (
-            patch("backend.runtime.dependencies.subprocess.run", return_value=completed),
-            patch("backend.runtime.dependencies.Path.is_file", return_value=True),
+            patch("backend.runtime.dependency_inspection.subprocess.run", return_value=completed),
+            patch("backend.runtime.dependency_inspection.Path.is_file", return_value=True),
         ):
             status = inspect_js_runtime("C:\\Tools\\deno.exe")
         self.assertEqual(status.state, "invalid")
@@ -99,7 +99,7 @@ class DependencyInventoryTests(unittest.TestCase):
             self.assertEqual(Path(discovered_ffprobe), ffprobe.resolve())
 
     def test_missing_executable_is_reported_without_running_a_command(self):
-        with patch("backend.runtime.dependencies.subprocess.run") as run:
+        with patch("backend.runtime.dependency_inspection.subprocess.run") as run:
             status = inspect_executable("ffmpeg", "FFmpeg", None)
 
         self.assertEqual(status.state, "missing")
@@ -112,7 +112,7 @@ class DependencyInventoryTests(unittest.TestCase):
             stdout="ffmpeg version 8.0-full_build Copyright\n",
             stderr="",
         )
-        with patch("backend.runtime.dependencies.subprocess.run", return_value=completed):
+        with patch("backend.runtime.dependency_inspection.subprocess.run", return_value=completed):
             status = inspect_executable("ffmpeg", "FFmpeg", "C:\\ffmpeg.exe")
 
         self.assertEqual(status.state, "ready")
@@ -124,7 +124,7 @@ class DependencyInventoryTests(unittest.TestCase):
             stdout="ffmpeg version 7.1 Copyright\n",
             stderr="",
         )
-        with patch("backend.runtime.dependencies.subprocess.run", return_value=completed):
+        with patch("backend.runtime.dependency_inspection.subprocess.run", return_value=completed):
             status = inspect_executable("ffmpeg", "FFmpeg", "C:\\ffmpeg.exe", "8.0")
 
         self.assertEqual(status.state, "invalid")
@@ -136,7 +136,7 @@ class DependencyInventoryTests(unittest.TestCase):
             stdout="ffmpeg version 9.0.1-full_build Copyright\n",
             stderr="",
         )
-        with patch("backend.runtime.dependencies.subprocess.run", return_value=completed):
+        with patch("backend.runtime.dependency_inspection.subprocess.run", return_value=completed):
             status = inspect_executable(
                 "ffmpeg", "FFmpeg", "C:\\ffmpeg.exe", "8.0 or later"
             )
@@ -148,7 +148,7 @@ class DependencyInventoryTests(unittest.TestCase):
         required = dict(PYTHON_DEPENDENCIES)
 
         with patch(
-            "backend.runtime.dependencies.importlib.metadata.version",
+            "backend.runtime.dependency_inspection.importlib.metadata.version",
             side_effect=lambda name: "0.0.0" if name == "faster-whisper" else required[name],
         ):
             statuses = inspect_python_dependencies()
@@ -202,7 +202,7 @@ class DependencyInventoryTests(unittest.TestCase):
             install_supported=True,
         )
         with (
-            patch("backend.runtime.dependencies.inspect_whisper_model", return_value=missing),
+            patch("backend.runtime.dependency_inspection.inspect_whisper_model", return_value=missing),
             self.assertRaisesRegex(DependencyNotReadyError, "Install it from the app setup"),
         ):
             require_whisper_model_path()
@@ -264,7 +264,7 @@ class DependencyPlanTests(unittest.TestCase):
         plan = build_install_plan(["python"], python_executable=Path("C:\\python.exe"))
 
         with (
-            patch("backend.runtime.dependencies._run_action") as run,
+            patch("backend.runtime.dependency_install._run_action") as run,
             self.assertRaises(DependencyConsentError),
         ):
             execute_install_plan(plan, approved_plan_id="different-plan")
@@ -305,8 +305,8 @@ class DependencyPlanTests(unittest.TestCase):
         events = []
 
         with (
-            patch("backend.runtime.dependencies._run_action", return_value="installed"),
-            patch("backend.runtime.dependencies.inspect_dependencies", return_value=inventory),
+            patch("backend.runtime.dependency_install._run_action", return_value="installed"),
+            patch("backend.runtime.dependency_install.inspect_dependencies", return_value=inventory),
         ):
             results = execute_install_plan(
                 plan,
@@ -352,8 +352,8 @@ class DependencyPlanTests(unittest.TestCase):
         )
 
         with (
-            patch("backend.runtime.dependencies._run_action", return_value="installed"),
-            patch("backend.runtime.dependencies.inspect_dependencies", return_value=inventory),
+            patch("backend.runtime.dependency_install._run_action", return_value="installed"),
+            patch("backend.runtime.dependency_install.inspect_dependencies", return_value=inventory),
         ):
             results = execute_install_plan(plan, approved_plan_id=plan.id)
 
@@ -403,8 +403,8 @@ class DependencyPlanTests(unittest.TestCase):
         )
 
         with (
-            patch("backend.runtime.dependencies._run_action", return_value="installed"),
-            patch("backend.runtime.dependencies.inspect_dependencies", return_value=inventory),
+            patch("backend.runtime.dependency_install._run_action", return_value="installed"),
+            patch("backend.runtime.dependency_install.inspect_dependencies", return_value=inventory),
             self.assertRaisesRegex(DependencyInstallError, "did not verify"),
         ):
             execute_install_plan(plan, approved_plan_id=plan.id)
@@ -418,7 +418,7 @@ class DependencyPlanTests(unittest.TestCase):
         events = []
 
         with (
-            patch("backend.runtime.dependencies.subprocess.Popen", return_value=process),
+            patch("backend.runtime.dependency_install.subprocess.Popen", return_value=process),
             self.assertRaisesRegex(DependencyInstallError, "cancelled"),
         ):
             _run_action(plan.actions[0], cancellation, events.append)
@@ -438,7 +438,7 @@ class DependencyPlanTests(unittest.TestCase):
     def test_install_tracking_starts_and_reports_background_state(self):
         bridge = DesktopBridge()
         plan = build_install_plan(["python"], python_executable=Path("C:\\python.exe"))
-        bridge._install_plans[plan.id] = plan
+        bridge.installations._install_plans[plan.id] = plan
 
         running = Event()
         finish = Event()
@@ -452,7 +452,7 @@ class DependencyPlanTests(unittest.TestCase):
             progress_callback(type("Event", (), {"action_id": plan_arg.actions[0].id, "phase": "completed", "message": "Installation verified", "completed_bytes": 4096, "total_bytes": 4096})())
             return (type("Result", (), {"action_id": plan_arg.actions[0].id, "dependency_ids": plan_arg.actions[0].dependency_ids, "detail": "installed"})(),)
 
-        with patch("scripts.desktop_bridge.execute_install_plan", side_effect=fake_run):
+        with patch("backend.desktop.installation.execute_install_plan", side_effect=fake_run):
             started = bridge.handle("dependencies.install", {"plan_id": plan.id})
             self.assertIn("install_id", started)
             self.assertEqual(started["status"], "running")
@@ -472,7 +472,7 @@ class DependencyPlanTests(unittest.TestCase):
                 status = bridge.handle("dependencies.status", {"install_id": started["install_id"]})
             self.assertEqual(status["status"], "completed")
 
-        bridge._install_executor.shutdown(wait=True)
+        bridge.installations._install_executor.shutdown(wait=True)
         bridge.close()
 
 

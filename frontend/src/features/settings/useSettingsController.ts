@@ -29,6 +29,7 @@ export function useSettingsController({
   const draft = watchedDraft.directories ? watchedDraft as Settings : null
 
   useEffect(() => {
+    // Setup may refresh saved paths in the background; an edited form keeps its own draft.
     if (settingsQuery.data && !form.formState.isDirty) form.reset(settingsQuery.data)
   }, [form, settingsQuery.data])
 
@@ -66,6 +67,7 @@ export function useSettingsController({
   }
 
   const updateGroup = <K extends keyof Settings>(group: K, value: Settings[K]) => {
+    // Compare edits with the last saved defaults so Discard and dirty tracking remain accurate.
     form.reset({ ...form.getValues(), [group]: value }, { keepDefaultValues: true })
   }
 

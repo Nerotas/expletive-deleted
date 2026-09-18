@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import shutil
 from functools import wraps
+from dataclasses import replace
 from threading import RLock
-from uuid import uuid4
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Callable
@@ -15,6 +14,7 @@ from backend.jobs.downloads import DownloadManager, DownloadRecord
 from backend.jobs.media import MEDIA_EXTENSIONS, archive_path, relative_media_path
 from backend.settings import (
     AppSettings,
+    DirectoryAccessError,
     SettingsStore,
     ensure_directories,
     load_effective_settings,
@@ -24,6 +24,10 @@ from backend.settings import (
 
 from .capabilities import get_capabilities
 from .library import ArchiveItem, LibraryItem, scan_archive, scan_library
+from backend.settings.directories import bind_directories
+from backend.filesystem.operations import remove_file, remove_empty_parents
+from backend.filesystem.publication import move_verified
+from backend.filesystem.paths import identity, version
 
 
 class ServiceBusyError(RuntimeError):
@@ -63,12 +67,22 @@ class BackendService:
         self.store = store or SettingsStore()
         self._manager_factory = manager_factory
         self.settings = load_effective_settings(self.store)
-        ensure_directories(self.settings.directories)
+        try:
+            ensure_directories(self.settings.directories)
+        except DirectoryAccessError:
+            # Keep Settings reachable for explicit folder reselection. Every media
+            # operation still validates the persisted binding before touching media.
+            pass
         self.jobs = manager_factory(self.settings)
         self.downloads = DownloadManager(self.settings, self._queue_completed_youtube_download)
 
     def get_settings(self) -> dict[str, object]:
         return settings_to_dict(self.settings)
+
+    @_while_open
+    def output_context(self):
+        """Snapshot current output ownership without holding a settings lock during probing."""
+        return self.settings, tuple(self.jobs.list())
 
     @_while_open
     def update_settings(self, payload: Mapping[str, Any]) -> dict[str, object]:
@@ -83,6 +97,7 @@ class BackendService:
         if active or downloads_active:
             raise ServiceBusyError("Settings cannot change while jobs are active")
         updated = settings_from_dict(payload, self.settings)
+        updated = replace(updated, directories=bind_directories(updated.directories))
         ensure_directories(updated.directories)
         self.store.save(updated)
         self.jobs.close()
@@ -136,8 +151,11 @@ class BackendService:
             if not self._closing:
                 self.jobs.submit(source, "report_only", auto_censor_after_transcription=True)
 
+    @_while_open
     def archive_source(self, source: Path) -> dict[str, object]:
         """Move a completed or transcribed source out of the Queue without touching artifacts."""
+        if source.expanduser().is_symlink():
+            raise ArchiveSourceError('Select an original file rather than a symbolic link')
         source = source.expanduser().resolve()
         if any(
             job.source.expanduser().resolve() == source
@@ -153,6 +171,7 @@ class BackendService:
         if not source.is_file() or source.suffix.lower() not in MEDIA_EXTENSIONS:
             raise ArchiveSourceError(f"Queue source is unavailable or unsupported: {source}")
 
+        selected_version = version(source)
         item = next((candidate for candidate in self.get_library() if candidate.source.resolve() == source), None)
         if item is None or item.status not in ("transcribed", "finished"):
             raise ArchiveSourceError("Only transcribed or finished Queue files can be archived")
@@ -161,9 +180,9 @@ class BackendService:
         if destination.exists():
             raise ArchiveSourceError(f"Archive destination already exists: {destination}")
         try:
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.move(str(source), destination)
-        except OSError as exc:
+            move_verified(self.settings.directories.binding(self.settings.directories.input), source,
+                          self.settings.directories.binding(self.settings.directories.archive), destination, expected_version=selected_version)
+        except (OSError, ValueError, RuntimeError) as exc:
             raise ArchiveSourceError(f"Could not archive source: {exc}") from exc
         return {"source": str(source), "archived_to": str(destination)}
 
@@ -196,9 +215,12 @@ class BackendService:
                     results.append({"source": str(source), "status": "failed", "detail": str(exc)})
         return results
 
+    @_while_open
     def purge_archive_source(self, source: Path) -> dict[str, object]:
         """Permanently delete one archived original after an explicit UI confirmation."""
         self._ensure_no_active_jobs("Archived files cannot be deleted while a job is active")
+        if source.expanduser().is_symlink():
+            raise ArchiveSourceError('Select an original file rather than a symbolic link')
         source = source.expanduser().resolve()
         archive_root = self.settings.directories.archive.resolve()
         try:
@@ -208,13 +230,15 @@ class BackendService:
         if not source.is_file() or source.is_symlink() or source.suffix.lower() not in MEDIA_EXTENSIONS:
             raise ArchiveSourceError(f"Archive file is unavailable or unsupported: {source}")
         size_bytes = source.stat().st_size
+        selected_identity = identity(source)
         try:
-            source.unlink()
-            self._remove_empty_archive_parents(source.parent, archive_root)
+            remove_file(self.settings.directories.binding(self.settings.directories.archive), source, expected=selected_identity)
+            remove_empty_parents(self.settings.directories.binding(self.settings.directories.archive), source.parent)
         except OSError as exc:
             raise ArchiveSourceError(f"Could not delete archive file: {exc}") from exc
         return {"source": str(source), "deleted_bytes": size_bytes}
 
+    @_while_open
     def restore_archive_source(self, source: Path) -> dict[str, object]:
         """Move an archived original back to Ready without overwriting a Queue source."""
         self._ensure_no_active_jobs("Archived files cannot be returned while a job is active")
@@ -235,13 +259,14 @@ class BackendService:
         if destination.exists():
             raise ArchiveSourceError(f"Queue destination already exists: {destination}")
         try:
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.move(str(source), destination)
-            self._remove_empty_archive_parents(source.parent, archive_root)
+            move_verified(self.settings.directories.binding(self.settings.directories.archive), source,
+                          self.settings.directories.binding(self.settings.directories.input), destination)
+            remove_empty_parents(self.settings.directories.binding(self.settings.directories.archive), source.parent)
         except OSError as exc:
             raise ArchiveSourceError(f"Could not return archive file to Queue: {exc}") from exc
         return {"source": str(source), "restored_to": str(destination)}
 
+    @_while_open
     def purge_archive(self) -> dict[str, object]:
         """Permanently delete every supported original in Processed after confirmation."""
         self._ensure_no_active_jobs("Archived files cannot be deleted while a job is active")
@@ -258,17 +283,8 @@ class BackendService:
             job for job in self.jobs.list()
             if job.status not in ("completed", "failed", "cancelled", "transcribed")
         )
-        if active:
+        if active or any(item.status not in ("completed", "failed", "cancelled") for item in self.downloads.list()):
             raise ServiceBusyError(message)
-
-    @staticmethod
-    def _remove_empty_archive_parents(directory: Path, archive_root: Path) -> None:
-        while directory != archive_root:
-            try:
-                directory.rmdir()
-            except OSError:
-                return
-            directory = directory.parent
 
     def close(self) -> None:
         with self._lifecycle_lock:

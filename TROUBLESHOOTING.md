@@ -129,6 +129,8 @@ Run report-only mode first:
 
 Review the transcript under the configured Transcripts directory, then classify the term from the desktop **Dictionary** page. The shipped files under `resources/` are factory defaults; live state is stored atomically in `%LOCALAPPDATA%\ExpletiveDeleted\dictionary\censored.json`, `exclusions.json`, and `discovered.json`. Use the Dictionary page to import, export, or deliberately restore it.
 
+If **Play** reports that output cannot be verified, check FFprobe in Settings and that the completed copy remains in the configured output folder. Files moved elsewhere can be opened through Explorer. Dictionary exports accept ordinary `.json` files; if a selection expires or the destination changes during confirmation, select it again. The app retains a competing file instead of replacing it with the backup.
+
 If a surround transcript predates front-center transcription, the backend automatically rejects that cache and transcribes it again.
 
 ## FFmpeg Processing Fails
@@ -168,6 +170,12 @@ ffprobe -version
 ```
 
 Include the failing command, the final error text, the media container and stream metadata, and whether the problem reproduces in report-only mode.
+
+## A Selected Media Folder Changed
+
+If the app reports that a selected folder changed, open Settings and choose the intended folder using its actual target path. The app remembers folder identity, so moving or retargeting a junction does not silently grant access to a different location. Your media is not moved by this check. Network/device paths and protected processing on non-Windows systems are currently unsupported.
+
+If replacement reports a `.recovery` file, keep it: it contains the previous output. Close active processing before restoring it to a different, unused filename. Never overwrite a competing output to recover it. An interrupted replacement can also leave this hidden recovery file; it is not an incomplete media file to discard.
 
 ## Managed Download Destinations
 

@@ -20,6 +20,7 @@ import type {
   Settings,
 } from '../types/domain'
 
+// Keep preload access and wire method names here; features consume typed operations only.
 function bridge() {
   if (!window.expletiveDeleted) {
     throw new Error('The Electron preload bridge did not load. Restart the desktop application.')
@@ -58,10 +59,8 @@ export const desktopClient = {
   updateDictionary: (action: DictionaryAction, target: DictionaryTarget, word: string) =>
     invoke<DictionaryMutationResult>(`dictionary.${action}`, { target, word }),
   restoreDictionaryDefaults: () => invoke<DictionaryMutationResult>('dictionary.restore_defaults'),
-  importDictionary: (source: string) =>
-    invoke<DictionaryMutationResult>('dictionary.import', { source }),
-  exportDictionary: (destination: string) =>
-    invoke<{ path: string }>('dictionary.export', { destination }),
+  importDictionary: () => bridge().importDictionary(),
+  exportDictionary: () => bridge().exportDictionary(),
   getReview: (source: string) => invoke<ReviewResult>('reviews.list', { source }),
   planDependencies: (components: string[]) =>
     invoke<InstallPlan>('dependencies.plan', { components }),
@@ -90,10 +89,10 @@ export const desktopClient = {
   purgeArchiveSource: (source: string) => invoke<unknown>('archive.purge', { source }),
   purgeArchive: () => invoke<unknown>('archive.purge'),
   listJobs: () => invoke<Job[]>('jobs.list'),
-    listDownloads: () => invoke<Job[]>('downloads.list'),
-    submitYoutubeDownload: (url: string, retryId?: string, cookieBrowser?: string) => invoke<Job>('downloads.submit', { url, ...(retryId ? { retry_id: retryId } : {}), ...(cookieBrowser ? { cookie_browser: cookieBrowser } : {}) }),
-    listDownloadEvents: (jobId: string) => invoke<JobEvent[]>('downloads.events', { job_id: jobId }),
-    cancelDownload: (jobId: string) => invoke<Job>('downloads.cancel', { job_id: jobId }),
+  listDownloads: () => invoke<Job[]>('downloads.list'),
+  submitYoutubeDownload: (url: string, retryId?: string, cookieBrowser?: string) => invoke<Job>('downloads.submit', { url, ...(retryId ? { retry_id: retryId } : {}), ...(cookieBrowser ? { cookie_browser: cookieBrowser } : {}) }),
+  listDownloadEvents: (jobId: string) => invoke<JobEvent[]>('downloads.events', { job_id: jobId }),
+  cancelDownload: (jobId: string) => invoke<Job>('downloads.cancel', { job_id: jobId }),
   submitJob: (source: string, mode: Job['mode'], options?: JobSubmissionOptions) =>
     invoke<Job>('jobs.submit', { source, mode, ...options }),
   submitJobs: (sources: string[], mode: Job['mode']) =>
@@ -102,11 +101,9 @@ export const desktopClient = {
   cancelJob: (jobId: string) => invoke<Job>('jobs.cancel', { job_id: jobId }),
   selectDirectory: (defaultPath?: string) => bridge().selectDirectory(defaultPath),
   selectFile: (defaultPath?: string) => bridge().selectFile(defaultPath),
-  selectDictionaryImport: () => bridge().selectDictionaryImport(),
-  selectDictionaryExport: () => bridge().selectDictionaryExport(),
   openExternal: (url: string) => bridge().openExternal(url),
   openTranscodeFolder: () => bridge().openTranscodeFolder(),
-  openFile: (filePath: string) => bridge().openFile(filePath),
+  openOutput: (source: string) => bridge().openOutput(source),
   getDroppedFilePath: (file: File) => bridge().getPathForFile(file),
 }
 

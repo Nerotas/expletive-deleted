@@ -11,6 +11,7 @@ from backend.censor import transcript_cache_is_compatible
 from backend.jobs.media import MEDIA_EXTENSIONS, output_path, transcript_path
 from backend.runtime import find_ffprobe
 from backend.settings import AppSettings
+from backend.filesystem.discovery import files_within
 
 
 LibraryStatus = Literal["ready", "transcribed", "finished"]
@@ -69,7 +70,7 @@ def scan_library(
 
     ffprobe_bin = ffprobe_bin or find_ffprobe()
     try:
-        candidates = paths.ready.rglob("*") if settings.source.scan_subdirectories else paths.ready.iterdir()
+        candidates = files_within(settings.directories.binding(paths.ready), recursive=settings.source.scan_subdirectories)
         sources = sorted(
             (
                 path
@@ -86,6 +87,8 @@ def scan_library(
         date_added = datetime.fromtimestamp(source.stat().st_ctime, tz=timezone.utc)
         transcript = transcript_path(source, paths.transcripts, paths.ready)
         output = output_path(source, paths.finished, paths.ready)
+        settings.directories.binding(paths.transcripts).target(transcript)
+        settings.directories.binding(paths.finished).target(output)
         if output.is_file():
             items.append(
                 LibraryItem(
@@ -123,7 +126,7 @@ def scan_archive(settings: AppSettings) -> tuple[ArchiveItem, ...]:
                 size_bytes=path.stat().st_size,
                 archived_at=datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc),
             )
-            for path in archive_root.rglob("*")
+            for path in files_within(settings.directories.binding(archive_root))
             if path.is_file() and not path.is_symlink() and path.suffix.lower() in MEDIA_EXTENSIONS
         ]
     except OSError as exc:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from backend.filesystem.paths import RootBinding
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -19,6 +20,10 @@ class RuntimePaths:
     finished: Path
     processed: Path
     transcripts: Path
+    bindings: tuple[RootBinding, ...] = ()
+
+    def binding(self, path: Path) -> RootBinding:
+        return next((item for item in self.bindings if item.configured == path), None) or RootBinding.capture(path)
 
     @property
     def transcoded(self) -> Path:

@@ -1,9 +1,9 @@
-import { AlertCircle, CheckCircle2, ExternalLink, FileSearch, FolderOpen, Heart, RefreshCw, RotateCcw, Save } from 'lucide-react'
-import { NumberInput } from '../../components/ui/NumberInput'
+import { MediaSettingsSections } from './MediaSettingsSections'
+import { RuntimeSettingsSection } from './RuntimeSettingsSection'
+import { ExternalLink, FolderOpen, Heart, RotateCcw, Save } from 'lucide-react'
 import { PageHeading } from '../../components/ui/PageHeading'
-import { SegmentedControl } from '../../components/ui/SegmentedControl'
-import type { Capabilities, Settings, WhisperModel } from '../../types/domain'
-import { Field, SettingsSection } from './SettingsControls'
+import type { Capabilities, Settings } from '../../types/domain'
+import { SettingsSection } from './SettingsControls'
 import type { SettingsController } from './useSettingsController'
 import './settings.css'
 import { APPLICATION_DISPLAY_NAME } from '../../constants/application'
@@ -28,7 +28,6 @@ const DIRECTORY_LABELS: Record<keyof Settings['directories'], string> = {
 
 export function SettingsPage({ controller, capabilities, checkingSystem, onCheckSystem, onOpenOnboarding }: SettingsPageProps) {
   const settings = controller.draft
-  const bundledRuntime = capabilities?.app_runtime_source === 'bundled'
   if (!settings) return <div className="loading-row">Loading settings</div>
 
   const setGroup = <K extends keyof Settings>(group: K, value: Settings[K]) => {
@@ -79,207 +78,8 @@ export function SettingsPage({ controller, capabilities, checkingSystem, onCheck
           ))}
         </SettingsSection>
 
-        <SettingsSection title="Processing" description="Choose the workflow and compute device">
-          <Field label="Mode">
-            <SegmentedControl
-              label="Processing mode"
-              value={settings.processing.mode}
-              options={[["report_only", 'Report only'], ['censor', 'Censor media']]}
-              onChange={(mode) => setGroup('processing', { ...settings.processing, mode })}
-            />
-          </Field>
-          <Field label="Device">
-            <select
-              aria-label="Device"
-              value={settings.processing.device}
-              onChange={(event) => setGroup('processing', {
-                ...settings.processing,
-                device: event.target.value as Settings['processing']['device'],
-              })}
-            >
-              <option value="auto">Automatic ({capabilities?.whisper_device ?? 'detecting'})</option>
-              <option value="cpu">CPU</option>
-              <option value="cuda">CUDA</option>
-            </select>
-          </Field>
-          <label className="toggle-row">
-            <div>
-              <strong>Automatically create a censored copy after transcription</strong>
-              <span>Place each newly verified transcript in the separate censored-copy queue.</span>
-            </div>
-            <input
-              type="checkbox"
-              checked={settings.processing.auto_censor_after_transcription}
-              onChange={(event) => setGroup('processing', {
-                ...settings.processing,
-                auto_censor_after_transcription: event.target.checked,
-              })}
-            />
-          </label>
-          <label className="toggle-row">
-            <div>
-              <strong>Automatically process YouTube downloads</strong>
-              <span>After a YouTube video reaches Ready, create its verified transcript, then queue its censored copy.</span>
-            </div>
-            <input
-              type="checkbox"
-              checked={settings.processing.auto_transcode_youtube_downloads}
-              onChange={(event) => setGroup('processing', {
-                ...settings.processing,
-                auto_transcode_youtube_downloads: event.target.checked,
-              })}
-            />
-          </label>
-        </SettingsSection>
-
-        <SettingsSection title="Censoring" description="Audio treatment and interval timing">
-          <Field label="Stereo method">
-            <SegmentedControl
-              label="Stereo method"
-              value={settings.censoring.stereo_method}
-              options={[["drop_audio", 'Drop audio'], ['karaoke', 'Karaoke']]}
-              onChange={(stereo_method) => setGroup('censoring', {
-                ...settings.censoring,
-                stereo_method,
-              })}
-            />
-          </Field>
-          <div className="field-pair">
-            <Field label="Before word">
-              <NumberInput
-                label="Before word"
-                value={settings.censoring.padding_before_ms}
-                onChange={(padding_before_ms) => setGroup('censoring', {
-                  ...settings.censoring,
-                  padding_before_ms,
-                })}
-              />
-            </Field>
-            <Field label="After word">
-              <NumberInput
-                label="After word"
-                value={settings.censoring.padding_after_ms}
-                onChange={(padding_after_ms) => setGroup('censoring', {
-                  ...settings.censoring,
-                  padding_after_ms,
-                })}
-              />
-            </Field>
-          </div>
-        </SettingsSection>
-
-        <SettingsSection title="Output" description="Audio layout, video handling, and source safety">
-          <Field label="Surround audio">
-            <SegmentedControl
-              label="Surround audio"
-              value={settings.audio.surround_output}
-              options={[["preserve_5_1", 'Preserve 5.1'], ['downmix_stereo', 'Downmix to stereo']]}
-              onChange={(surround_output) => setGroup('audio', { surround_output })}
-            />
-          </Field>
-          <Field label="Video">
-            <SegmentedControl
-              label="Video output"
-              value={settings.video.mode}
-              options={[["preserve_source", 'Preserve source (recommended)'], ["h264", 'Convert to H.264']]}
-              onChange={(mode) => setGroup('video', { mode })}
-            />
-          </Field>
-          <label className="toggle-row">
-            <div>
-              <strong>Scan subdirectories</strong>
-              <span>Include supported media inside folders under Ready.</span>
-            </div>
-            <input
-              type="checkbox"
-              checked={settings.source.scan_subdirectories}
-              onChange={(event) => setGroup('source', {
-                ...settings.source,
-                scan_subdirectories: event.target.checked,
-              })}
-            />
-          </label>
-          <label className="toggle-row">
-            <div>
-              <strong>Archive original after success</strong>
-              <span>Off by default. Never moves source files after failure or cancellation.</span>
-            </div>
-            <input
-              type="checkbox"
-              checked={settings.source.archive_after_success}
-              onChange={(event) => setGroup('source', {
-                ...settings.source,
-                archive_after_success: event.target.checked,
-              })}
-            />
-          </label>
-        </SettingsSection>
-
-        <SettingsSection title="Whisper" description="Choose the accuracy and speed profile for transcription">
-          <Field label="Model">
-            <select
-              aria-label="Model"
-              value={settings.whisper.model}
-              onChange={(event) => setGroup('whisper', {
-                ...settings.whisper,
-                model: event.target.value as WhisperModel,
-              })}
-            >
-              <option value="large-v3">large-v3 — recommended, highest accuracy</option>
-              <option value="medium">medium — faster, lower accuracy</option>
-              <option value="small">small — substantially lower accuracy</option>
-              <option value="base">base — major accuracy tradeoff</option>
-              <option value="tiny">tiny — fastest, lowest accuracy</option>
-            </select>
-          </Field>
-          <div className={`whisper-notice ${settings.whisper.model === 'large-v3' ? 'recommended' : 'warning'}`}>
-            <AlertCircle size={17} />
-            <div>
-              <strong>
-                {settings.whisper.model === 'large-v3'
-                  ? 'Recommended for reliable censoring'
-                  : `${settings.whisper.model} trades accuracy for speed`}
-              </strong>
-              <span>
-                {settings.whisper.model === 'large-v3'
-                  ? 'large-v3 remains the default because it produces the most consistent word detection and timestamps.'
-                  : 'Quality and timestamp accuracy drop noticeably with smaller models. Review transcripts and discovered words carefully.'}
-              </span>
-            </div>
-          </div>
-          <small className="whisper-library-note">
-            faster-whisper is used for all transcription. Changing the model requires its local
-            component download, and existing transcripts from another model will be regenerated.
-          </small>
-        </SettingsSection>
-
-        <SettingsSection title="Runtime components" description={bundledRuntime ? 'Included private Python and user-approved processing components' : 'Automatic discovery and optional path overrides'}>
-          {bundledRuntime && <p className="whisper-library-note">Private Python came with Expletive Deleted. Transcription packages, FFmpeg, FFprobe, YouTube tools, and speech models are installed or selected separately after your approval.</p>}
-          <label className="path-field">
-            <span>FFmpeg path override</span>
-            <div>
-              <input value={settings.runtime.ffmpeg_path ?? ''} placeholder="Using automatic detection" onChange={(event) => setGroup('runtime', { ...settings.runtime, ffmpeg_path: event.target.value || null })} />
-              <button className="icon-button" title="Choose and verify FFmpeg" onClick={() => void controller.chooseFfmpeg()}><FileSearch size={17} /></button>
-            </div>
-          </label>
-          <label className="path-field">
-            <span>FFprobe path override</span>
-            <input value={settings.runtime.ffprobe_path ?? ''} placeholder="Using automatic detection" onChange={(event) => setGroup('runtime', { ...settings.runtime, ffprobe_path: event.target.value || null })} />
-          </label>
-          <label className="path-field">
-            <span>Whisper model location</span>
-            <div>
-              <input value={settings.runtime.whisper_cache ?? ''} placeholder="Using application-managed model location" onChange={(event) => setGroup('runtime', { ...settings.runtime, whisper_cache: event.target.value || null })} />
-              <button className="icon-button" title="Choose Whisper model cache" onClick={() => void controller.chooseWhisperCache()}><FolderOpen size={17} /></button>
-            </div>
-          </label>
-          <div className={`runtime-status ${(capabilities?.processing_ready ?? capabilities?.ready) ? 'ready' : 'attention'}`}>
-            {(capabilities?.processing_ready ?? capabilities?.ready) ? <CheckCircle2 size={17} /> : <AlertCircle size={17} />}
-            <span>{(capabilities?.processing_ready ?? capabilities?.ready) ? 'Processing components and speech model are verified.' : capabilities?.app_runtime === 'invalid' ? 'The installed app needs repair.' : 'One or more processing components need attention.'}</span>
-            <button className="button secondary" disabled={checkingSystem} onClick={onCheckSystem}><RefreshCw className={checkingSystem ? 'spin' : undefined} size={15} />Check system</button>
-          </div>
-          <small className="whisper-library-note">Leave overrides blank to use automatically detected components. These fields select executable or cache locations; they do not add FFmpeg command-line flags. Save changed paths before checking again.</small>
-        </SettingsSection>
+        <MediaSettingsSections settings={settings} capabilities={capabilities} setGroup={setGroup} />
+        <RuntimeSettingsSection settings={settings} controller={controller} capabilities={capabilities} checkingSystem={checkingSystem} onCheckSystem={onCheckSystem} />
 
         <SettingsSection title="About" description="Desktop application identity">
           <div className="about-setting">

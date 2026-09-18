@@ -67,8 +67,6 @@ describe('desktop application renderer', () => {
     vi.spyOn(desktopClient, 'restoreArchiveSource').mockResolvedValue({})
     vi.spyOn(desktopClient, 'selectDirectory').mockResolvedValue(undefined)
     vi.spyOn(desktopClient, 'selectFile').mockResolvedValue(undefined)
-    vi.spyOn(desktopClient, 'selectDictionaryImport').mockResolvedValue(undefined)
-    vi.spyOn(desktopClient, 'selectDictionaryExport').mockResolvedValue(undefined)
     vi.spyOn(desktopClient, 'planDependencies').mockResolvedValue({
       plan_id: 'approved-plan',
       actions: [],
@@ -88,8 +86,8 @@ describe('desktop application renderer', () => {
     })
     vi.spyOn(desktopClient, 'updateDictionary').mockResolvedValue(emptyDictionary)
     vi.spyOn(desktopClient, 'restoreDictionaryDefaults').mockResolvedValue(emptyDictionary)
-    vi.spyOn(desktopClient, 'importDictionary').mockResolvedValue(emptyDictionary)
-    vi.spyOn(desktopClient, 'exportDictionary').mockResolvedValue({ path: 'C:\\backup\\dictionary.json' })
+    vi.spyOn(desktopClient, 'importDictionary').mockResolvedValue({ canceled: false, result: emptyDictionary })
+    vi.spyOn(desktopClient, 'exportDictionary').mockResolvedValue({ canceled: false, path: 'C:\\backup\\dictionary.json' })
     vi.spyOn(desktopClient, 'getReview').mockResolvedValue({ source: '', candidates: [], censored: [] })
     vi.spyOn(desktopClient, 'openExternal').mockResolvedValue()
     vi.spyOn(desktopClient, 'getDroppedFilePath').mockReturnValue('C:\\Source\\movie.mp4')
@@ -599,10 +597,8 @@ describe('desktop application renderer', () => {
     expect(await screen.findByText('example-exclusion')).toBeInTheDocument()
   })
 
-  it('confirms restore and forwards selected dictionary import and export paths', async () => {
+  it('confirms restore and delegates dictionary pickers to native operations', async () => {
     const user = userEvent.setup()
-    vi.mocked(desktopClient.selectDictionaryImport).mockResolvedValueOnce('C:\\backup\\import.json')
-    vi.mocked(desktopClient.selectDictionaryExport).mockResolvedValueOnce('C:\\backup\\export.json')
     renderApp('/dictionary')
 
     await user.click(await screen.findByRole('button', { name: 'Restore defaults' }))
@@ -612,9 +608,27 @@ describe('desktop application renderer', () => {
     await waitFor(() => expect(desktopClient.restoreDictionaryDefaults).toHaveBeenCalledOnce())
 
     await user.click(screen.getByRole('button', { name: 'Import' }))
-    await waitFor(() => expect(desktopClient.importDictionary).toHaveBeenCalledWith('C:\\backup\\import.json'))
+    await waitFor(() => expect(desktopClient.importDictionary).toHaveBeenCalledWith())
     await user.click(screen.getByRole('button', { name: 'Export' }))
-    await waitFor(() => expect(desktopClient.exportDictionary).toHaveBeenCalledWith('C:\\backup\\export.json'))
+    await waitFor(() => expect(desktopClient.exportDictionary).toHaveBeenCalledWith())
+  })
+
+  it.each(['Import', 'Export'] as const)('shows native %s picker failures', async (action) => {
+    const user = userEvent.setup()
+    const operation = action === 'Import' ? desktopClient.importDictionary : desktopClient.exportDictionary
+    vi.mocked(operation).mockRejectedValueOnce(new Error('Native picker could not open'))
+    renderApp('/dictionary')
+    await user.click(await screen.findByRole('button', { name: action }))
+    expect(await screen.findByText('Native picker could not open')).toBeInTheDocument()
+  })
+
+  it('does not announce a cancelled export as a saved backup', async () => {
+    const user = userEvent.setup()
+    vi.mocked(desktopClient.exportDictionary).mockResolvedValueOnce({ canceled: true })
+    renderApp('/dictionary')
+    await user.click(await screen.findByRole('button', { name: 'Export' }))
+    await waitFor(() => expect(desktopClient.exportDictionary).toHaveBeenCalledOnce())
+    expect(screen.queryByText(/Exported dictionary to/)).not.toBeInTheDocument()
   })
 
   it('turns a stalled Dictionary request into a retryable error', async () => {

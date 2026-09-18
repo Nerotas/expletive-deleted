@@ -75,28 +75,13 @@ class DesktopBridgeTests(unittest.TestCase):
             ):
                 bridge.handle(method)
 
-    def test_dictionary_portability_methods_use_policy_store(self):
-        service = MagicMock()
-        policy_store = MagicMock()
-        policy = self.policy(Path("C:/policy"), {"word"}, {"allowed"})
-        policy_store.restore_defaults.return_value = policy
-        policy_store.import_dictionary.return_value = policy
-        policy_store.export_dictionary.return_value = Path("C:/backup/dictionary.json")
-        bridge = DesktopBridge(service, policy_store)
-
-        restored = bridge.handle("dictionary.restore_defaults")
-        imported = bridge.handle("dictionary.import", {"source": "C:/backup/import.json"})
-        exported = bridge.handle(
-            "dictionary.export",
-            {"destination": "C:/backup/dictionary.json"},
-        )
-
-        policy_store.restore_defaults.assert_called_once_with()
-        policy_store.import_dictionary.assert_called_once_with(Path("C:/backup/import.json"))
-        policy_store.export_dictionary.assert_called_once_with(Path("C:/backup/dictionary.json"))
-        self.assertEqual(restored["words_count"], 1)
-        self.assertEqual(imported["exclusions_count"], 1)
-        self.assertEqual(exported, {"path": str(Path("C:/backup/dictionary.json"))})
+    def test_dictionary_paths_require_native_operations(self):
+        bridge = DesktopBridge(MagicMock(), MagicMock())
+        for method in ('dictionary.import', 'dictionary.export'):
+            with self.subTest(method=method), self.assertRaisesRegex(ValueError, 'Unknown desktop bridge method'):
+                bridge.handle(method, {'source': 'C:/outside.json', 'destination': 'C:/outside.json'})
+        bridge.policy_store.import_dictionary.assert_not_called()
+        bridge.policy_store.export_dictionary.assert_not_called()
 
     def test_dictionary_update_persists_through_policy_store(self):
         service = MagicMock()
@@ -321,7 +306,7 @@ class DesktopBridgeTests(unittest.TestCase):
         error_stream = io.TextIOWrapper(io.BytesIO(), encoding="cp1252")
         bridge = MagicMock()
         bridge.handle.side_effect = lambda method, params: params
-        with patch("scripts.desktop_bridge.contain_process_tree"), patch("scripts.desktop_bridge.DesktopBridge", return_value=bridge), \
+        with patch("backend.desktop.protocol.contain_process_tree"), patch("backend.desktop.protocol.DesktopBridge", return_value=bridge), \
                 patch("sys.stdin", input_stream), patch("sys.stdout", output_stream), patch("sys.stderr", error_stream):
             self.assertEqual(main(), 0)
         response = json.loads(output_stream.buffer.getvalue().decode("utf-8"))
@@ -332,10 +317,10 @@ class DesktopBridgeTests(unittest.TestCase):
         service.settings.runtime.whisper_cache = None
         service.get_settings.return_value = {"runtime": {}}
         bridge = DesktopBridge(service, MagicMock())
-        bridge._install_executor.shutdown()
-        bridge._install_executor = MagicMock()
+        bridge.installations._install_executor.shutdown()
+        bridge.installations._install_executor = MagicMock()
         plan = SimpleNamespace(id="approved", actions=[SimpleNamespace(id="first"), SimpleNamespace(id="second")])
-        bridge._install_plans[plan.id] = plan
+        bridge.installations._install_plans[plan.id] = plan
         state = bridge.handle("dependencies.install", {"plan_id": plan.id})
         return bridge, plan, state["install_id"]
 
@@ -346,8 +331,8 @@ class DesktopBridgeTests(unittest.TestCase):
                 progress_callback(InstallProgress(action.id, "completed", "Verified"))
                 self.assertEqual(bridge.handle("dependencies.status", {"install_id": install_id})["status"], "running")
             return []
-        with patch("scripts.desktop_bridge.execute_install_plan", side_effect=execute):
-            bridge._run_install_task(install_id, plan.id, plan, None)
+        with patch("backend.desktop.installation.execute_install_plan", side_effect=execute):
+            bridge.installations._run_install_task(install_id, plan.id, plan, None)
         self.assertEqual(bridge.handle("dependencies.status", {"install_id": install_id})["status"], "completed")
         self.assertEqual(bridge.handle("dependencies.cancel", {"install_id": install_id})["status"], "completed")
 
@@ -357,15 +342,15 @@ class DesktopBridgeTests(unittest.TestCase):
         def execute(*args, cancellation, **kwargs):
             self.assertTrue(cancellation.is_set())
             raise DependencyInstallError("cancelled")
-        with patch("scripts.desktop_bridge.execute_install_plan", side_effect=execute):
-            bridge._run_install_task(install_id, plan.id, plan, None)
+        with patch("backend.desktop.installation.execute_install_plan", side_effect=execute):
+            bridge.installations._run_install_task(install_id, plan.id, plan, None)
         self.assertEqual(bridge.handle("dependencies.status", {"install_id": install_id})["status"], "cancelled")
 
     def test_close_cancels_setup_and_rejects_new_installs(self):
         bridge, plan, install_id = self.prepare_install()
         bridge.close()
-        self.assertTrue(bridge._install_jobs[install_id]["cancel_event"].is_set())
-        bridge._install_executor.shutdown.assert_called_once_with(wait=True, cancel_futures=True)
+        self.assertTrue(bridge.installations._install_jobs[install_id]["cancel_event"].is_set())
+        bridge.installations._install_executor.shutdown.assert_called_once_with(wait=True, cancel_futures=True)
         bridge.service.close.assert_called_once_with()
         with self.assertRaisesRegex(RuntimeError, "closing"):
             bridge.handle("dependencies.install", {"plan_id": plan.id})
@@ -433,7 +418,7 @@ class DesktopBridgeTests(unittest.TestCase):
         bridge = DesktopBridge(service)
 
         with patch(
-            "scripts.desktop_bridge.inspect_executable",
+            "backend.desktop.installation.inspect_executable",
             side_effect=[
                 ready("ffmpeg", "FFmpeg", "C:/Tools/ffmpeg.exe"),
                 ready("ffprobe", "FFprobe", "C:/Tools/ffprobe.exe"),

@@ -79,6 +79,7 @@ class YoutubeUrlTests(unittest.TestCase):
             try:
                 with patch.object(manager, "_runtime_media_tools", return_value=(Path("ffmpeg"), Path("ffprobe"))), \
                         patch.object(manager, "_prepare", side_effect=lambda job, source, final, *args: final.write_bytes(b"verified")), \
+                        patch.object(manager, "_verify", return_value=None), \
                         patch("backend.jobs.downloads.subprocess.Popen", return_value=process):
                     manager._run("job")
                 self.assertEqual(callback_states, ["preparing"])

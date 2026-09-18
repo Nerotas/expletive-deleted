@@ -42,7 +42,7 @@ class BatchLifecycleTests(unittest.TestCase):
 
             def create_output(**options) -> bool:
                 self.assertFalse(options["report_only"])
-                destination.write_bytes(b"output")
+                Path(factory.call_args.args[1]).write_bytes(b"output")
                 return True
 
             censor.process.side_effect = create_output
@@ -50,7 +50,7 @@ class BatchLifecycleTests(unittest.TestCase):
             censor.used_cached_transcript = False
             censor.profane_count = 1
 
-            with patch("backend.jobs.batch.ProfanityCensor", return_value=censor):
+            with patch("backend.jobs.batch.ProfanityCensor", return_value=censor) as factory:
                 result = process_file(
                     source,
                     "large",
@@ -73,14 +73,14 @@ class BatchLifecycleTests(unittest.TestCase):
 
             def create_output(**options) -> bool:
                 self.assertFalse(options["report_only"])
-                return destination.write_bytes(b"output") > 0
+                return Path(factory.call_args.args[1]).write_bytes(b"output") > 0
 
             censor.process.side_effect = create_output
             censor.review_candidates = []
             censor.used_cached_transcript = False
             censor.profane_count = 1
 
-            with patch("backend.jobs.batch.ProfanityCensor", return_value=censor):
+            with patch("backend.jobs.batch.ProfanityCensor", return_value=censor) as factory:
                 result = process_file(source, "large", paths, 1, 1)
 
             self.assertEqual(result[0], "ok")
@@ -95,12 +95,12 @@ class BatchLifecycleTests(unittest.TestCase):
             archive_path = paths.processed / source.name
             archive_path.write_bytes(b"existing archive")
             censor = MagicMock()
-            censor.process.return_value = True
+            censor.process.side_effect = lambda **_: Path(factory.call_args.args[1]).write_bytes(b"verified output") > 0
             censor.review_candidates = []
             censor.used_cached_transcript = False
             censor.profane_count = 1
 
-            with patch("backend.jobs.batch.ProfanityCensor", return_value=censor):
+            with patch("backend.jobs.batch.ProfanityCensor", return_value=censor) as factory:
                 result = process_file(
                     source,
                     "large",
@@ -114,6 +114,7 @@ class BatchLifecycleTests(unittest.TestCase):
             self.assertEqual(result[0], "fail")
             self.assertTrue(source.is_file())
             self.assertEqual(archive_path.read_bytes(), b"existing archive")
+            self.assertEqual(destination.read_bytes(), b"verified output")
 
     def test_failure_leaves_source_in_ready(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -124,7 +125,7 @@ class BatchLifecycleTests(unittest.TestCase):
             censor.used_cached_transcript = False
             censor.profane_count = 0
 
-            with patch("backend.jobs.batch.ProfanityCensor", return_value=censor):
+            with patch("backend.jobs.batch.ProfanityCensor", return_value=censor) as factory:
                 result = process_file(
                     source,
                     "large",
@@ -146,7 +147,7 @@ class BatchLifecycleTests(unittest.TestCase):
             censor.used_cached_transcript = False
             censor.profane_count = 1
 
-            with patch("backend.jobs.batch.ProfanityCensor", return_value=censor):
+            with patch("backend.jobs.batch.ProfanityCensor", return_value=censor) as factory:
                 result = process_file(
                     source,
                     "large",

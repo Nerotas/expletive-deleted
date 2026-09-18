@@ -4,7 +4,6 @@
 import os
 import sys
 import json
-import math
 import shutil
 import subprocess
 import tempfile
@@ -31,303 +30,15 @@ from backend.runtime.transcription import (
     transcribe_segments,
 )
 
-
-def _profanity_dictionary():
-    """Create an isolated vendor dictionary only when broad detection is requested."""
-    from better_profanity import profanity
-
-    # The package-level object is mutable. Sharing it lets dictionary review requests
-    # replace the active processing policy while a job is running.
-    return type(profanity)()
-
-
-class TranscriptValidationError(RuntimeError):
-    """Raised when a transcript cannot safely unlock downstream processing."""
-
-
-def validate_transcript_data(
-    transcript_data: object,
-    *,
-    whisper_library: str | None = None,
-    whisper_model: str | None = None,
-    require_front_center: bool = False,
-) -> Dict:
-    """Validate the persisted transcript contract used by detection and censoring."""
-    if not isinstance(transcript_data, dict):
-        raise TranscriptValidationError("Transcript must be a JSON object")
-    if not isinstance(transcript_data.get("text"), str):
-        raise TranscriptValidationError("Transcript text must be a string")
-
-    words = transcript_data.get("words")
-    if not isinstance(words, list):
-        raise TranscriptValidationError("Transcript words must be a list")
-    for index, item in enumerate(words):
-        if not isinstance(item, dict) or not isinstance(item.get("word"), str):
-            raise TranscriptValidationError(f"Transcript word {index} is invalid")
-        start = item.get("start")
-        end = item.get("end")
-        if (
-            isinstance(start, bool)
-            or isinstance(end, bool)
-            or not isinstance(start, (int, float))
-            or not isinstance(end, (int, float))
-            or not math.isfinite(float(start))
-            or not math.isfinite(float(end))
-            or start < 0
-            or end < start
-        ):
-            raise TranscriptValidationError(
-                f"Transcript word {index} has invalid timestamps"
-            )
-
-    audio_source = transcript_data.get("audio_source")
-    if audio_source not in ("full_mix", "front_center"):
-        raise TranscriptValidationError("Transcript audio source is invalid")
-    if require_front_center and audio_source != "front_center":
-        raise TranscriptValidationError(
-            "Transcript must use the source's front-center audio channel"
-        )
-    if whisper_library and transcript_data.get("whisper_library") != whisper_library:
-        raise TranscriptValidationError("Transcript uses a different Whisper library")
-    if whisper_model and transcript_data.get("whisper_model") != whisper_model:
-        raise TranscriptValidationError("Transcript uses a different Whisper model")
-    return transcript_data
-
-
-def write_transcript_atomic(
-    transcript_path: Path,
-    transcript_data: Dict,
-    *,
-    whisper_library: str,
-    whisper_model: str,
-    require_front_center: bool,
-) -> Dict:
-    """Atomically persist and verify a transcript before it can unlock transcoding."""
-    validate = lambda value: validate_transcript_data(
-        value,
-        whisper_library=whisper_library,
-        whisper_model=whisper_model,
-        require_front_center=require_front_center,
-    )
-    validate(transcript_data)
-    transcript_path.parent.mkdir(parents=True, exist_ok=True)
-    temporary_path: Path | None = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            encoding="utf-8",
-            dir=transcript_path.parent,
-            prefix=f".{transcript_path.name}.",
-            suffix=".tmp",
-            delete=False,
-        ) as temporary_file:
-            json.dump(transcript_data, temporary_file, indent=2)
-            temporary_file.write("\n")
-            temporary_file.flush()
-            os.fsync(temporary_file.fileno())
-            temporary_path = Path(temporary_file.name)
-
-        with temporary_path.open(encoding="utf-8") as source:
-            validate(json.load(source))
-        os.replace(temporary_path, transcript_path)
-        temporary_path = None
-        with transcript_path.open(encoding="utf-8") as source:
-            return validate(json.load(source))
-    except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
-        raise TranscriptValidationError(
-            f"Transcript could not be saved and verified: {exc}"
-        ) from exc
-    finally:
-        if temporary_path is not None:
-            temporary_path.unlink(missing_ok=True)
-
-
-def probe_audio_stream(ffprobe_bin: str, input_file: str) -> tuple[int, str]:
-    """Return the channel count and layout of the first audio stream."""
-    try:
-        result = subprocess.run(
-            [ffprobe_bin, '-v', 'error', '-select_streams', 'a:0',
-             '-show_entries', 'stream=channels,channel_layout', '-of', 'json',
-             input_file],
-            capture_output=True, text=True, timeout=5
-        )
-        streams = json.loads(result.stdout).get('streams', [])
-        if not streams:
-            return 0, ''
-        return int(streams[0].get('channels', 0)), streams[0].get('channel_layout', '')
-    except Exception:
-        return 0, ''
-
-
-def is_5_1_stream(channels: int, layout: str) -> bool:
-    """Return whether audio metadata identifies a supported 5.1 layout."""
-    return channels == 6 and layout in ('5.1', '5.1(side)')
-
-
-def is_7_1_stream(channels: int, layout: str) -> bool:
-    """Return whether audio metadata identifies a supported 7.1 layout."""
-    return channels == 8 and layout in ('7.1', '7.1(wide)', '7.1(wide-side)')
-
-
-def has_discrete_center_channel(channels: int, layout: str) -> bool:
-    """Return whether audio has a supported discrete front-center channel."""
-    return is_5_1_stream(channels, layout) or is_7_1_stream(channels, layout)
-
-
-def transcript_cache_is_compatible(
-    input_file: str,
-    transcript_path: str,
-    ffprobe_bin: str,
-    whisper_library: str | None = None,
-    whisper_model: str | None = None,
-) -> bool:
-    """Return whether a transcript exists and uses the right source channels."""
-    if not os.path.exists(transcript_path):
-        return False
-    channels, layout = probe_audio_stream(ffprobe_bin, input_file)
-    try:
-        with open(transcript_path, 'r') as transcript_file:
-            transcript_data = json.load(transcript_file)
-        validate_transcript_data(
-            transcript_data,
-            whisper_library=whisper_library,
-            whisper_model=whisper_model,
-            require_front_center=has_discrete_center_channel(channels, layout),
-        )
-        return True
-    except Exception:
-        return False
-
-
-def find_review_candidates(
-    words_data: Dict,
-    censor_words: set[str],
-    exclude_words: set[str],
-) -> List[Dict]:
-    """Find vendor-list matches that a user has not yet classified as censor or ignore."""
-    profanity = _profanity_dictionary()
-    candidates = []
-    for word_obj in words_data.get("words", []):
-        word = str(word_obj.get("word", "")).strip(".,!?;:\"' \t")
-        word_lower = word.lower()
-        if not word or word_lower in censor_words or word_lower in exclude_words:
-            continue
-        if profanity.contains_profanity(word_lower):
-            candidates.append(
-                {
-                    "word": word_lower,
-                    "start": word_obj.get("start"),
-                    "end": word_obj.get("end"),
-                }
-            )
-    return candidates
-
-
-def _parse_ffmpeg_time(value: str) -> float:
-    """Convert FFmpeg's HH:MM:SS.microseconds progress value to seconds."""
-    try:
-        hours, minutes, seconds = value.split(":")
-        return int(hours) * 3600 + int(minutes) * 60 + float(seconds)
-    except (TypeError, ValueError):
-        return 0.0
-
-
-class ProcessingCancelled(RuntimeError):
-    """Raised when an active media job is cancelled."""
-
-
-def run_ffmpeg_with_progress(
-    command: list[str],
-    duration: float | None,
-    progress_callback: Callable[[dict[str, object]], None] | None = None,
-    cancellation: Event | None = None,
-) -> subprocess.CompletedProcess:
-    """Run FFmpeg and render its machine-readable progress stream."""
-    progress_command = command[:1] + [
-        "-hide_banner", "-loglevel", "error", "-nostats",
-        "-progress", "pipe:1",
-    ] + command[1:]
-    started = time.perf_counter()
-    last_percent = -1
-    rendered = False
-
-    with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as error_file:
-        process = subprocess.Popen(
-            progress_command,
-            stdout=subprocess.PIPE,
-            stderr=error_file,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            bufsize=1,
-        )
-        progress_values: dict[str, str] = {}
-        if process.stdout is not None:
-            for line in process.stdout:
-                if cancellation is not None and cancellation.is_set():
-                    process.terminate()
-                    try:
-                        process.wait(timeout=5)
-                    except subprocess.TimeoutExpired:
-                        process.kill()
-                        process.wait()
-                    raise ProcessingCancelled("Media processing was cancelled")
-                key, separator, value = line.strip().partition("=")
-                if not separator:
-                    continue
-                progress_values[key] = value
-                if key != "progress":
-                    continue
-
-                encoded_seconds = _parse_ffmpeg_time(progress_values.get("out_time", ""))
-                if duration and duration > 0:
-                    percent = min(100, int(encoded_seconds / duration * 100))
-                else:
-                    percent = 100 if value == "end" else 0
-                if value == "end":
-                    percent = 100
-                if percent == last_percent and value != "end":
-                    continue
-
-                speed_text = progress_values.get("speed", "N/A").strip() or "N/A"
-                try:
-                    speed = float(speed_text.rstrip("x"))
-                except ValueError:
-                    speed = 0.0
-                remaining = max(0.0, (duration or 0.0) - encoded_seconds)
-                eta = ProfanityCensor._format_seconds(remaining / speed) if speed > 0 else "--:--"
-                elapsed = ProfanityCensor._format_seconds(time.perf_counter() - started)
-                filled = int(percent * 24 / 100)
-                bar = "#" * filled + "-" * (24 - filled)
-                status = (
-                    f"\r[FFmpeg] [{bar}] {percent:3d}% | fps {progress_values.get('fps', 'N/A')} | "
-                    f"speed {speed_text} | elapsed {elapsed} | eta {eta}"
-                )
-                sys.stdout.write(status)
-                sys.stdout.flush()
-                if progress_callback is not None:
-                    progress_callback(
-                        {
-                            "percent": float(percent),
-                            "eta_seconds": remaining / speed if speed > 0 else None,
-                            "fps": float(progress_values["fps"])
-                            if progress_values.get("fps", "").replace(".", "", 1).isdigit()
-                            else None,
-                            "message": f"FFmpeg speed {speed_text}",
-                        }
-                    )
-                rendered = True
-                last_percent = percent
-
-        returncode = process.wait()
-        error_file.seek(0)
-        stderr = error_file.read()
-
-    if rendered:
-        sys.stdout.write("\n")
-        sys.stdout.flush()
-    return subprocess.CompletedProcess(progress_command, returncode, "", stderr)
-
+from .detection import _profanity_dictionary, find_review_candidates
+from .media import probe_audio_stream, is_5_1_stream, is_7_1_stream, has_discrete_center_channel
+from .transcripts import (
+    TranscriptValidationError,
+    validate_transcript_data,
+    write_transcript_atomic,
+    transcript_cache_is_compatible,
+)
+from .ffmpeg import ProcessingCancelled, run_ffmpeg_with_progress, format_seconds
 
 
 class ProfanityCensor:
@@ -430,12 +141,7 @@ class ProfanityCensor:
 
     @staticmethod
     def _format_seconds(seconds: float) -> str:
-        whole = max(0, int(round(seconds)))
-        hours, remainder = divmod(whole, 3600)
-        minutes, secs = divmod(remainder, 60)
-        if hours:
-            return f"{hours:02d}:{minutes:02d}:{secs:02d}"
-        return f"{minutes:02d}:{secs:02d}"
+        return format_seconds(seconds)
 
     def get_media_duration_seconds(self) -> float | None:
         try:
@@ -1207,88 +913,12 @@ class ProfanityCensor:
             return False
 
 
+
 def main():
-    import argparse
+    """Retain the legacy module entrypoint without loading CLI code during imports."""
+    from .cli import main as run_cli
 
-    parser = argparse.ArgumentParser(description="Transcribe and censor one media file")
-    parser.add_argument("input_file")
-    parser.add_argument("output_file")
-    parser.add_argument("model", nargs="?", default="large", choices=["large"])
-    parser.add_argument("transcripts_dir", nargs="?")
-    parser.add_argument("--report-only", action="store_true", help="List policy review candidates without changing media")
-    parser.add_argument(
-        "--include-undiscovered",
-        action="store_true",
-        help="Also censor vendor-list matches that are not included or excluded",
-    )
-    parser.add_argument(
-        "--censor-method",
-        default="mute",
-        choices=["mute", "karaoke"],
-        help="mute: silence profane intervals (default); karaoke: cancel centre-panned audio",
-    )
-    parser.add_argument("--padding-before-ms", type=int, default=150)
-    parser.add_argument("--padding-after-ms", type=int, default=150)
-    parser.add_argument(
-        "--surround-output",
-        choices=["preserve_5_1", "downmix_stereo"],
-        default="preserve_5_1",
-    )
-    parser.add_argument(
-        "--video-mode",
-        choices=["h264", "preserve_source"],
-        default="preserve_source",
-    )
-    args = parser.parse_args()
-
-    input_file = args.input_file
-    output_file = args.output_file
-    required_model = args.model
-    transcripts_dir = args.transcripts_dir
-
-    if not os.path.exists(input_file):
-        print(f"[-] Input file not found: {input_file}")
-        sys.exit(1)
-
-    print("=" * 70)
-    print("  Profanity Censoring Workflow")
-    print("=" * 70)
-    print(f"Input:  {input_file}")
-    print(f"Output: {output_file}")
-    print(f"Model:  {required_model}")
-    if transcripts_dir:
-        print(f"Transcripts: {transcripts_dir}")
-    if args.report_only and args.include_undiscovered:
-        parser.error("--report-only and --include-undiscovered cannot be used together")
-    if args.report_only:
-        print("Mode:   report-only (no media output or archival)")
-    elif args.include_undiscovered:
-        print("Mode:   censoring configured and undiscovered vendor-list words")
-    print()
-
-    censor = ProfanityCensor(
-        input_file,
-        output_file,
-        required_model,
-        transcripts_dir,
-        censor_method=args.censor_method,
-        padding_before_ms=args.padding_before_ms,
-        padding_after_ms=args.padding_after_ms,
-        surround_output=args.surround_output,
-        video_mode=args.video_mode,
-    )
-    success = censor.process(
-        report_only=args.report_only,
-        include_undiscovered=args.include_undiscovered,
-    )
-
-    print()
-    if success:
-        print("[OK] Processing complete!")
-        sys.exit(0)
-    else:
-        print("[FAILED] Processing failed!")
-        sys.exit(1)
+    return run_cli()
 
 
 if __name__ == "__main__":

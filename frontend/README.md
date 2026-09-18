@@ -2,6 +2,10 @@
 
 Electron hosts the React renderer in this directory. This is an installed desktop application, not a browser-hosted application.
 
+Native IPC handlers must use `trustedIpcHandlers` from `electron/ipc-security.ts`. The sandboxed preload is bundled; `renderer-policy.ts` owns trusted document matching and the separate production/development CSPs. After building, run `npm run smoke:security` for real Electron and Vite/HMR boundary tests. Packaged smoke runs the same production checks. See [HP-01 implementation](../docs/HP-01_IMPLEMENTATION_2026-09-17.md).
+
+`electron/native-files.ts` owns the generic backend allowlist and native playback/dictionary actions. After building, `npm run smoke:native-files` tests those actions through actual main/preload handlers and guarded Python operations. See [HP-02 implementation](../docs/HP-02_IMPLEMENTATION_2026-09-17.md).
+
 From `frontend/`:
 
 ```powershell
@@ -10,6 +14,8 @@ npm run dev
 ```
 
 `npm run dev` launches Electron. Vite is used only as Electron's renderer build and hot-reload tool.
+
+The Python child starts through `scripts.desktop_bridge`, a thin entrypoint for `backend.desktop.protocol`. Request routing, dictionary responses, and setup workers have separate backend modules; see the [Python module guide](../backend/README.md).
 
 Production validation:
 
@@ -27,11 +33,15 @@ The package audit requires private Python and rejects processing packages, FFmpe
 
 ## Renderer architecture
 
+See the [renderer developer guide](src/README.md) for module ownership, state rules, and extension guidance, and the [frontend review](../docs/FRONTEND_REVIEW_2026-09-16.md) for completed improvements and remaining findings.
+
 - `src/App.tsx` composes the shell, global status, and routes.
 - `src/features/` owns Queue, Dictionary, Settings, Onboarding, and capability state.
+- Queue calculations and snapshot loading live in `queue-model.ts` and `queue-data.ts`; page, table, row, archive, and dialogs have separate owners. Settings sections, dictionary table rendering, and setup progress are also separate components.
 - `src/features/onboarding/` keeps each walkthrough section in its own component: Welcome, Components, Initial Settings, Add Media, Process Media, Finish, and backend-startup recovery. `OnboardingPage.tsx` owns only composition, saved-step navigation, and the temporary settings draft.
 - `src/components/ui/` contains reusable controls and presentation primitives.
 - `src/services/desktop-client.ts` is the typed boundary around Electron IPC.
+- ESLint prevents renderer Node/Electron imports and direct preload access outside the typed client. This development guard does not replace runtime IPC validation.
 - React Router handles renderer navigation, TanStack Query owns backend state, and React Hook Form owns the persisted/draft settings lifecycle.
 
 ## Queue behavior
