@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 from backend.policy import PolicyStore
 from backend.service import BackendService
+from backend.settings.transactions import validate_base
 from .dictionary import DictionaryController
 from .installation import InstallationController
 from .native_files import NativeFiles
@@ -17,6 +18,8 @@ class DesktopBridge:
 
     def __init__(self, service: BackendService | None = None, policy_store: PolicyStore | None = None):
         self.service = service or BackendService()
+        self._settings_owner = self.service.store.desktop_owner()
+        self._settings_owner.__enter__()
         self.policy_store = policy_store or PolicyStore()
         self.installations = InstallationController(self.service)
         self.dictionary = DictionaryController(self.service, self.policy_store)
@@ -31,9 +34,11 @@ class DesktopBridge:
         if method.startswith("dictionary.") or method == "reviews.list":
             return self.dictionary.handle(method, params)
         if method == "settings.get":
-            return self.service.get_settings()
+            return self.service.get_settings_snapshot()
         if method == "settings.update":
-            return self.service.update_settings(params["settings"])
+            return self.service.update_settings(params["settings"], validate_base(params.get("base")))
+        if method == "settings.patch":
+            return self.service.patch_settings(params.get("revision"), params.get("changes"), strict=params.get("strict") is True)
         if method == "capabilities.get":
             return self.service.get_capabilities()
         if method == "library.list":
@@ -129,3 +134,4 @@ class DesktopBridge:
             self.service.close()
         finally:
             self.installations.close()
+            self._settings_owner.__exit__(None, None, None)

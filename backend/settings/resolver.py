@@ -29,19 +29,24 @@ def load_effective_settings(
 ) -> AppSettings:
     """Load settings, honoring an explicit or environment legacy workflow root."""
     selected_store = store or SettingsStore()
-    settings = selected_store.load()
+    with selected_store.locked():
+        settings = selected_store.load()
+        effective = effective_settings(settings, legacy_root=legacy_root)
+        if effective.directories == settings.directories:
+            bound = bind_directories(settings.directories)
+            if bound.bindings != settings.directories.bindings:
+                effective = replace(settings, directories=bound)
+                selected_store.save(effective)
+        return effective
+
+
+def effective_settings(settings: AppSettings, *, legacy_root: Path | None = None) -> AppSettings:
+    """Apply compatibility overrides without ever persisting their values."""
     configured_root = legacy_root or os.environ.get("CENSOR_PROJECT_ROOT")
     if configured_root:
-        settings = replace(
-            settings,
-            directories=_directory_settings(get_runtime_paths(Path(configured_root))),
-        )
+        settings = replace(settings, directories=bind_directories(
+            _directory_settings(get_runtime_paths(Path(configured_root)))))
     settings.validate()
-    bound = bind_directories(settings.directories)
-    if bound.bindings != settings.directories.bindings:
-        settings = replace(settings, directories=bound)
-        if not configured_root:
-            selected_store.save(settings)
     return settings
 
 

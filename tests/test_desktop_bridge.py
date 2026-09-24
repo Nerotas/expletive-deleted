@@ -8,6 +8,8 @@ from types import SimpleNamespace
 from time import perf_counter
 from unittest.mock import MagicMock, patch
 
+from backend.settings import AppSettings
+from backend.settings.transactions import snapshot
 from backend.policy import PolicyEntry, PolicyStore, ProfanityPolicy
 from backend.runtime import (
     DependencyStatus,
@@ -314,13 +316,16 @@ class DesktopBridgeTests(unittest.TestCase):
 
     def prepare_install(self):
         service = MagicMock()
+        service.get_settings_snapshot.return_value = snapshot(AppSettings.defaults())
+        service.apply_runtime_changes.return_value = {"status": "saved"}
         service.settings.runtime.whisper_cache = None
         service.get_settings.return_value = {"runtime": {}}
         bridge = DesktopBridge(service, MagicMock())
         bridge.installations._install_executor.shutdown()
         bridge.installations._install_executor = MagicMock()
-        plan = SimpleNamespace(id="approved", actions=[SimpleNamespace(id="first"), SimpleNamespace(id="second")])
+        plan = SimpleNamespace(id="approved", actions=[SimpleNamespace(id="first", component="python", dependency_ids=()), SimpleNamespace(id="second", component="python", dependency_ids=())])
         bridge.installations._install_plans[plan.id] = plan
+        bridge.installations._plan_contexts[plan.id] = bridge.installations._capture_context()
         state = bridge.handle("dependencies.install", {"plan_id": plan.id})
         return bridge, plan, state["install_id"]
 
@@ -397,6 +402,8 @@ class DesktopBridgeTests(unittest.TestCase):
 
     def test_ffmpeg_location_validates_companion_and_persists_both_paths(self):
         service = MagicMock()
+        service.get_settings_snapshot.return_value = snapshot(AppSettings.defaults())
+        service.apply_runtime_changes.return_value = {"status": "saved"}
         service.get_settings.return_value = {
             "runtime": {
                 "ffmpeg_path": None,
@@ -419,23 +426,22 @@ class DesktopBridgeTests(unittest.TestCase):
 
         with patch(
             "backend.desktop.installation.inspect_executable",
-            side_effect=[
-                ready("ffmpeg", "FFmpeg", "C:/Tools/ffmpeg.exe"),
-                ready("ffprobe", "FFprobe", "C:/Tools/ffprobe.exe"),
-            ],
+            side_effect=lambda dependency_id, name, path, version: ready(dependency_id, name, path),
         ):
             result = bridge.handle(
                 "dependencies.locate_ffmpeg",
                 {"path": "C:/Tools/ffmpeg.exe"},
             )
 
-        updated = service.update_settings.call_args.args[0]
+        updated = {"runtime": service.apply_runtime_changes.call_args.args[1]}
         self.assertEqual(updated["runtime"]["ffmpeg_path"], str(Path("C:/Tools/ffmpeg.exe").resolve()))
         self.assertEqual(updated["runtime"]["ffprobe_path"], str(Path("C:/Tools/ffprobe.exe").resolve()))
-        self.assertEqual(result, {"ready": True})
+        self.assertEqual(result["status"], "completed")
 
     def test_dependency_plan_discloses_managed_destination_without_installing(self):
         service = MagicMock()
+        service.get_settings_snapshot.return_value = snapshot(AppSettings.defaults())
+        service.apply_runtime_changes.return_value = {"status": "saved"}
         service.settings.runtime.whisper_cache = None
         service.settings.whisper.library = "faster-whisper"
         service.settings.whisper.model = "large-v3"

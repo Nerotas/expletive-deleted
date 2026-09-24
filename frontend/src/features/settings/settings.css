@@ -42,3 +42,8 @@
 .runtime-status.attention { color: var(--warning); }
 @media (max-width: 1050px) { .settings-layout { grid-template-columns: 1fr; } .settings-section { grid-template-columns: 155px 1fr; } }
 @media (max-width: 760px) { .settings-section { grid-template-columns: 1fr; } .settings-section > header { border-right: 0; border-bottom: 1px solid var(--line); } }
+
+.settings-conflict { max-height: calc(100vh - 64px); overflow-y: auto; }
+.settings-conflict fieldset { margin: 16px 0; }
+.settings-conflict label { display: block; margin: 12px 0; overflow-wrap: anywhere; }
+.settings-conflict input { margin-right: 8px; }

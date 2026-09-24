@@ -133,7 +133,7 @@ function invoke(method: string, params?: Record<string, unknown>): Promise<unkno
 
 function outputDirectory(settings: unknown): string {
   if (!settings || typeof settings !== 'object') throw new Error('Could not read the configured transcode folder.')
-  const directories = (settings as { directories?: unknown }).directories
+  const directories = (settings as { settings?: { directories?: unknown } }).settings?.directories
   if (!directories || typeof directories !== 'object') throw new Error('Could not read the configured transcode folder.')
   const output = (directories as { output?: unknown }).output
   if (typeof output !== 'string' || !output.trim()) throw new Error('The configured transcode folder is unavailable.')

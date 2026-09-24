@@ -80,11 +80,8 @@ def print_venv_whisper_profile() -> None:
 def initialize_application_settings(store: SettingsStore | None = None) -> tuple[Path, tuple[Path, ...]]:
     """Persist defaults when needed and create the effective working directories."""
     store = store or SettingsStore()
-    persisted_settings = store.load()
     effective_settings = load_effective_settings(store)
     statuses = ensure_directories(effective_settings.directories)
-    if not store.path.exists():
-        store.save(persisted_settings)
     return store.path, tuple(status.path for status in statuses)
 
 

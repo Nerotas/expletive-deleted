@@ -48,3 +48,6 @@ jobs:
 
       - name: Require dictionary transaction and recovery gates
         run: python -m unittest tests.test_policy_transactions
+
+      - name: Require shared settings and component conflict gates
+        run: python -m unittest tests.test_settings_transactions tests.test_installation_conflicts tests.test_desktop_bridge tests.test_manage_settings

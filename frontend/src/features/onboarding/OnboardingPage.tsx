@@ -49,6 +49,8 @@ export function OnboardingPage({
   const [dictionaryPrepared, setDictionaryPrepared] = useState(initialSettings?.onboarding.completed ?? false)
   const [firstFileSource, setFirstFileSource] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const baseline = useRef(settings.snapshot)
+  const saveInFlight = useRef(false)
   const stepRegion = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -64,17 +66,21 @@ export function OnboardingPage({
   }
 
   const saveAndAdvance = async () => {
+    if (saveInFlight.current) return
     if (stepId === 'settings' && !dictionaryPrepared) return
     const next = nextOnboardingStep(step)
     const nextDraft: Settings = {
       ...currentDraft,
       onboarding: { ...currentDraft.onboarding, last_step: next },
     }
+    saveInFlight.current = true
     setSaving(true)
-    const saved = await settings.saveDraft(nextDraft)
+    const saved = await settings.saveDraft(nextDraft, baseline.current ?? undefined)
+    saveInFlight.current = false
     setSaving(false)
     if (!saved) return
-    setDraft(nextDraft)
+    baseline.current = saved
+    setDraft(saved.settings)
     setStep((current) => Math.min(current + 1, ONBOARDING_STEPS.length - 1))
   }
 
@@ -88,12 +94,15 @@ export function OnboardingPage({
   }
 
   const finish = async () => {
+    if (saveInFlight.current) return
     const finishedDraft: Settings = {
       ...currentDraft,
       onboarding: { completed: true, last_step: 'finish' },
     }
+    saveInFlight.current = true
     setSaving(true)
-    const saved = await settings.saveDraft(finishedDraft)
+    const saved = await settings.saveDraft(finishedDraft, baseline.current ?? undefined)
+    saveInFlight.current = false
     setSaving(false)
     if (saved) onFinished()
   }
@@ -112,12 +121,14 @@ export function OnboardingPage({
 
     <div className="onboarding-workspace">
       <div className="onboarding-step" ref={stepRegion} tabIndex={-1} aria-labelledby="onboarding-step-heading">
+        <fieldset className="onboarding-fields" disabled={saving}>
         {stepId === 'welcome' && <WelcomeStep />}
         {stepId === 'components' && <ComponentsStep capabilities={capabilities} checking={checking} busy={capabilityBusy} onReviewInstall={onReviewInstall} onLocateExisting={onLocateExisting} onCheckAgain={onCheckAgain} />}
         {stepId === 'settings' && <InitialSettingsStep draft={currentDraft} dictionary={dictionary} dictionaryPrepared={dictionaryPrepared} onDictionaryPrepared={() => setDictionaryPrepared(true)} onChange={updateDraft} onChooseDirectory={(key) => void chooseDirectory(key)} />}
         {stepId === 'add-media' && <AddMediaStep queue={queue} settings={currentDraft} onAdded={setFirstFileSource} />}
         {stepId === 'process-media' && <ProcessMediaStep source={firstFileSource} queue={queue} settings={currentDraft} capabilities={capabilities} />}
         {stepId === 'finish' && <FinishStep settings={currentDraft} capabilities={capabilities} dictionaryPrepared={dictionaryPrepared} />}
+        </fieldset>
       </div>
       <footer className="onboarding-actions">
         <button className="button secondary" disabled={step === 0 || saving} onClick={() => setStep((current) => current - 1)}><ArrowLeft size={16} />Back</button>

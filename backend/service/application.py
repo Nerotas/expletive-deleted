@@ -22,6 +22,9 @@ from backend.settings import (
     settings_to_dict,
 )
 
+from backend.settings.transactions import snapshot, changes_between, validate_base
+from backend.settings.resolver import effective_settings
+
 from .capabilities import get_capabilities
 from .library import ArchiveItem, LibraryItem, scan_archive, scan_library
 from backend.settings.directories import bind_directories
@@ -31,6 +34,7 @@ from backend.filesystem.paths import identity, version
 
 
 class ServiceBusyError(RuntimeError):
+    code = "settings_busy"
     """Raised when settings cannot change while jobs are active."""
 
 
@@ -49,6 +53,14 @@ def _while_open(operation: Callable[..., Any]) -> Callable[..., Any]:
         with self._lifecycle_lock:
             if self._closing:
                 raise ServiceBusyError("The local processing service is closing")
+            return operation(self, *args, **kwargs)
+    return guarded
+
+
+def _settings_locked(operation):
+    @wraps(operation)
+    def guarded(self, *args, **kwargs):
+        with self.store.locked():
             return operation(self, *args, **kwargs)
     return guarded
 
@@ -85,27 +97,65 @@ class BackendService:
         return self.settings, tuple(self.jobs.list())
 
     @_while_open
-    def update_settings(self, payload: Mapping[str, Any]) -> dict[str, object]:
-        active = tuple(
-            job for job in self.jobs.list()
-            if job.status not in ("completed", "failed", "cancelled", "transcribed")
-        )
-        downloads_active = any(
-            item.status not in ("completed", "failed", "cancelled")
-            for item in self.downloads.list()
-        )
+    def get_settings_snapshot(self):
+        return self.store.snapshot(effective_settings)
+
+    @_while_open
+    def update_settings(self, payload: Mapping[str, Any], base=None):
+        # Internal compatibility callers edit the service snapshot; IPC requires an explicit base.
+        baseline = validate_base(base) if base is not None else snapshot(self.settings)
+        result = self.patch_settings(baseline["revision"], changes_between(baseline["settings"], payload))
+        return result if base is not None else result["snapshot"]["settings"]
+
+    @_while_open
+    @_settings_locked
+    def patch_settings(self, revision, changes, *, strict=False):
+        self._ensure_settings_idle()
+        replacements = []
+
+        def prepare(updated):
+            updated = replace(updated, directories=bind_directories(updated.directories))
+            ensure_directories(effective_settings(updated).directories)
+            effective = effective_settings(updated)
+            # Construct replacements before publication so failure leaves old managers usable.
+            jobs = self._manager_factory(effective)
+            replacements.append(jobs)
+            downloads = DownloadManager(effective, self._queue_completed_youtube_download)
+            replacements.append(downloads)
+            return updated
+
+        try:
+            result = self.store.transact(revision, changes, effective=effective_settings, prepare=prepare, strict=strict)
+        except Exception:
+            for manager in replacements:
+                manager.close()
+            raise
+        if result["status"] == "saved":
+            old_jobs, old_downloads = self.jobs, self.downloads
+            self.settings = effective_settings(self.store.load())
+            self.jobs, self.downloads = replacements
+            old_jobs.close()
+            old_downloads.close()
+        return result
+
+    def _ensure_settings_idle(self):
+        active = any(job.status not in ("completed", "failed", "cancelled", "transcribed") for job in self.jobs.list())
+        downloads_active = any(item.status not in ("completed", "failed", "cancelled") for item in self.downloads.list())
         if active or downloads_active:
-            raise ServiceBusyError("Settings cannot change while jobs are active")
-        updated = settings_from_dict(payload, self.settings)
-        updated = replace(updated, directories=bind_directories(updated.directories))
-        ensure_directories(updated.directories)
-        self.store.save(updated)
-        self.jobs.close()
-        self.downloads.close()
-        self.settings = updated
-        self.jobs = self._manager_factory(updated)
-        self.downloads = DownloadManager(updated, self._queue_completed_youtube_download)
-        return settings_to_dict(updated)
+            raise ServiceBusyError("Settings cannot change while jobs or downloads are active")
+
+    def apply_runtime_changes(self, baseline, values, *, strict=False):
+        allowed = {"ffmpeg_path", "ffprobe_path", "whisper_cache", "ytdlp_path"}
+        if not set(values) <= allowed:
+            raise ValueError("Unsupported verified runtime field")
+        if bool("ffmpeg_path" in values) != bool("ffprobe_path" in values):
+            raise ValueError("FFmpeg and FFprobe must be applied as a verified pair")
+        changes = [{"field": f"runtime.{key}", "expected": baseline["settings"]["runtime"][key], "value": value}
+                   for key, value in values.items()]
+        if "whisper_cache" in values:
+            changes.append({"field": "whisper.model", "expected": baseline["settings"]["whisper"]["model"],
+                            "value": baseline["settings"]["whisper"]["model"]})
+        return self.patch_settings(baseline["revision"], changes, strict=strict)
 
     def get_library(self) -> tuple[LibraryItem, ...]:
         return scan_library(

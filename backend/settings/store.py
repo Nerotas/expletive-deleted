@@ -6,6 +6,8 @@ import configparser
 import os
 import tempfile
 import json
+from contextlib import contextmanager
+from backend.filesystem.locking import store_lock, StoreBusyError
 from dataclasses import replace, asdict
 from collections.abc import Mapping
 from pathlib import Path
@@ -15,6 +17,10 @@ from backend.filesystem.paths import RootBinding
 
 from .models import AppSettings, SettingsValidationError
 from .serialization import settings_from_dict, settings_to_dict
+
+
+class SettingsBusyError(RuntimeError):
+    code = "settings_busy"
 
 
 class SettingsFileError(RuntimeError):
@@ -48,7 +54,38 @@ class SettingsStore:
         self.path = (path or prepare_app_data_root() / "settings.ini").expanduser().resolve()
         self.defaults = defaults or AppSettings.defaults()
 
+    @contextmanager
+    def locked(self):
+        with store_lock(self.path.with_suffix(".lock")):
+            yield
+
+    def desktop_owner(self):
+        return store_lock(self.path.with_suffix(".desktop.lock"), timeout=0)
+
+    @contextmanager
+    def cli_writer(self):
+        # Desktop ownership prevents CLI writes bypassing active media/download guards.
+        try:
+            with store_lock(self.path.with_suffix(".desktop.lock"), timeout=0):
+                yield
+        except StoreBusyError as exc:
+            raise SettingsBusyError("Close the desktop application before changing settings from the CLI.") from exc
+
+    def snapshot(self, effective=None):
+        from .transactions import snapshot
+        with self.locked():
+            current = self.load()
+            return snapshot(effective(current) if effective else current)
+
+    def transact(self, revision, changes, *, effective=None, prepare=None, strict=False):
+        from .transactions import transact
+        return transact(self, revision, changes, effective=effective, prepare=prepare, strict=strict)
+
     def load(self) -> AppSettings:
+        with self.locked():
+            return self._load()
+
+    def _load(self) -> AppSettings:
         if not self.path.exists():
             self.defaults.validate()
             self.save(self.defaults)
@@ -72,6 +109,10 @@ class SettingsStore:
             raise SettingsFileError(self.path, str(exc)) from exc
 
     def save(self, settings: AppSettings) -> Path:
+        with self.locked():
+            return self._save(settings)
+
+    def _save(self, settings: AppSettings) -> Path:
         payload = settings_to_dict(settings)
         temporary_path: Path | None = None
         try:
@@ -106,6 +147,10 @@ class SettingsStore:
                 temporary_path.unlink(missing_ok=True)
 
     def reset(self) -> AppSettings:
+        with self.locked():
+            return self._reset()
+
+    def _reset(self) -> AppSettings:
         try:
             self.path.unlink(missing_ok=True)
         except OSError as exc:

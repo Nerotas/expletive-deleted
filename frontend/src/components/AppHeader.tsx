@@ -63,7 +63,7 @@ export function AppHeader({
         >
           {theme === 'light' ? <MoonIcon size={16} /> : <SunIcon size={16} />}
         </button>
-        {installState && ['running', 'canceling'].includes(installState.status) ? (
+        {installState && ['running', 'canceling', 'resolving', 'awaiting_resolution'].includes(installState.status) ? (
           <button className="runtime-pill installing" type="button" onClick={onOpenInstall}>
             <LoaderCircle className="spin" size={16} />
             {installState.message || 'Installing…'}
