@@ -1,3 +1,5 @@
+import { unwrapInvokeResponse } from '../../shared/ipc-response'
+import { decodeInstallStatus } from './install-status'
 import type {
   Capabilities,
   ArchiveItem,
@@ -32,11 +34,14 @@ function bridge() {
   return window.expletiveDeleted
 }
 
-function invoke<T>(method: string, params?: Record<string, unknown>): Promise<T> {
-  return bridge().invoke<T>(method, params)
+async function invoke<T>(method: string, params?: Record<string, unknown>, options?: import('../../shared/bridge').RequestOptions): Promise<T> {
+  return unwrapInvokeResponse(await bridge().request<T>(method, params, options))
 }
 
 export const desktopClient = {
+  getBackendState: () => bridge().getBackendState(),
+  onBackendState: (listener: (state: import('../../shared/bridge').BackendState) => void) => bridge().onBackendState(listener),
+  restart: () => bridge().restart(),
   getSettings: () => invoke<SettingsSnapshot>('settings.get'),
   updateSettings: (settings: Settings, base: SettingsSnapshot) => invoke<SettingsResult>('settings.update', { settings, base }),
   patchSettings: (revision: string, changes: FieldChange[], strict = false) => invoke<SettingsResult>('settings.patch', { revision, changes, strict }),
@@ -70,13 +75,15 @@ export const desktopClient = {
   planDependencies: (components: string[]) =>
     invoke<InstallPlan>('dependencies.plan', { components }),
   installDependencies: (planId: string) =>
-    invoke<InstallStatus>('dependencies.install', { plan_id: planId }),
-  getInstallStatus: (installId: string) =>
-    invoke<InstallStatus>('dependencies.status', { install_id: installId }),
+    invoke<unknown>('dependencies.install', { plan_id: planId }).then((result) => decodeInstallStatus(result)),
+  getInstallStatus: (installId: string, timeoutMs = 2000, generation?: number) =>
+    invoke<InstallStatus>('dependencies.status', { install_id: installId }, { timeoutMs, generation }),
+  getActiveInstall: (planId: string, timeoutMs = 2000, generation?: number) =>
+    invoke<InstallStatus | null>('dependencies.active', { plan_id: planId }, { timeoutMs, generation }),
   cancelInstall: (installId: string) =>
-    invoke<InstallStatus>('dependencies.cancel', { install_id: installId }),
+    invoke<unknown>('dependencies.cancel', { install_id: installId }).then((result) => decodeInstallStatus(result, installId)),
   resolveInstallConflict: (installId: string, revision: string, choices: Partial<Record<SettingsField, 'keep_current' | 'use_verified'>>) =>
-    invoke<InstallStatus>('dependencies.resolve_conflict', { install_id: installId, revision, choices }),
+    invoke<unknown>('dependencies.resolve_conflict', { install_id: installId, revision, choices }).then((result) => decodeInstallStatus(result, installId)),
   inspectExistingFfmpeg: (path: string) =>
     invoke<{ ffmpeg_path: string; ffprobe_path: string; version: string | null }>(
       'dependencies.inspect_ffmpeg',

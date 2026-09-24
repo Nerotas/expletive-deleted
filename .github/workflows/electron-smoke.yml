@@ -18,7 +18,7 @@ jobs:
   smoke:
     name: Smoke test
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Check out repository
@@ -60,6 +60,10 @@ jobs:
       - name: Verify desktop ownership, settings conflicts, and concurrent CLI dictionary edits
         working-directory: frontend
         run: npm run smoke:state
+
+      - name: Verify setup reconnection, silence, exit, and worker saturation
+        working-directory: frontend
+        run: npm run smoke:recovery
 
       - name: Smoke-test graceful and forced shutdown
         # Run the native shutdown regressions against the already built entrypoint.

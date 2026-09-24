@@ -190,6 +190,8 @@ try {
         Assert-NativeSuccess 'Native file authorization smoke'
         & npm run smoke:state
         Assert-NativeSuccess 'Electron instance and dictionary transaction smoke'
+        & npm run smoke:recovery
+        Assert-NativeSuccess 'Setup reconnection and recovery smoke'
         & node scripts/smoke-shutdown.mjs
         Assert-NativeSuccess 'Electron shutdown smoke test'
 

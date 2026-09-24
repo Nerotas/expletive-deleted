@@ -123,3 +123,5 @@ Renderer module ownership, state rules, and validation commands are documented i
 5. Source media is retained on failed or cancelled work, and incomplete output is removed when safe.
 
 HP-04 uses the shared settings transaction mechanism for component setup, normal Settings, and onboarding saves (the shared foundation for HP-09). Field-level comparisons preserve newer unrelated values and return conflicts without publication. Verified setup assets remain available while choices, active media work, or persistence errors delay settings application. See [HP-04 implementation](docs/HP-04_IMPLEMENTATION_2026-09-24.md).
+
+HP-08 separates installation progress from connection state. Setup uses serial bounded status reads, a monotonic 30-second reconnection window, status-only reconciliation after lost acknowledgements, and explicit restart recovery. Backend control dispatch stays responsive under ordinary worker saturation. The offline native recovery gate runs in CI, release, and local validation; see [HP-08 implementation](docs/HP-08_IMPLEMENTATION_2026-09-24.md).

@@ -184,6 +184,11 @@ jobs:
         working-directory: frontend
         run: npm run smoke:state
 
+      - name: Verify setup reconnection, silence, exit, and worker saturation
+        if: steps.version.outputs.published != 'true'
+        working-directory: frontend
+        run: npm run smoke:recovery
+
       - name: Smoke-test graceful and forced shutdown
         if: steps.version.outputs.published != 'true'
         working-directory: frontend

@@ -38,23 +38,26 @@ export async function assertRendererSecurity(app, page, { development = false } 
     }
   }, mainId)
 
-  // Keep this list aligned with preload.ts; each entry crosses a distinct IPC channel.
-  const exerciseChannels = (target) => target.evaluate(async () => {
+  // Restart is tested only from hostile documents here; recovery smoke exercises
+  // the explicit authorized restart without interrupting these boundary checks.
+  const exerciseChannels = (target, hostile = false) => target.evaluate(async (hostile) => {
     const api = window.expletiveDeleted
     const requests = [
       () => api.invoke('settings.get'), () => api.selectDirectory(), () => api.selectFile(),
       () => api.importDictionary(), () => api.exportDictionary(),
       () => api.openExternal('https://example.invalid/security-fixture'),
       () => api.openTranscodeFolder(), () => api.openOutput('security-fixture.txt'),
+      () => api.request('settings.get'), () => api.getBackendState(),
+      ...(hostile ? [() => api.restart()] : []),
     ]
     const results = []
     for (const request of requests) {
       try { await request(); results.push('allowed') } catch (error) { results.push(error.message) }
     }
     return results
-  })
+  }, hostile)
   const assertDenied = (results) => {
-    assert.equal(results.length, 8)
+    assert.equal(results.length, 11)
     for (const result of results) assert.match(result, /trusted application window/)
   }
 
@@ -65,6 +68,11 @@ export async function assertRendererSecurity(app, page, { development = false } 
     })
     assert.deepEqual(preferences, { sandbox: true, contextIsolation: true, nodeIntegration: false })
     assert.equal(await page.evaluate(() => typeof window.require), 'undefined')
+    assert.deepEqual(await page.evaluate(() => Object.keys(window.expletiveDeleted).sort()), [
+      'desktop', 'invoke', 'request', 'getBackendState', 'onBackendState', 'restart',
+      'selectDirectory', 'selectFile', 'importDictionary', 'exportDictionary',
+      'openExternal', 'openTranscodeFolder', 'openOutput', 'getPathForFile',
+    ].sort(), 'Packaged and development preload must expose no fixture controls')
     const csp = await page.locator('meta[http-equiv="Content-Security-Policy"]').getAttribute('content')
     assert.ok(csp)
     assert.ok(!csp.includes('unsafe-eval'))
@@ -109,7 +117,8 @@ export async function assertRendererSecurity(app, page, { development = false } 
     const trustedResults = await exerciseChannels(page)
     assert.deepEqual(trustedResults.slice(0, 7), Array(7).fill('allowed'))
     assert.match(trustedResults[7], /absolute path/)
-    for (const method of ['dictionary.import', 'dictionary.export', 'native.output.prepare', 'native.output.check', 'native.export.prepare', 'native.dictionary.export', 'native.dictionary.import', 'native.release']) {
+    assert.deepEqual(trustedResults.slice(8), ['allowed', 'allowed'])
+    for (const method of ['dictionary.import', 'dictionary.export', 'native.output.prepare', 'native.output.check', 'native.export.prepare', 'native.dictionary.export', 'native.dictionary.import', 'native.release', 'test.silence', 'test.exit', 'dependencies.test_silence']) {
       await assert.rejects(page.evaluate((method) => window.expletiveDeleted.invoke(method, {}), method), /approved native file selection/)
     }
     assert.equal(await app.evaluate(() => globalThis.__securitySmoke.calls.length), 6)
@@ -131,7 +140,7 @@ export async function assertRendererSecurity(app, page, { development = false } 
     console.log('Checking foreign documents and redirected navigation')
     // Main-process loads deliberately bypass will-navigate, proving IPC has its own guard.
     await app.evaluate(async (_, url) => { await globalThis.__securitySmoke.window.loadURL(url) }, foreignUrl)
-    assertDenied(await exerciseChannels(page))
+    assertDenied(await exerciseChannels(page, true))
     // Keep the inert fixture loaded: reloading React here lets HashRouter's
     // initial replaceState interrupt loadURL before the HTTP request even starts.
     await app.evaluate(async (_, url) => {
@@ -177,9 +186,9 @@ export async function assertRendererSecurity(app, page, { development = false } 
     }, { url: entryUrl, preload })
     const extraPage = await extraPagePromise
     await extraPage.waitForLoadState('domcontentloaded')
-    assertDenied(await exerciseChannels(extraPage))
+    assertDenied(await exerciseChannels(extraPage, true))
     assert.equal(await app.evaluate(() => globalThis.__securitySmoke.calls.length), 6)
-    console.log(`Renderer security checks passed (${development ? 'Vite development' : 'production'}): all 8 IPC channels, CSP, sandbox, navigation, redirects, popups, foreign documents and windows.`)
+    console.log(`Renderer security checks passed (${development ? 'Vite development' : 'production'}): all 10 IPC channels (11 preload operations), CSP, sandbox, navigation, redirects, popups, foreign documents and windows.`)
   } finally {
     await app.evaluate(({ shell, dialog }) => {
       const state = globalThis.__securitySmoke

@@ -47,7 +47,7 @@ function App() {
   const installDialogOpen = Boolean(
     capabilities.installState
     && ['running', 'canceling', 'resolving', 'awaiting_resolution'].includes(capabilities.installState.status)
-    && capabilities.installState.install_id !== dismissedInstallId,
+    && `${capabilities.installState.install_id}:${capabilities.connection.phase}` !== dismissedInstallId,
   )
   const backendDetail = settings.error instanceof Error ? settings.error.message : settings.error ? String(settings.error) : undefined
 
@@ -69,6 +69,7 @@ function App() {
         capabilities={capabilities.capabilities}
         checking={capabilities.checking}
         installState={capabilities.installState}
+        connection={capabilities.connection}
         theme={theme}
         toggleTheme={toggleTheme}
         onOpenInstall={() => setDismissedInstallId(null)}
@@ -175,20 +176,21 @@ function App() {
         conflicts={settings.conflict.conflicts} busy={settings.busy}
         onCancel={settings.cancelConflict} onResolve={settings.resolveConflict}
       />}
-      {capabilities.installState?.status === 'awaiting_resolution' && installDialogOpen && !settings.conflict && <SettingsConflictDialog
+      {capabilities.installState?.status === 'awaiting_resolution' && installDialogOpen && capabilities.connection.phase === 'connected' && !settings.conflict && <SettingsConflictDialog
         key={`${capabilities.installState.install_id}:${capabilities.installState.resolution?.snapshot.revision}`}
         conflicts={capabilities.conflicts} busy={capabilities.resolving} verified error={capabilities.installState.error}
-        onCancel={() => setDismissedInstallId(capabilities.installState?.install_id ?? null)}
+        onCancel={() => setDismissedInstallId(`${capabilities.installState?.install_id}:${capabilities.connection.phase}`)}
         onResolve={capabilities.resolveConflict}
       />}
-      {capabilities.installState && installDialogOpen && capabilities.installState.status !== 'awaiting_resolution' && (
+      {capabilities.installState && installDialogOpen && !settings.conflict && (capabilities.installState.status !== 'awaiting_resolution' || capabilities.connection.phase !== 'connected') && (
         <SetupProgressDialog
           installState={capabilities.installState}
-          onClose={() => setDismissedInstallId(capabilities.installState?.install_id ?? null)}
-          onCancel={() => {
-            void capabilities.cancelCurrentInstall?.()
-            setDismissedInstallId(capabilities.installState?.install_id ?? null)
-          }}
+          onClose={() => setDismissedInstallId(`${capabilities.installState?.install_id}:${capabilities.connection.phase}`)}
+          connection={capabilities.connection}
+          cancelPending={capabilities.cancelPending || capabilities.installing && capabilities.installState.install_id.startsWith('pending:')}
+          onRetry={capabilities.retryConnection}
+          onRestart={capabilities.restart}
+          onCancel={() => void capabilities.cancelCurrentInstall()}
         />
       )}
     </div>

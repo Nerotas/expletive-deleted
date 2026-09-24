@@ -43,6 +43,7 @@ try {
         Invoke-TestStage 'Electron renderer security' { npm run smoke:security }
         Invoke-TestStage 'Native file authorization' { npm run smoke:native-files }
         Invoke-TestStage 'Electron instance and dictionary transactions' { npm run smoke:state }
+        Invoke-TestStage 'Setup reconnection and recovery' { npm run smoke:recovery }
         Invoke-TestStage 'Electron shutdown recovery' { node scripts/smoke-shutdown.mjs }
 
         if (-not $SkipPackaged) {

@@ -200,3 +200,9 @@ If a media job or download is active, finish or cancel it before applying choice
 Settings and the setup wizard also pause if the same field changed elsewhere. Choose the current value or your edit; Cancel preserves the draft and current step. A further change may require another choice.
 
 Advanced: CLI settings writers report `settings_busy` while the desktop owns the profile. Close the desktop before running `manage_settings.py init`, `set-options`, or `set-directories`. Read-only settings commands and dictionary CLI transactions remain available. Settings use local thread/process locks; older app versions do not honor these locks, so do not run old and new versions against one profile concurrently.
+
+### Setup reconnecting or outcome unknown
+
+A lost response does not prove that installation failed or finished. The app shows elapsed reconnection time for up to 30 seconds. If the local service has exited, it offers recovery immediately. **Retry connection** only checks existing status, including a start or cancellation whose acknowledgement was lost. It never resends installation or cancellation commands.
+
+Use **Restart app** if the service stopped or cannot respond. Restart can stop unfinished work but retains completed component files. Once the app reopens, check components, locate an existing component if needed, and review a fresh plan before approving remaining setup. A settings conflict still uses **Keep current** / **Use verified**, without reinstalling.

@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { desktopClient, type DesktopClient } from '../../services/desktop-client'
 import type { InstallPlan, InstallStatus, SettingsField, SettingsConflict } from '../../types/domain'
 import { settingValue } from '../settings/settings-transactions'
+import { useInstallStatus, type Observation } from './useInstallStatus'
+import { isCommunicationError } from './installation-connection'
 import { errorMessage } from '../../utils/format'
 
 type CapabilitiesOptions = {
@@ -19,10 +21,22 @@ export function useCapabilities({
   const queryClient = useQueryClient()
   const [pendingPlan, setPendingPlan] = useState<InstallPlan | null>(null)
   const [installState, setInstallState] = useState<InstallStatus | null>(null)
+  const [observation, setObservation] = useState<Observation | null>(null)
+  const [cancelPending, setCancelPending] = useState(false)
+  const receiveStatus = useCallback((status: InstallStatus) => {
+    setInstallState(status)
+    setCancelPending(false)
+  }, [])
+  const connection = useInstallStatus(client, observation, receiveStatus)
+  const observe = (status: InstallStatus) => {
+    setInstallState(status)
+    setObservation(['running', 'canceling', 'resolving', 'awaiting_resolution'].includes(status.status) ? { target: { installId: status.install_id } } : null)
+  }
   const query = useQuery({
     queryKey: ['capabilities'],
     queryFn: () => client.getCapabilities(),
     refetchOnMount: 'always',
+    enabled: !observation || connection.phase === 'connected',
     refetchInterval: (currentQuery) => currentQuery.state.data?.app_runtime === 'ready' ? false : 3000,
   })
   const settledInstallRef = useRef<string | null>(null)
@@ -57,32 +71,28 @@ export function useCapabilities({
       } else if (installState.status === 'failed') {
         onError(installState.error ?? 'Dependency installation failed')
       }
-      setInstallState(null)
+      setInstallState((current) => current?.install_id === installState.install_id ? null : current)
+      setObservation((current) => current === observation ? null : current)
     })()
-  }, [installState, onError, onNotice, query, queryClient])
-
-  const activeInstallId = installState && ['running', 'canceling', 'resolving'].includes(installState.status)
-    ? installState.install_id
-    : null
-
-  useEffect(() => {
-    if (!activeInstallId) return
-    const timer = window.setInterval(() => {
-      void client.getInstallStatus(activeInstallId)
-        .then((status) => setInstallState(status))
-        .catch(() => undefined)
-    }, 1200)
-
-    return () => window.clearInterval(timer)
-  }, [activeInstallId, client])
+  }, [installState, observation, onError, onNotice, query, queryClient])
 
   const installMutation = useMutation({
     mutationFn: (planId: string) => client.installDependencies(planId),
-    onSuccess: (result) => {
+    onMutate: (planId) => {
       setPendingPlan(null)
-      setInstallState(result)
+      setInstallState({ install_id: `pending:${planId}`, status: 'running', message: 'Starting approved setup',
+        action_id: null, action_index: null, action_count: null, started_at: null, phase: 'starting', completed_bytes: null, total_bytes: null, error: null })
     },
-    onError: (reason) => onError(errorMessage(reason)),
+    onSuccess: observe,
+    onError: (reason, planId) => {
+      if (isCommunicationError(reason)) {
+        // A missing acknowledgement is not permission to replay approval.
+        setObservation({ target: { planId }, failure: reason })
+      } else {
+        setInstallState(null)
+        onError(errorMessage(reason))
+      }
+    },
   })
 
   const locateMutation = useMutation({
@@ -100,7 +110,7 @@ export function useCapabilities({
     },
     onSuccess: async (updated) => {
       if (!updated) return
-      setInstallState(updated)
+      observe(updated)
     },
     onError: (reason) => onError(errorMessage(reason)),
   })
@@ -109,10 +119,14 @@ export function useCapabilities({
     mutationFn: (choices: Partial<Record<SettingsField, boolean>>) => {
       if (!installState?.resolution) throw new Error('No component settings are awaiting review')
       const selected = Object.fromEntries(Object.entries(choices).map(([field, value]) => [field, value ? 'use_verified' : 'keep_current'])) as Partial<Record<SettingsField, 'keep_current' | 'use_verified'>>
+      setObservation(null)
       return client.resolveInstallConflict(installState.install_id, installState.resolution.snapshot.revision, selected)
     },
-    onSuccess: setInstallState,
-    onError: (reason) => onError(errorMessage(reason)),
+    onSuccess: observe,
+    onError: (reason) => {
+      if (installState && isCommunicationError(reason)) setObservation({ target: { installId: installState.install_id }, failure: reason })
+      else onError(errorMessage(reason))
+    },
   })
   const conflicts: SettingsConflict[] = installState?.resolution
     ? Object.entries(installState.verified_values ?? {}).map(([field, proposed]) => ({
@@ -123,6 +137,12 @@ export function useCapabilities({
     })) : []
 
   return {
+    connection,
+    cancelPending,
+    retryConnection: () => {
+      if (observation) setObservation({ target: observation.target, failure: { code: 'request_timeout' } })
+    },
+    restart: () => { void client.restart().catch((reason) => onError(errorMessage(reason))) },
     conflicts,
     resolving: resolveMutation.isPending,
     resolveConflict: (choices: Partial<Record<SettingsField, boolean>>) => resolveMutation.mutate(choices),
@@ -139,15 +159,22 @@ export function useCapabilities({
     },
     cancelInstall: () => setPendingPlan(null),
     cancelCurrentInstall: async () => {
-      if (!installState) return
-      const status = await client.cancelInstall(installState.install_id).catch(() => null)
-      if (status) setInstallState(status)
+      if (!installState || cancelPending || installState.install_id.startsWith('pending:')) return
+      setCancelPending(true)
+      // Reconcile either acknowledgement through a fresh read; an older cancel
+      // response cannot replace newer progress or claim that cancellation finished.
+      setObservation(null)
+      try {
+        await client.cancelInstall(installState.install_id)
+        setObservation({ target: { installId: installState.install_id } })
+      } catch (reason) {
+        setObservation({ target: { installId: installState.install_id }, failure: reason })
+      }
     },
     approveInstall: async () => {
-      if (!pendingPlan) return
+      if (!pendingPlan || installMutation.isPending || installState) return
       await installMutation.mutateAsync(pendingPlan.plan_id).catch(() => undefined)
     },
-    dismissProgress: () => setInstallState(null),
     locateExisting: async (component: 'ffmpeg' | 'whisper_model' | 'ytdlp') => {
       await locateMutation.mutateAsync(component).catch(() => undefined)
     },

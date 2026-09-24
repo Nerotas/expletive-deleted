@@ -188,3 +188,7 @@ Other medium-priority findings, architecture improvements, and release-qualifica
 ## HP-04 implementation follow-up - 2026-09-24
 
 The setup and onboarding write directions now use one locked, revision-aware field transaction. Setup conflicts preserve current settings and verified files; explicit resolution revalidates selected components without replaying installation. Local backend, renderer, and native state validation is recorded in [the implementation report](HP-04_IMPLEMENTATION_2026-09-24.md). This updates local implementation status without closing remote issues or claiming completion of the broader HP-09/HP-08 work.
+
+## HP-08 local implementation - 2026-09-24
+
+Serial bounded polling, visible 30-second reconnection, status-only reconciliation and explicit restart recovery are implemented locally. Backend controls remain responsive under worker saturation, and verified-component settings continue through the shared HP-04 conflict state. Validation and test-harness limits are recorded in [the HP-08 implementation report](HP-08_IMPLEMENTATION_2026-09-24.md). Remote issue status is unchanged.

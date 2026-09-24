@@ -1,10 +1,15 @@
 import type { DictionaryMutationResult, NativeFileResult } from './types/domain'
+import type { BackendState, RequestOptions } from '../shared/bridge'
 
 declare global {
   interface Window {
     expletiveDeleted?: {
       desktop: boolean
-      invoke: <T>(method: string, params?: Record<string, unknown>) => Promise<T>
+      invoke: <T>(method: string, params?: Record<string, unknown>, options?: RequestOptions) => Promise<T>
+      request: <T>(method: string, params?: Record<string, unknown>, options?: RequestOptions) => Promise<import('../shared/ipc-response').InvokeResponse<T>>
+      getBackendState: () => Promise<BackendState>
+      onBackendState: (listener: (state: BackendState) => void) => () => void
+      restart: () => Promise<void>
       selectDirectory: (defaultPath?: string) => Promise<string | undefined>
       selectFile: (defaultPath?: string) => Promise<string | undefined>
       importDictionary: () => Promise<NativeFileResult<{ result: DictionaryMutationResult }>>

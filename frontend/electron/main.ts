@@ -3,6 +3,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { existsSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { backendEnvironment, findBackendRoot, findPythonRuntime, requireBundledRuntime } from './backend-runtime.js'
+import { BridgeTransport, transportError, type RequestOptions } from './bridge-transport.js'
 import { stopBridge } from './bridge-shutdown.js'
 import { secureRendererWindow, trustedIpcHandlers, type TrustedRenderer } from './ipc-security.js'
 import { createRendererPolicy } from './renderer-policy.js'
@@ -10,15 +11,13 @@ import { nativeFileOperations, assertRendererMethod } from './native-files.js'
 import { respond } from './ipc-response.js'
 import { claimDesktopInstance } from './single-instance.js'
 
-type BridgeResponse = { id: number; ok: true; result: unknown } | { id: number; ok: false; error: { message?: string; code?: string; diagnostic?: string } }
-
 let trustedRenderer: TrustedRenderer | undefined
 let bridge: ChildProcessWithoutNullStreams | undefined
-let requestId = 0
+let transport: BridgeTransport | undefined
+let generation = 0
 let bridgeFailure: string | undefined
 let shuttingDown = false
 let shutdownComplete = false
-const pending = new Map<number, { resolve: (value: unknown) => void; reject: (reason: Error) => void }>()
 const APPLICATION_ID = 'com.expletive-deleted.desktop'
 const APPLICATION_ICON = 'expletive-deleted-icon.ico'
 // Keep development and packaged launches on the same per-user ownership key.
@@ -41,11 +40,6 @@ function resolveApplicationIcon(): string | undefined {
     path.join(app.getAppPath(), 'src', 'assets', APPLICATION_ICON),
   ]
   return candidates.find((candidate) => existsSync(candidate))
-}
-
-function rejectPending(message: string): void {
-  for (const request of pending.values()) request.reject(new Error(message))
-  pending.clear()
 }
 
 function startBridge(): void {
@@ -80,55 +74,34 @@ function startBridge(): void {
     stderr += message
     logDevelopmentError('Python bridge stderr:', message.trim())
   })
-  let buffer = ''
-  bridge.stdout.on('data', (chunk: Buffer) => {
-    buffer += chunk.toString()
-    const lines = buffer.split('\n')
-    buffer = lines.pop() ?? ''
-    for (const line of lines) {
-      try {
-        const response = JSON.parse(line) as BridgeResponse
-        const request = pending.get(response.id)
-        if (!request) continue
-        pending.delete(response.id)
-        if (response.ok) request.resolve(response.result)
-        else {
-          const message = response.error.message ?? 'The local processing service rejected the request.'
-          logDevelopmentError('Python bridge request failed:', response.error.diagnostic ?? message)
-          const error = new Error(message) as Error & { code?: string; diagnostic?: string }
-          if (typeof response.error.code === 'string') error.code = response.error.code
-          if (typeof response.error.diagnostic === 'string') error.diagnostic = response.error.diagnostic
-          request.reject(error)
-        }
-      } catch { /* ignore malformed private protocol output */ }
+  const child = bridge
+  transport = new BridgeTransport(++generation, (line, done) => child.stdin.write(line, done), (state) => {
+    const window = trustedRenderer?.window
+    if (window && !window.isDestroyed() && rendererPolicy.allows(window.webContents.getURL())) {
+      window.webContents.send('expletive-deleted:backend-state', state)
     }
   })
+  const currentTransport = transport
+  child.stdout.on('data', (chunk: Buffer) => currentTransport.receive(chunk))
+  child.stdout.on('end', () => currentTransport.stop('unavailable'))
+  child.stdin.on('error', () => currentTransport.stop('unavailable'))
   bridge.on('error', (error) => {
     bridgeFailure = `Could not start the local processing service: ${error.message}`
     logDevelopmentError('Python bridge failed to start:', error)
-    rejectPending(bridgeFailure)
+    currentTransport.stop('unavailable')
   })
   bridge.on('exit', (code) => {
     bridge = undefined
     bridgeFailure = stderr.trim() || `The local processing service stopped unexpectedly${code === null ? '' : ` (exit code ${code})`}.`
     logDevelopmentError('Python bridge exited:', bridgeFailure)
-    rejectPending(bridgeFailure)
+    currentTransport.stop('exited')
   })
 }
 
-function invoke(method: string, params?: Record<string, unknown>): Promise<unknown> {
-  if (shuttingDown) return Promise.reject(new Error('The desktop application is closing.'))
-  if (!bridge?.stdin.writable) return Promise.reject(new Error(bridgeFailure ?? 'The local processing service is unavailable. Restart the desktop application.'))
-  const id = ++requestId
-  return new Promise((resolve, reject) => {
-    pending.set(id, { resolve, reject })
-    bridge!.stdin.write(`${JSON.stringify({ id, method, ...(params ? { params } : {}) })}\n`, (error) => {
-      if (!error) return
-      pending.delete(id)
-      logDevelopmentError(`Could not send ${method} to the Python bridge:`, error)
-      reject(new Error(`Could not contact the local processing service: ${error.message}`))
-    })
-  })
+function invoke(method: string, params?: Record<string, unknown>, options?: RequestOptions): Promise<unknown> {
+  if (shuttingDown) return Promise.reject(transportError('backend_exited', 'The desktop application is closing.'))
+  if (!transport) return Promise.reject(transportError('backend_unavailable', bridgeFailure ?? 'The local processing service is unavailable.'))
+  return transport.request(method, params, options)
 }
 
 function outputDirectory(settings: unknown): string {
@@ -171,10 +144,16 @@ if (desktopInstance.ownsInstance) app.whenReady().then(() => {
   startBridge()
   const handle = trustedIpcHandlers(ipcMain, () => trustedRenderer)
   const nativeFiles = nativeFileOperations(invoke, dialog, shell)
-  handle('expletive-deleted:invoke', (_request, method: string, params?: Record<string, unknown>) => respond(async () => {
+  handle('expletive-deleted:invoke', (_request, method: string, params?: Record<string, unknown>, options?: RequestOptions) => respond(async () => {
     assertRendererMethod(method)
-    return invoke(method, params)
+    return invoke(method, params, options)
   }))
+  handle('expletive-deleted:backend-state', () => transport?.snapshot ?? { generation, status: 'unavailable' })
+  handle('expletive-deleted:restart', () => {
+    // Relaunch is a user action. before-quit still applies bounded worker shutdown.
+    app.relaunch()
+    app.quit()
+  })
   handle('expletive-deleted:select-directory', async ({ window }, defaultPath?: string) => {
     const result = await dialog.showOpenDialog(window, { defaultPath, properties: ['openDirectory', 'createDirectory'] })
     return result.canceled ? undefined : result.filePaths[0]
@@ -212,7 +191,7 @@ app.on('before-quit', (event) => {
   event.preventDefault()
   if (shuttingDown) return
   shuttingDown = true
-  rejectPending('The desktop application is closing.')
+  transport?.stop('exited')
   void stopBridge(bridge).finally(() => {
     shutdownComplete = true
     app.quit()

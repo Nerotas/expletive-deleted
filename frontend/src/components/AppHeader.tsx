@@ -13,7 +13,10 @@ import appIconUrl from '../assets/expletive-deleted-icon.svg'
 import { APPLICATION_DISPLAY_NAME } from '../constants/application'
 import type { Capabilities, InstallStatus, Theme } from '../types/domain'
 
+import type { ConnectionState } from '../features/capabilities/installation-connection'
+
 type AppHeaderProps = {
+  connection?: ConnectionState
   capabilities: Capabilities | null
   checking: boolean
   installState: InstallStatus | null
@@ -34,6 +37,7 @@ export function AppHeader({
   capabilities,
   checking,
   installState,
+  connection,
   theme,
   toggleTheme,
   onOpenInstall,
@@ -65,8 +69,8 @@ export function AppHeader({
         </button>
         {installState && ['running', 'canceling', 'resolving', 'awaiting_resolution'].includes(installState.status) ? (
           <button className="runtime-pill installing" type="button" onClick={onOpenInstall}>
-            {installState.status === 'awaiting_resolution' ? <AlertCircle size={16} /> : <LoaderCircle className="spin" size={16} />}
-            {installState.message || 'Installing…'}
+            {installState.status === 'awaiting_resolution' || connection?.phase === 'recovery' ? <AlertCircle size={16} /> : <LoaderCircle className="spin" size={16} />}
+            {connection?.phase === 'reconnecting' ? `Reconnecting (${Math.floor(connection.elapsedMs / 1000)}s)` : connection?.phase === 'recovery' ? 'Setup needs attention' : installState.message || 'Installing…'}
           </button>
         ) : (
           <div className={`runtime-pill ${checking ? 'checking' : processingReady ? 'ready' : 'attention'}`}>

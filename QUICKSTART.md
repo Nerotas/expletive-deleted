@@ -157,3 +157,7 @@ Advanced single-file CLI processing requires `--overwrite` to replace existing o
 ## If setup asks you to review settings
 
 Choose **Keep current** to retain the saved path or **Use verified** to select the component that setup verified. FFmpeg and FFprobe are selected together. Completed downloads stay on your computer, and applying the choice does not download or install again. If another change occurs, review the refreshed values. Wait for active media jobs or downloads to finish before applying settings. Cancel keeps the choice pending; reopen it from the status button at the top of the app.
+
+### If setup loses contact
+
+The app shows **Reconnecting to setup** for up to 30 seconds and resumes from actual progress when contact returns. If recovery appears, the installation outcome is unknown. **Retry connection** checks progress without starting installation again. **Restart app** may stop unfinished work; completed downloads are retained. After restarting, check components and review a fresh plan before approving any remaining setup.

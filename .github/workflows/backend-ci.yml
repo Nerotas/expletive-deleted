@@ -51,3 +51,6 @@ jobs:
 
       - name: Require shared settings and component conflict gates
         run: python -m unittest tests.test_settings_transactions tests.test_installation_conflicts tests.test_desktop_bridge tests.test_manage_settings
+
+      - name: Require setup control responsiveness and approval ownership
+        run: python -m unittest tests.test_setup_control tests.test_installation_conflicts tests.test_settings_transactions
