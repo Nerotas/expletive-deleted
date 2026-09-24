@@ -56,6 +56,12 @@ See the [renderer developer guide](src/README.md) for module ownership, state ru
 - The optional persisted setting `processing.auto_censor_after_transcription` promotes each newly verified transcript to the censored-copy queue. `processing.auto_transcode_youtube_downloads` starts the same chain after a completed YouTube download.
 - The renderer never decides that a transcript is safe for transcoding. That mandatory persisted-artifact gate belongs to the Python backend.
 
+## Desktop ownership
+
+`electron/single-instance.ts` claims Electron ownership before startup. A second launch restores/focuses the first window, including requests received before its first paint. The stable profile is `<application-data>/desktop`; `CENSOR_APP_DATA_DIR` isolates both the profile and backend data for tests.
+
+After building, run `npm run smoke:state` to exercise two real launches, one window/bridge owner, startup focus, minimized-window restoration, and concurrent CLI/desktop edits. CI, local validation, and release gates run it sequentially with other native smoke tests.
+
 ## Dictionary behavior
 
 - The resource text files are built-in defaults and are never edited by the renderer.

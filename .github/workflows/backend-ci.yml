@@ -45,3 +45,6 @@ jobs:
 
       - name: Require native Windows containment and publication gates
         run: python -m unittest tests.test_filesystem_paths tests.test_windows_destination_guards tests.test_publication tests.test_output_access
+
+      - name: Require dictionary transaction and recovery gates
+        run: python -m unittest tests.test_policy_transactions

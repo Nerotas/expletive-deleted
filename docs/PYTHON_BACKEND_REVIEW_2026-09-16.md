@@ -38,6 +38,8 @@ The root compatibility entrypoints and `scripts.desktop_bridge` exports still wo
 
 ## Remaining findings
 
+**2026-09-23 follow-up:** the dictionary portion of finding 4 is addressed by [HP-03 transactions and recovery](HP-03_IMPLEMENTATION_2026-09-23.md), with native single-instance and concurrent CLI validation. The setup/settings portion remains open. The findings below retain the original inspection context.
+
 These findings are not fixed by moving code. Some were established in the preceding bridge assessment; others emerged from this backend-wide review.
 
 1. **High: artifact names can collide for different sources with the same stem.** `jobs/media.py` generates the same transcript and video-output names for `movie.mp4` and `movie.mkv` in the same input directory. A temporary-path probe confirmed both collisions. Transcript compatibility checks validate schema/model/channels, but do not bind a cache to source identity or content. A robust fix needs a source identity scheme and explicit migration of existing artifacts.

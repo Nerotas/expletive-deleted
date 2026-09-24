@@ -23,7 +23,21 @@ def main(argv: list[str] | None = None) -> int:
     process = subparsers.add_parser("process", help="Submit and wait for one serial media job")
     process.add_argument("source", type=Path)
     process.add_argument("--mode", choices=["report_only", "censor"])
+    dictionary = subparsers.add_parser("dictionary", help="Edit the shared local dictionary")
+    dictionary.add_argument("action", choices=["add", "remove"])
+    dictionary.add_argument("target", choices=["censor", "exclude"])
+    dictionary.add_argument("word")
     args = parser.parse_args(argv)
+
+    if args.command == "dictionary":
+        from backend.filesystem.locking import StoreBusyError
+        from backend.policy import PolicyFileError, PolicyStore
+        try:
+            _policy, changed = PolicyStore().update(args.target, args.word, args.action)
+        except (PolicyFileError, StoreBusyError) as exc:
+            parser.exit(1, f"{exc}\n")
+        _print({"changed": changed})
+        return 0
 
     service = BackendService()
     try:

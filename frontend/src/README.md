@@ -25,6 +25,8 @@ Follow a queue action from `QueueRow` through `useQueue`, `desktopClient`, Elect
 
 Playback uses `desktopClient.openOutput(source)`; Python derives the output. Dictionary `importDictionary()` and `exportDictionary()` own their native picker flow and return cancellation as data. Do not introduce renderer-supplied launch/export paths or forward internal `native.*` methods through generic invoke.
 
+Dictionary transaction ownership belongs to `backend/policy/transactions.py`; one-window lifecycle ownership belongs to `electron/single-instance.ts`. Renderer query serialization cannot replace these cross-process safeguards.
+
 ## State ownership
 
 - **Backend state:** TanStack Query caches capabilities, settings, dictionary pages, and queue snapshots. Feature controllers coordinate mutations and refresh their affected queries.

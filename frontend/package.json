@@ -24,6 +24,7 @@
     "smoke": "npm run build && node scripts/smoke.mjs",
     "smoke:shutdown": "npm run build && node scripts/smoke-shutdown.mjs",
     "smoke:security": "node scripts/smoke-security.mjs",
+    "smoke:state": "node scripts/smoke-state.mjs",
     "smoke:native-files": "node scripts/smoke-native-files.mjs",
     "audit:package": "node scripts/audit-package.mjs",
     "audit:bundled-runtime": "node scripts/audit-bundled-runtime.mjs",

@@ -57,6 +57,10 @@ jobs:
         working-directory: frontend
         run: npm run smoke:native-files
 
+      - name: Verify one desktop owner and concurrent CLI dictionary edits
+        working-directory: frontend
+        run: npm run smoke:state
+
       - name: Smoke-test graceful and forced shutdown
         # Run the native shutdown regressions against the already built entrypoint.
         working-directory: frontend

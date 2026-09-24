@@ -67,7 +67,7 @@ Source: [bridge assessment, B02](BRIDGE_ASSESSMENT_2026-09-16.md#b02--native-fil
 - Serialize complete dictionary changes so accepted edits are not silently lost.
 - Allow one desktop instance per user. Launching the application again focuses the existing window.
 
-Single-instance desktop ownership does not by itself protect against CLI access or background policy writers. The technical plan must account for those writers when defining transaction ownership and locking; a particular locking or storage mechanism has not been selected in this discussion.
+Implemented and validated on Windows on 2026-09-23: shared thread/process ownership now covers full dictionary transactions, with a fixed-destination redo journal and recovery before snapshots. Electron enforces one window/bridge owner and restores/focuses it on a second launch. Independent CLI access and background discovery use the same store lock. See [implementation and acceptance evidence](HP-03_IMPLEMENTATION_2026-09-23.md).
 
 Sources: [bridge assessment, B03](BRIDGE_ASSESSMENT_2026-09-16.md#b03--concurrent-dictionary-changes-lose-acknowledged-edits); [backend review, remaining finding 4](PYTHON_BACKEND_REVIEW_2026-09-16.md#remaining-findings).
 

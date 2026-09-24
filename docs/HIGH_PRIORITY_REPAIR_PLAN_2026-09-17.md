@@ -100,6 +100,8 @@ CI owner: Backend CI, Frontend Tests, and native security smoke. No relocated-fi
 
 ## HP-03: Dictionary transactions and one desktop instance
 
+Implemented on 2026-09-23; see [acceptance evidence and platform limits](HP-03_IMPLEMENTATION_2026-09-23.md).
+
 ### Implementation
 
 1. Acquire `app.requestSingleInstanceLock()` before spawning Python or constructing a window. Use stable per-user application identity. On `second-instance`, restore/focus the existing window; if it is not ready yet, retain a focus request. The losing process exits without starting a bridge. See [Electron's single-instance API](https://www.electronjs.org/docs/latest/api/app#apprequestsingleinstancelockadditionaldata).

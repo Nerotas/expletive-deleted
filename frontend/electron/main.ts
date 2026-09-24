@@ -8,6 +8,7 @@ import { secureRendererWindow, trustedIpcHandlers, type TrustedRenderer } from '
 import { createRendererPolicy } from './renderer-policy.js'
 import { nativeFileOperations, assertRendererMethod } from './native-files.js'
 import { respond } from './ipc-response.js'
+import { claimDesktopInstance } from './single-instance.js'
 
 type BridgeResponse = { id: number; ok: true; result: unknown } | { id: number; ok: false; error: { message?: string; code?: string; diagnostic?: string } }
 
@@ -20,6 +21,11 @@ let shutdownComplete = false
 const pending = new Map<number, { resolve: (value: unknown) => void; reject: (reason: Error) => void }>()
 const APPLICATION_ID = 'com.expletive-deleted.desktop'
 const APPLICATION_ICON = 'expletive-deleted-icon.ico'
+// Keep development and packaged launches on the same per-user ownership key.
+const applicationData = process.env.CENSOR_APP_DATA_DIR?.trim()
+  || path.join(process.env.LOCALAPPDATA || app.getPath('appData'), 'ExpletiveDeleted')
+app.setPath('userData', path.resolve(applicationData, 'desktop'))
+const desktopInstance = claimDesktopInstance(app)
 const rendererPolicy = createRendererPolicy(path.join(__dirname, '../renderer/index.html'), app.isPackaged, process.env.ELECTRON_RENDERER_URL)
 const developmentLogging = Boolean(rendererPolicy.development)
 
@@ -147,7 +153,10 @@ function createWindow(): void {
     webPreferences: { preload: path.join(__dirname, '../preload/preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true },
   })
   trustedRenderer = secureRendererWindow(browserWindow, rendererPolicy)
-  browserWindow.once('ready-to-show', () => browserWindow.show())
+  browserWindow.once('ready-to-show', () => {
+    browserWindow.show()
+    desktopInstance.windowReady(browserWindow)
+  })
   browserWindow.on('closed', () => {
     trustedRenderer = undefined
     void invoke('native.release_all').catch(() => {})
@@ -157,7 +166,7 @@ function createWindow(): void {
 
 if (process.platform === 'win32') app.setAppUserModelId(APPLICATION_ID)
 
-app.whenReady().then(() => {
+if (desktopInstance.ownsInstance) app.whenReady().then(() => {
   if (!rendererPolicy.development) Menu.setApplicationMenu(null)
   startBridge()
   const handle = trustedIpcHandlers(ipcMain, () => trustedRenderer)

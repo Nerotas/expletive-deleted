@@ -6,6 +6,16 @@ Closing the desktop app requests cancellation and waits up to 15 seconds for cle
 
 Settings saves are rejected while local jobs or YouTube downloads are active. Finish or cancel that work, then save the retained draft. This keeps download progress and cancellation attached to the current queue.
 
+## Dictionary Is Busy or Needs Recovery
+
+A busy dictionary means another desktop, CLI, or background operation holds the local transaction lock. Wait a moment and retry. The lock has a five-second wait limit and is released automatically if its process exits; do not delete `.policy.lock`.
+
+An interrupted update may already have committed. Reload the dictionary before retrying: a valid `.policy-journal.json` is completed automatically before any snapshot is returned. Recovery keeps timestamps and entry sources and never uploads dictionary content.
+
+If recovery fails, check access and free space in `%LOCALAPPDATA%\ExpletiveDeleted\dictionary`, then reopen the app. Keep the three JSON stores and journal intact. Invalid recovery data blocks reads and edits instead of replacing your dictionary with defaults. For persistent corruption, close desktop and CLI processes, preserve a private copy of the entire folder, and obtain application support to restore a known-good backup. Do not share dictionary or journal contents in public logs.
+
+Opening the app again restores the existing window; it does not start another processing service. Do not run older application versions against the same dictionary: they do not honor transaction ownership or recovery.
+
 ## Start Here
 
 Run the tracked readiness check from the repository root:
