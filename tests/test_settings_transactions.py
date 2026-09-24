@@ -173,3 +173,14 @@ print(json.dumps(store.transact(base['revision'], [{'field':field,'expected':bas
             self.assertIs(service.downloads, original_downloads)
             self.assertEqual(service.settings.processing.device, 'auto')
             self.assertEqual(self.store.path.read_bytes(), before)
+
+    def test_rejects_incomplete_update_instead_of_filling_missing_fields_with_defaults(self):
+        with self.assertRaisesRegex(ValueError, "complete draft"):
+            changes_between(self.base["settings"], {"processing": {"device": "cpu"}})
+
+    def test_flush_failure_removes_temporary_file_and_preserves_original(self):
+        before = self.store.path.read_bytes()
+        with patch('backend.settings.store.os.fsync', side_effect=OSError('flush failed')), self.assertRaises(Exception):
+            self.store.transact(self.base['revision'], [self.change('processing.device', 'cpu')])
+        self.assertEqual(before, self.store.path.read_bytes())
+        self.assertEqual(list(self.root.glob('.settings.ini.*.tmp')), [])

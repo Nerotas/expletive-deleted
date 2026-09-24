@@ -65,7 +65,7 @@ export function AppHeader({
         </button>
         {installState && ['running', 'canceling', 'resolving', 'awaiting_resolution'].includes(installState.status) ? (
           <button className="runtime-pill installing" type="button" onClick={onOpenInstall}>
-            <LoaderCircle className="spin" size={16} />
+            {installState.status === 'awaiting_resolution' ? <AlertCircle size={16} /> : <LoaderCircle className="spin" size={16} />}
             {installState.message || 'Installing…'}
           </button>
         ) : (

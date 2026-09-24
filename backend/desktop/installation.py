@@ -25,7 +25,8 @@ from backend.runtime import (
 from backend.runtime.dependency_inspection import inspect_ytdlp
 from backend.runtime.locations import get_managed_ytdlp_path, get_managed_ffmpeg_directory
 from backend.service import BackendService, ServiceBusyError
-from backend.runtime.dependency_models import InstallPlan
+from backend.runtime.dependency_models import InstallPlan, InstallProgress
+from backend.settings.transactions import SettingsSnapshot
 
 
 @dataclass(frozen=True)
@@ -37,7 +38,7 @@ class VerificationContext:
     model: str
 
     @property
-    def baseline(self):
+    def baseline(self) -> SettingsSnapshot:
         return json.loads(self.baseline_json)
 
 
@@ -78,7 +79,7 @@ class InstallationController:
             cancellation = self._install_jobs[install_id]["cancel_event"]
         try:
             completed_ids: set[str] = set()
-            def callback(progress: object) -> None:
+            def callback(progress: InstallProgress) -> None:
                 action_index = next(
                     (index + 1 for index, action in enumerate(plan.actions) if action.id == progress.action_id),
                     None,
@@ -105,7 +106,7 @@ class InstallationController:
             try:
                 results = execute_install_plan(
                     plan,
-                    approved_plan_id=plan_id,
+                    approved_plan_id=plan.id,
                     cancellation=cancellation,
                     progress_callback=callback,
                     cache_dir=cache_dir,
@@ -162,15 +163,14 @@ class InstallationController:
                 whisper_library=context.library,
                 whisper_model=context.model,
             )
+            # Each review gets an immutable context, even if its action hash matches
+            # an earlier review. Repeated approval of this token remains idempotent.
+            approval_id = uuid.uuid4().hex
             with self._install_lock:
-                # A reviewed plan keeps its original baseline until it has been consumed.
-                active = any(state.get("plan_id") == plan.id and state["status"] not in {"failed", "cancelled"}
-                             for state in self._install_jobs.values())
-                if not active:
-                    self._install_plans[plan.id] = plan
-                    self._plan_contexts[plan.id] = context
+                self._install_plans[approval_id] = plan
+                self._plan_contexts[approval_id] = context
             return {
-                "plan_id": plan.id,
+                "plan_id": approval_id,
                 "actions": [
                     {
                         "id": action.id,
@@ -199,7 +199,7 @@ class InstallationController:
                 if plan is None:
                     raise ValueError("Dependency plan is unknown or expired; review it again")
                 for existing_id, existing in self._install_jobs.items():
-                    if existing.get("plan_id") == plan_id and existing["status"] not in {"failed", "cancelled"}:
+                    if existing.get("plan_id") == plan_id:
                         return self._serialize_install_state(existing_id)
                     if existing["status"] in {"running", "canceling", "awaiting_resolution", "resolving"}:
                         components = {action.component for action in plan.actions}
@@ -273,7 +273,7 @@ class InstallationController:
             return self._serialize_install_state(operation_id)
         raise ValueError(f"Unknown desktop bridge method: {method}")
 
-    def _capture_context(self):
+    def _capture_context(self) -> VerificationContext:
         baseline = self.service.get_settings_snapshot()
         settings = baseline["settings"]
         cache = settings["runtime"]["whisper_cache"]
@@ -281,7 +281,7 @@ class InstallationController:
                                    resolve_whisper_cache_dir(Path(cache) if cache else None),
                                    settings["whisper"]["library"], settings["whisper"]["model"])
 
-    def _revalidate(self, context, values):
+    def _revalidate(self, context: VerificationContext, values: dict[str, str]) -> None:
         if "ffmpeg_path" in values:
             pair = self._inspect_ffmpeg_selection(values["ffmpeg_path"])
             if pair["ffprobe_path"] != values["ffprobe_path"]:
@@ -295,11 +295,11 @@ class InstallationController:
             if not status.ready:
                 raise ValueError(f"The selected yt-dlp executable is not ready: {status.detail}")
 
-    def _apply_verified(self, operation_id, baseline, values, *, strict=False):
+    def _apply_verified(self, operation_id: str, baseline: SettingsSnapshot, values: dict[str, str]) -> None:
         state = self._install_jobs[operation_id]
         try:
             self._revalidate(state["context"], values)
-            result = self.service.apply_runtime_changes(baseline, values, strict=strict)
+            result = self.service.apply_runtime_changes(baseline, values)
             error = None
         except Exception as exc:
             # Verification, media guards and persistence errors retain the installed assets.
@@ -317,7 +317,7 @@ class InstallationController:
             state["completed_bytes"] = None
             state["total_bytes"] = None
 
-    def _resolve(self, params):
+    def _resolve(self, params: Mapping[str, Any]) -> dict[str, Any]:
         operation_id = params.get("install_id")
         with self._install_lock:
             state = self._install_jobs.get(operation_id)
@@ -338,8 +338,10 @@ class InstallationController:
                         for key, value in values.items()}
             state["status"] = "resolving"
         try:
-            # Recheck original verified assets, even when retaining a manual selection.
-            self._revalidate(replace(state["context"], model=resolution["snapshot"]["settings"]["whisper"]["model"]), values)
+            # Recheck every component being applied. A kept manual path may remain
+            # unready, and does not depend on the discarded verified selection.
+            applying = {key: value for key, value in values.items() if choices[f"runtime.{key}"] == "use_verified"}
+            self._revalidate(replace(state["context"], model=resolution["snapshot"]["settings"]["whisper"]["model"]), applying)
             self._apply_resolution(operation_id, resolution["snapshot"], selected)
         except Exception as exc:
             with self._install_lock:
@@ -347,7 +349,7 @@ class InstallationController:
                 state["error"] = str(exc)
         return self._serialize_install_state(operation_id)
 
-    def _apply_resolution(self, operation_id, baseline, selected):
+    def _apply_resolution(self, operation_id: str, baseline: SettingsSnapshot, selected: dict[str, str | None]) -> None:
         # Keep-current may be unready; only use-verified requires the original verification.
         state = self._install_jobs[operation_id]
         try:

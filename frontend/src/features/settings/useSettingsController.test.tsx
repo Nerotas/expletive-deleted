@@ -104,6 +104,23 @@ describe('settings transactions controller', () => {
     await act(async () => { result.current.cancelConflict(); await pending })
   })
 
+  it('discards to the latest persisted snapshot after cancelling a conflict', async () => {
+    const latest = structuredClone(base)
+    latest.revision = 'latest'
+    latest.settings.censoring.padding_before_ms = 222
+    vi.mocked(desktopClient.updateSettings).mockResolvedValue({ status: 'conflict', snapshot: latest, conflicts: [{ field: 'censoring.padding_before_ms', expected: 100, current: 222, proposed: 333 }] })
+    const { result } = setup()
+    await waitFor(() => expect(result.current.draft).not.toBeNull())
+    act(() => result.current.updateGroup('censoring', { ...defaultSettings.censoring, padding_before_ms: 333 }))
+    let pending!: Promise<void>
+    act(() => { pending = result.current.save() })
+    await waitFor(() => expect(result.current.conflict).not.toBeNull())
+    await act(async () => { result.current.cancelConflict(); await pending })
+    expect(result.current.draft?.censoring.padding_before_ms).toBe(333)
+    act(() => result.current.discard())
+    expect(result.current.draft?.censoring.padding_before_ms).toBe(222)
+  })
+
   it('keeps failed edits and reports persistence errors', async () => {
     vi.mocked(desktopClient.updateSettings).mockRejectedValue(new Error('Disk full'))
     const { result, onError } = setup()

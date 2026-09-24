@@ -45,6 +45,14 @@ class DesktopBridgeTests(unittest.TestCase):
             },
         )
 
+    def test_settings_protocol_rejects_old_snapshotless_writes(self):
+        service = MagicMock()
+        bridge = DesktopBridge(service, MagicMock())
+        self.addCleanup(bridge.close)
+        with self.assertRaisesRegex(ValueError, "snapshot"):
+            bridge.handle("settings.update", {"settings": snapshot(AppSettings.defaults())["settings"]})
+        service.update_settings.assert_not_called()
+
     def test_dictionary_inventory_seeds_complete_user_dictionary_from_defaults(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             dictionary_path = Path(temporary_directory) / "dictionary"

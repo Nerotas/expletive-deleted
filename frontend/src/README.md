@@ -61,3 +61,5 @@ npm run smoke
 `smoke` includes the production build and launches native Electron with isolated application data. It checks onboarding, preload, routing, and dictionary behavior and writes screenshots into ignored `test-results/`. Inspect light/dark screens for meaningful visual changes. Use `npm run smoke:shutdown` when changing Electron lifecycle or backend shutdown. Installer validation is documented in [the frontend README](../README.md).
 
 See [the frontend inspection report](../../docs/FRONTEND_REVIEW_2026-09-16.md) for validation results and remaining risks. Passing type checks does not validate arbitrary IPC payloads at runtime.
+
+Settings snapshots include an opaque revision. The normal form keeps its baseline while dirty; onboarding owns a separate baseline and step draft. `settings-transactions.ts` derives wizard changes and preserves late form edits; the backend is authoritative for merging and validation. `SettingsConflictDialog` is shared by settings, onboarding, and verified-component resolution. Cancel retains drafts/steps; repeated conflicts require a new choice. `useCapabilities` keeps `awaiting_resolution` visible without installation replay.

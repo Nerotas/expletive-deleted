@@ -125,6 +125,7 @@ class SettingsStore:
                 suffix=".tmp",
                 delete=False,
             ) as temporary_file:
+                temporary_path = Path(temporary_file.name)
                 parser = _settings_to_ini(payload)
                 if settings.directories.bindings:
                     # Identities and selected paths share the same atomic settings transaction.
@@ -135,7 +136,6 @@ class SettingsStore:
                 parser.write(temporary_file)
                 temporary_file.flush()
                 os.fsync(temporary_file.fileno())
-                temporary_path = Path(temporary_file.name)
             # Flush the complete draft before atomically replacing persisted settings.
             os.replace(temporary_path, self.path)
             temporary_path = None

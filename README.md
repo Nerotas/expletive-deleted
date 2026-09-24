@@ -222,3 +222,5 @@ See [QUICKSTART.md](QUICKSTART.md) for complete installed-app, source-build, and
 - [Windows path protections](docs/HP-07_IMPLEMENTATION_2026-09-17.md) and [verified publication](docs/HP-06_IMPLEMENTATION_2026-09-17.md)
 - [Verified playback and native dictionary file operations](docs/HP-02_IMPLEMENTATION_2026-09-17.md)
 - [Troubleshooting](TROUBLESHOOTING.md)
+
+Component setup and onboarding save only their intended settings changes. If a path changed during setup, **Review component settings** offers **Keep current** or **Use verified**. Completed downloads are retained; applying a choice verifies the existing component without reinstalling it.

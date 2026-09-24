@@ -77,12 +77,12 @@ class BackendServiceTests(unittest.TestCase):
                     with self.subTest(status=status):
                         manager._records["download"] = DownloadRecord("download", "url", "id", status=status)
                         with self.assertRaises(ServiceBusyError):
-                            service.update_settings(edited)
+                            service.update_settings(edited, service.get_settings_snapshot())
                         self.assertIs(service.downloads, manager)
                         self.assertEqual(service.get_settings(), original)
                         self.assertEqual(service.store.load().processing.mode, original["processing"]["mode"])
                 manager._records["download"] = DownloadRecord("download", "url", "id", status="completed")
-                self.assertEqual(service.update_settings(edited)["processing"]["mode"], "report_only")
+                self.assertEqual(service.update_settings(edited, service.get_settings_snapshot())["snapshot"]["settings"]["processing"]["mode"], "report_only")
             finally:
                 service.close()
 
@@ -99,7 +99,7 @@ class BackendServiceTests(unittest.TestCase):
                 return record
             def save():
                 save_started.set()
-                return service.update_settings(service.get_settings())
+                return service.update_settings(service.get_settings(), service.get_settings_snapshot())
             try:
                 with ThreadPoolExecutor(max_workers=2) as executor, patch.object(manager, "submit", side_effect=submit):
                     submitted = executor.submit(service.submit_youtube_download, "url")
@@ -139,14 +139,14 @@ class BackendServiceTests(unittest.TestCase):
             service = BackendService(store, manager_factory=manager_factory)
             payload = service.get_settings()
             payload["processing"]["mode"] = "report_only"
-            updated = service.update_settings(payload)
+            updated = service.update_settings(payload, service.get_settings_snapshot())
             service.close()
 
             reopened = BackendService(store, manager_factory=StubManager)
             persisted = reopened.settings
             reopened.close()
 
-        self.assertEqual(updated["processing"]["mode"], "report_only")
+        self.assertEqual(updated["snapshot"]["settings"]["processing"]["mode"], "report_only")
         self.assertEqual(persisted.processing.mode, "report_only")
         self.assertTrue(managers[0].closed)
         self.assertTrue(managers[1].closed)

@@ -44,6 +44,11 @@ const env = {
   CENSOR_PYTHON: python, CENSOR_APP_DATA_DIR: path.join(root, 'app-data'),
   CENSOR_RUNTIME_ASSETS_DIR: path.join(root, 'runtime'), HF_HUB_OFFLINE: '1',
 }
+const requiredCases = [
+  'second-launch-during-startup', 'second-launch-restores-and-focuses', 'cli-and-desktop-edits-survive',
+  'setup-conflict-repeated-resolution-without-reinstall', 'inspection-preserves-newer-preferences',
+  'wizard-back-and-finish-preserve-component-settings', 'cli-settings-blocked-by-desktop-owner',
+]
 const cases = []
 const app = await electron.launch({ args: [harness], env })
 async function secondLaunch() {
@@ -200,10 +205,11 @@ try {
   assert.match(cli.stdout, /Close the desktop/)
   assert.equal((await snapshot()).settings.processing.device, 'cpu')
   cases.push('cli-settings-blocked-by-desktop-owner')
+  assert.deepEqual(cases, requiredCases, 'Every mandatory state case must execute')
   console.log(`Native state smoke passed: ${cases.join(', ')}`)
 } finally {
   await mkdir('test-results', { recursive: true })
   // Keep dictionary and journal contents out of CI artifacts.
-  await writeFile('test-results/state.json', JSON.stringify({ cases, complete: cases.length === 7 }, null, 2))
+  await writeFile('test-results/state.json', JSON.stringify({ cases, complete: cases.length === requiredCases.length }, null, 2))
   await app.close()
 }

@@ -22,3 +22,19 @@ export function applySettingChanges(settings: Settings, changes: FieldChange[]):
   }
   return result
 }
+
+const FIELD_LABELS: Record<SettingsField, string> = {
+  'directories.input': 'Ready / Input folder', 'directories.output': 'Finished / Output folder',
+  'directories.archive': 'Processed / Archive folder', 'directories.transcripts': 'Transcripts folder',
+  'processing.mode': 'Processing mode', 'processing.device': 'Processing device',
+  'processing.auto_censor_after_transcription': 'Automatic censoring after transcription',
+  'processing.auto_transcode_youtube_downloads': 'Automatic processing of YouTube downloads',
+  'censoring.stereo_method': 'Censoring method', 'censoring.padding_before_ms': 'Padding before a word (ms)',
+  'censoring.padding_after_ms': 'Padding after a word (ms)', 'audio.surround_output': 'Surround sound output',
+  'video.mode': 'Video output', 'whisper.library': 'Transcription engine', 'whisper.model': 'Speech model',
+  'source.archive_after_success': 'Archive originals after success', 'source.scan_subdirectories': 'Include subfolders',
+  'onboarding.completed': 'Setup completed', 'onboarding.last_step': 'Saved setup step',
+  'runtime.ffmpeg_path': 'FFmpeg path', 'runtime.ffprobe_path': 'FFprobe path',
+  'runtime.whisper_cache': 'Whisper model folder', 'runtime.ytdlp_path': 'yt-dlp path',
+}
+export function settingsFieldLabel(field: SettingsField): string { return FIELD_LABELS[field] }

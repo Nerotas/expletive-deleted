@@ -487,7 +487,7 @@ describe('desktop application renderer', () => {
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled()
   })
 
-  it('refreshes the persisted cache path after installing a Whisper model', async () => {
+  it.each(['completed', 'failed'] as const)('refreshes the persisted cache path after installing a Whisper model (%s)', async (status) => {
     const managedCache = 'C:\\Users\\Parent\\AppData\\Local\\ExpletiveDeleted\\models\\whisper'
     vi.mocked(desktopClient.getCapabilities).mockImplementation(async () => ({
       ...readyCapabilities,
@@ -502,7 +502,7 @@ describe('desktop application renderer', () => {
       persisted.runtime.whisper_cache = managedCache
       return {
         install_id: 'install-job',
-        status: 'completed',
+        status,
         action_id: null,
         action_index: null,
         action_count: null,
@@ -511,7 +511,7 @@ describe('desktop application renderer', () => {
         completed_bytes: null,
         total_bytes: null,
         started_at: new Date().toISOString(),
-        error: null,
+        error: status === 'failed' ? 'A later component failed' : null,
       }
     })
     const user = userEvent.setup()
@@ -520,7 +520,7 @@ describe('desktop application renderer', () => {
     expect(await screen.findByText('Whisper large-v3')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Download large-v3 model' }))
     await user.click(screen.getByRole('button', { name: 'Continue' }))
-    await screen.findByText('Installation complete and verified')
+    await screen.findByText(status === 'failed' ? 'A later component failed' : 'Installation complete and verified')
     await user.click(screen.getByRole('link', { name: 'Settings' }))
 
     expect(await screen.findByDisplayValue(managedCache)).toBeInTheDocument()

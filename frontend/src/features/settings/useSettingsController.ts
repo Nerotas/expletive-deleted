@@ -21,7 +21,7 @@ export function useSettingsController({
 }: SettingsControllerOptions) {
   const queryClient = useQueryClient()
   const form = useForm<Settings>()
-  const baseline = useRef<SettingsSnapshot | null>(null)
+  const [baseline, setBaseline] = useState<SettingsSnapshot | null>(null)
   const saving = useRef(false)
   const [busy, setBusy] = useState(false)
   const [conflict, setConflict] = useState<SettingsResult | null>(null)
@@ -38,7 +38,7 @@ export function useSettingsController({
   useEffect(() => {
     // Setup may refresh saved paths in the background; an edited form keeps its own draft.
     if (settingsQuery.data && !form.formState.isDirty && !saving.current) {
-      baseline.current = settingsQuery.data
+      setBaseline(settingsQuery.data)
       form.reset(settingsQuery.data.settings)
     }
   }, [form, settingsQuery.data])
@@ -49,7 +49,7 @@ export function useSettingsController({
 
   const saveDraft = async (nextSettings: Settings, wizardBase?: SettingsSnapshot): Promise<SettingsSnapshot | null> => {
     if (saving.current) return null
-    const base = wizardBase ?? baseline.current
+    const base = wizardBase ?? baseline
     if (!base) return null
     saving.current = true
     setBusy(true)
@@ -61,6 +61,7 @@ export function useSettingsController({
         ? await client.patchSettings(base.revision, changes)
         : await client.updateSettings(submitted, base)
       while (result.status === 'conflict') {
+        queryClient.setQueryData(['settings'], result.snapshot)
         setConflict(result)
         setBusy(false)
         const choices = await new Promise<Partial<Record<SettingsField, boolean>> | null>((resolve) => { choiceResolver.current = resolve })
@@ -76,7 +77,7 @@ export function useSettingsController({
       }
       const updated = result.snapshot
       const laterEdits = settingChanges(formAtSubmit, form.getValues())
-      baseline.current = updated
+      setBaseline(updated)
       queryClient.setQueryData(['settings'], updated)
       form.reset(updated.settings)
       if (laterEdits.length) form.reset(applySettingChanges(updated.settings, laterEdits), { keepDefaultValues: true })
@@ -100,7 +101,7 @@ export function useSettingsController({
   const discard = () => {
     if (saving.current) return
     if (settingsQuery.data) {
-      baseline.current = settingsQuery.data
+      setBaseline(settingsQuery.data)
       form.reset(settingsQuery.data.settings)
     }
   }
@@ -148,7 +149,7 @@ export function useSettingsController({
 
   return {
     persisted: settingsQuery.data?.settings ?? null,
-    snapshot: baseline.current,
+    snapshot: baseline,
     conflict,
     cancelConflict: () => choiceResolver.current?.(null),
     resolveConflict: (choices: Partial<Record<SettingsField, boolean>>) => choiceResolver.current?.(choices),

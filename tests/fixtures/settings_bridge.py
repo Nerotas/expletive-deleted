@@ -8,7 +8,7 @@ import time
 from types import SimpleNamespace
 from backend.desktop import installation
 from backend.desktop.bridge import DesktopBridge
-from backend.desktop.protocol import main, serve
+from backend.desktop.protocol import serve
 from backend.runtime.dependency_models import InstallResult, InstallProgress
 from backend.service import BackendService
 from backend.settings import AppSettings, SettingsStore

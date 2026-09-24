@@ -47,11 +47,12 @@ export function useCapabilities({
     settledInstallRef.current = settledKey
 
     void (async () => {
+      // Earlier actions may have verified and saved paths even if a later action failed.
+      await Promise.all([
+        query.refetch(),
+        queryClient.invalidateQueries({ queryKey: ['settings'] }),
+      ])
       if (installState.status === 'completed') {
-        await Promise.all([
-          query.refetch(),
-          queryClient.invalidateQueries({ queryKey: ['settings'] }),
-        ])
         onNotice('Installation complete and verified')
       } else if (installState.status === 'failed') {
         onError(installState.error ?? 'Dependency installation failed')

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 from backend.policy import PolicyStore
 from backend.service import BackendService
+from backend.settings import SettingsStore
 from backend.settings.transactions import validate_base
 from .dictionary import DictionaryController
 from .installation import InstallationController
@@ -17,13 +18,21 @@ class DesktopBridge:
     """Route private requests without owning feature-specific worker state."""
 
     def __init__(self, service: BackendService | None = None, policy_store: PolicyStore | None = None):
-        self.service = service or BackendService()
-        self._settings_owner = self.service.store.desktop_owner()
+        store = service.store if service is not None else SettingsStore()
+        self._settings_owner = store.desktop_owner()
         self._settings_owner.__enter__()
-        self.policy_store = policy_store or PolicyStore()
-        self.installations = InstallationController(self.service)
-        self.dictionary = DictionaryController(self.service, self.policy_store)
-        self.native_files = NativeFiles(self.service, self.policy_store)
+        self._closed = False
+        try:
+            # Acquire ownership before loading settings so a CLI edit cannot slip
+            # between the startup snapshot and the desktop's active-job guards.
+            self.service = service if service is not None else BackendService(store)
+            self.policy_store = policy_store or PolicyStore()
+            self.installations = InstallationController(self.service)
+            self.dictionary = DictionaryController(self.service, self.policy_store)
+            self.native_files = NativeFiles(self.service, self.policy_store)
+        except Exception:
+            self._settings_owner.__exit__(None, None, None)
+            raise
 
     def handle(self, method: str, params: Mapping[str, Any] | None = None) -> object:
         params = params or {}
@@ -38,7 +47,10 @@ class DesktopBridge:
         if method == "settings.update":
             return self.service.update_settings(params["settings"], validate_base(params.get("base")))
         if method == "settings.patch":
-            return self.service.patch_settings(params.get("revision"), params.get("changes"), strict=params.get("strict") is True)
+            strict = params.get("strict", False)
+            if not isinstance(strict, bool):
+                raise ValueError("Settings resolution requires a boolean strict flag")
+            return self.service.patch_settings(params.get("revision"), params.get("changes"), strict=strict)
         if method == "capabilities.get":
             return self.service.get_capabilities()
         if method == "library.list":
@@ -127,6 +139,9 @@ class DesktopBridge:
         raise ValueError(f"Unknown desktop bridge method: {method}")
 
     def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
         self.native_files.close()
         self.installations.cancel_pending()
         # Do not wait for setup before giving media jobs their cancellation signal.

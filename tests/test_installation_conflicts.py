@@ -26,6 +26,8 @@ class InstallationConflictTests(unittest.TestCase):
         self.controller._install_executor.shutdown()
         self.controller._install_executor = MagicMock()
         self.ready = SimpleNamespace(ready=True, path=self.root / 'verified.exe', detail='verified', installed_version='8.0')
+        patcher = patch('backend.runtime.dependency_plan.inspect_python_dependencies', return_value=(self.ready,))
+        patcher.start(); self.addCleanup(patcher.stop)
         for target in ('inspect_executable', 'inspect_whisper_model', 'inspect_ytdlp'):
             patcher = patch(f'backend.desktop.installation.{target}', return_value=self.ready)
             patcher.start(); self.addCleanup(patcher.stop)
@@ -128,7 +130,7 @@ class InstallationConflictTests(unittest.TestCase):
         plan, operation = self.plan('ytdlp')
         self.edit('runtime', 'ytdlp_path', str(self.root / 'manual.exe'))
         self.complete(plan, operation)
-        again = self.controller.handle('dependencies.install', {'plan_id': plan.id})
+        again = self.controller.handle('dependencies.install', {'plan_id': self.controller._install_jobs[operation]['plan_id']})
         self.assertEqual(again['install_id'], operation)
         self.controller._install_executor.submit.assert_called_once()
         self.assertEqual(self.controller.handle('dependencies.cancel', {'install_id': operation})['status'], 'awaiting_resolution')
@@ -207,3 +209,51 @@ class InstallationConflictTests(unittest.TestCase):
             self.assertEqual(self.resolve(state)['status'], 'completed')
         self.assertEqual(inspect.call_args.kwargs['model'], 'small')
         self.assertEqual(self.service.settings.whisper.model, 'small')
+
+    def test_repeated_reviews_never_replace_an_earlier_immutable_baseline(self):
+        first = self.controller.handle('dependencies.plan', {'components': ['ytdlp']})
+        self.edit('runtime', 'ytdlp_path', str(self.root / 'manual.exe'))
+        second = self.controller.handle('dependencies.plan', {'components': ['ytdlp']})
+        self.assertNotEqual(first['plan_id'], second['plan_id'])
+        self.assertIsNone(self.controller._plan_contexts[first['plan_id']].baseline['settings']['runtime']['ytdlp_path'])
+        operation = self.controller.handle('dependencies.install', {'plan_id': first['plan_id']})['install_id']
+        state = self.complete(self.controller._install_plans[first['plan_id']], operation)
+        self.assertEqual(state['status'], 'awaiting_resolution')
+
+    def test_successful_components_are_applied_when_a_later_action_fails(self):
+        from backend.runtime.dependency_models import InstallProgress
+        payload = self.controller.handle('dependencies.plan', {'components': ['ytdlp', 'whisper_model']})
+        plan = self.controller._install_plans[payload['plan_id']]
+        operation = self.controller.handle('dependencies.install', {'plan_id': payload['plan_id']})['install_id']
+        ytdlp = next(action for action in plan.actions if 'ytdlp' in action.dependency_ids)
+        def execute(*args, progress_callback, **kwargs):
+            progress_callback(InstallProgress(ytdlp.id, 'completed', 'verified'))
+            raise RuntimeError('model download interrupted')
+        with patch('backend.desktop.installation.execute_install_plan', side_effect=execute):
+            self.controller._run_install_task(operation, payload['plan_id'], plan, self.controller._plan_contexts[payload['plan_id']].cache_dir)
+        self.assertIsNotNone(self.service.settings.runtime.ytdlp_path)
+        self.assertIsNone(self.service.settings.runtime.whisper_cache)
+        state = self.controller.handle('dependencies.status', {'install_id': operation})
+        self.assertEqual(state['status'], 'failed')
+        self.assertIn('interrupted', state['error'])
+
+    def test_active_local_job_defers_application_without_reinstallation(self):
+        plan, operation = self.plan('ytdlp')
+        self.service.jobs._jobs['active'] = SimpleNamespace(status='transcribing')
+        try:
+            state = self.complete(plan, operation)
+            self.assertEqual(state['status'], 'awaiting_resolution')
+            self.assertIsNone(self.service.settings.runtime.ytdlp_path)
+        finally:
+            self.service.jobs._jobs.clear()
+        self.assertEqual(self.resolve(state)['status'], 'completed')
+        self.controller._install_executor.submit.assert_called_once()
+
+    def test_keep_current_does_not_require_discarded_verified_files(self):
+        plan, operation = self.plan('ytdlp')
+        manual = self.root / 'manual.exe'
+        self.edit('runtime', 'ytdlp_path', str(manual))
+        state = self.complete(plan, operation)
+        self.ready.ready = False
+        self.assertEqual(self.resolve(state, 'keep_current')['status'], 'completed')
+        self.assertEqual(self.service.settings.runtime.ytdlp_path, manual)

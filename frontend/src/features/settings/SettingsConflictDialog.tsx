@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import type { SettingsConflict, SettingsField } from '../../types/domain'
+import { settingsFieldLabel } from './settings-transactions'
 import './settings.css'
 
 type Props = {
@@ -16,16 +17,16 @@ export function SettingsConflictDialog({ conflicts, busy, verified, error, onCan
   const panel = useRef<HTMLElement>(null)
   const [choices, setChoices] = useState<Partial<Record<SettingsField, boolean>>>({})
   const cancel = useRef(onCancel)
-  cancel.current = onCancel
   const pending = useRef(busy)
-  pending.current = busy
+  useEffect(() => { cancel.current = onCancel; pending.current = busy }, [onCancel, busy])
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null
     panel.current?.focus()
     const keydown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && !pending.current) { event.preventDefault(); cancel.current() }
       if (event.key !== 'Tab') return
-      const elements = [...(panel.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled)') ?? [])]
+      const elements = [...(panel.current?.querySelectorAll<HTMLElement>(':is(button, input):not(:disabled)') ?? [])]
+      if (!elements.length) { event.preventDefault(); panel.current?.focus(); return }
       const first = elements[0], last = elements.at(-1)
       if (event.shiftKey && (document.activeElement === first || document.activeElement === panel.current)) {
         event.preventDefault(); last?.focus()
@@ -49,7 +50,7 @@ export function SettingsConflictDialog({ conflicts, busy, verified, error, onCan
       <p>{verified ? 'Completed downloads are retained. Choose which paths to keep; applying your choices does not reinstall components.' : 'Choose which values to save. Your other edits are retained.'}</p>
       {error && <p role="alert">{error}</p>}
       {conflicts.map((conflict) => <fieldset key={conflict.field} disabled={busy}>
-        <legend>{conflict.field}</legend>
+        <legend>{settingsFieldLabel(conflict.field)}</legend>
         <label><input type="radio" name={`${title}-${conflict.field}`} checked={choices[conflict.field] === false} onChange={() => choose(conflict.field, false)} />Keep current: <span>{String(conflict.current ?? 'Not set')}</span></label>
         <label><input type="radio" name={`${title}-${conflict.field}`} checked={choices[conflict.field] === true} onChange={() => choose(conflict.field, true)} />{verified ? 'Use verified' : 'Use my edit'}: <span>{String(conflict.proposed ?? 'Not set')}</span></label>
       </fieldset>)}

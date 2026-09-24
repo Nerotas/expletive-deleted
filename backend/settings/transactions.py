@@ -5,31 +5,64 @@ from __future__ import annotations
 import hashlib
 import json
 from copy import deepcopy
+from typing import Any, Callable, Literal, TYPE_CHECKING, TypedDict, Union
 
-from .models import SettingsValidationError
+if TYPE_CHECKING:
+    from .store import SettingsStore
+
+from .models import AppSettings, SettingsValidationError
 from .serialization import settings_from_dict, settings_to_dict
 
 
-def snapshot(settings):
+SettingsValue = Union[str, int, bool, None]
+
+
+class SettingsSnapshot(TypedDict):
+    settings: dict[str, Any]
+    revision: str
+
+
+class FieldChange(TypedDict):
+    field: str
+    expected: SettingsValue
+    value: SettingsValue
+
+
+class SettingsConflict(TypedDict):
+    field: str
+    expected: SettingsValue
+    current: SettingsValue
+    proposed: SettingsValue
+
+
+class SettingsResult(TypedDict):
+    status: Literal["saved", "conflict"]
+    snapshot: SettingsSnapshot
+    conflicts: list[SettingsConflict]
+
+
+def snapshot(settings: AppSettings) -> SettingsSnapshot:
     payload = settings_to_dict(settings)
     revision = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     return {"settings": payload, "revision": revision}
 
 
-def fields(payload):
+def fields(payload: dict[str, Any]) -> dict[str, SettingsValue]:
     return {f"{group}.{key}": value for group, values in payload.items()
             if isinstance(values, dict) for key, value in values.items()}
 
 
-def changes_between(base, draft):
+def changes_between(base: dict[str, Any], draft: dict[str, Any]) -> list[FieldChange]:
     # Validate complete drafts before deriving intent; schema edits are never patches.
     parsed = settings_to_dict(settings_from_dict(draft))
+    if set(draft) != set(parsed) or set(fields(draft)) != set(fields(parsed)):
+        raise ValueError("Settings update requires a complete draft; use field changes for a patch")
     before = fields(base)
     return [{"field": field, "expected": before[field], "value": value}
             for field, value in fields(parsed).items() if before[field] != value]
 
 
-def validate_base(base):
+def validate_base(base: object) -> SettingsSnapshot:
     if not isinstance(base, dict) or set(base) != {"settings", "revision"}:
         raise ValueError("A settings snapshot and revision are required")
     if snapshot(settings_from_dict(base["settings"])) != base:
@@ -37,7 +70,15 @@ def validate_base(base):
     return base
 
 
-def transact(store, revision, changes, *, effective=None, prepare=None, strict=False):
+def transact(
+    store: SettingsStore,
+    revision: str,
+    changes: list[FieldChange],
+    *,
+    effective: Callable[[AppSettings], AppSettings] | None = None,
+    prepare: Callable[[AppSettings], AppSettings] | None = None,
+    strict: bool = False,
+) -> SettingsResult:
     if not isinstance(revision, str) or not revision or not isinstance(changes, list):
         raise ValueError("A settings revision and field changes are required")
     with store.locked():
