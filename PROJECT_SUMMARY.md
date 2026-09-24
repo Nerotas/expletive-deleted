@@ -8,6 +8,8 @@ The master product and architecture direction is recorded in [docs/Profanity Cen
 
 The Windows installer bundles only private CPython and its pip bootstrap. The consent-driven processing-component policy and release audit are recorded in [docs/BUNDLED_RUNTIME_PACKAGING_PLAN.md](docs/BUNDLED_RUNTIME_PACKAGING_PLAN.md).
 
+HP-03 serializes complete policy reads and mutations across threads and processes, journals split-store publication, and recovers before returning snapshots. Electron claims one per-user instance before creating a window or Python bridge. Native state smoke also verifies CLI edits while the desktop runs. See [HP-03 implementation](docs/HP-03_IMPLEMENTATION_2026-09-23.md).
+
 ## Working Pipeline
 
 Desktop shutdown requests cancellation before ending Python and waits up to 15 seconds. A Windows Job Object contains the bridge's process tree for forced-exit cleanup. Shared publication verifies and flushes staged output before a collision-refusing rename. Authorized replacement retains the previous file for recovery until publication succeeds. Settings changes and archive operations share a lock with submissions and reject conflicting active work.

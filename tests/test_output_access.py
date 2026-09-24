@@ -38,6 +38,18 @@ class OutputAccessTests(unittest.TestCase):
     def prepare(self, source=None):
         return self.native.handle('native.output.prepare', {'source': str(source or self.source)})['token']
 
+    def test_export_cannot_replace_managed_dictionary_or_journal(self):
+        from backend.policy import PolicyFileError, PolicyStore
+        self.native.policy_store = PolicyStore(self.root / 'dictionary')
+        self.native.policy_store.load()
+        before = self.native.policy_store.censor_path.read_bytes()
+        for name in ('censored.json', 'exclusions.json', 'discovered.json', '.policy-journal.json'):
+            with self.assertRaises(PolicyFileError):
+                self.native.handle('native.export.prepare', {
+                    'destination': str(self.root / 'dictionary' / name),
+                })
+        self.assertEqual(self.native.policy_store.censor_path.read_bytes(), before)
+
     def test_output_is_derived_and_pinned_until_handoff(self):
         token = self.prepare()
         self.assertEqual(self.native.handle('native.output.check', {'token': token}), {'path': str(self.output)})

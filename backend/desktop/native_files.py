@@ -75,6 +75,7 @@ class NativeFiles:
                         token = self._remember(resources, kind='output', path=path, response_path=response_path, check=check)
                         return {'token': token}
                     path = self._json_path(params.get('destination'))
+                    self.policy_store.validate_export_destination(path)
                     response_path = path
                     root = RootBinding.capture(path.parent)
                     path = resources.enter_context(root.lease(path))
@@ -101,6 +102,7 @@ class NativeFiles:
                 return {'path': str(lease['response_path'])}
             if method == 'native.dictionary.export' and lease['kind'] == 'export':
                 try:
+                    self.policy_store.validate_export_destination(lease['path'])
                     if lease['expected'] is not None and params.get('overwrite') is not True:
                         raise NativeFileError('Replacing this dictionary file requires confirmation.')
                     with Publication(lease['root'], lease['path'], overwrite=params.get('overwrite') is True,

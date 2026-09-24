@@ -166,7 +166,7 @@ jobs:
         if: steps.version.outputs.published != 'true'
         shell: pwsh
         run: |
-          & (Join-Path $env:PRIVATE_PYTHON_DIR 'python.exe') -B -m unittest tests.test_filesystem_paths tests.test_windows_destination_guards tests.test_publication tests.test_output_access
+          & (Join-Path $env:PRIVATE_PYTHON_DIR 'python.exe') -B -m unittest tests.test_filesystem_paths tests.test_windows_destination_guards tests.test_publication tests.test_output_access tests.test_policy_transactions
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Check renderer security in production and Vite development
@@ -178,6 +178,11 @@ jobs:
         if: steps.version.outputs.published != 'true'
         working-directory: frontend
         run: npm run smoke:native-files
+
+      - name: Verify one desktop owner and concurrent CLI dictionary edits
+        if: steps.version.outputs.published != 'true'
+        working-directory: frontend
+        run: npm run smoke:state
 
       - name: Smoke-test graceful and forced shutdown
         if: steps.version.outputs.published != 'true'

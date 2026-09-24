@@ -11,6 +11,8 @@ Before changing settings, finish or cancel active jobs and downloads. Closing th
 
 Queue **Play** opens a verified censored copy from the configured output folder and requires FFprobe. Use Explorer for files moved elsewhere. Dictionary **Import** and **Export** open native file pickers; replacing an existing JSON backup requires confirmation. Cancelling the picker leaves files unchanged.
 
+Opening the app again brings the existing window forward. Dictionary changes are saved together, and an interrupted update is recovered on the next read. If a dictionary error persists, follow the recovery guidance in [Troubleshooting](TROUBLESHOOTING.md#dictionary-is-busy-or-needs-recovery).
+
 ## Installed Windows application (recommended)
 
 1. Run `Expletive-Deleted-Setup-<version>-x64.exe` and choose the installation directory.

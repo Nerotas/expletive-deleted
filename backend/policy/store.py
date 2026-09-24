@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Callable, Literal
 
 from backend.application_identity import prepare_app_data_root
+from .errors import PolicyFileError
+from .transactions import STORE_NAMES, JOURNAL_NAME, LOCK_NAME, transactional
 from backend.runtime import (
     get_profanity_censor_words_file,
     get_profanity_exclusions_file,
@@ -27,15 +29,6 @@ PolicyTarget = Literal["censor", "exclude"]
 PolicyAction = Literal["add", "remove"]
 PolicySource = Literal["default", "user", "imported"]
 EPOCH_TIMESTAMP = "1970-01-01T00:00:00Z"
-
-
-class PolicyFileError(RuntimeError):
-    """Raised when the local user dictionary cannot be safely read or written."""
-
-    def __init__(self, path: Path, detail: str):
-        self.path = path
-        self.detail = detail
-        super().__init__(f"Dictionary file {path}: {detail}")
 
 
 @dataclass(frozen=True)
@@ -89,7 +82,10 @@ class PolicyStore:
         *,
         censor_defaults_path: Path | None = None,
         exclusions_defaults_path: Path | None = None,
+        lock_timeout: float = 5.0,
     ):
+        self.lock_timeout = lock_timeout
+        self._pending: dict[str, dict] | None = None
         self.directory = (directory or default_dictionary_directory()).expanduser().resolve()
         self.censor_path = self.directory / "censored.json"
         self.exclusions_path = self.directory / "exclusions.json"
@@ -101,10 +97,13 @@ class PolicyStore:
             exclusions_defaults_path or get_profanity_exclusions_file()
         ).expanduser().resolve()
 
+    @transactional
     def load(self) -> ProfanityPolicy:
         self._ensure_split_stores()
         censor_version, censor_entries = self._read_entry_store(self.censor_path)
         exclusion_version, exclusion_entries = self._read_entry_store(self.exclusions_path)
+        if set(censor_entries) & set(exclusion_entries):
+            raise PolicyFileError(self.directory, "Censored and excluded entries overlap; restore a valid backup.")
         return ProfanityPolicy(
             censor_words=frozenset(censor_entries),
             exclusions=frozenset(exclusion_entries),
@@ -116,6 +115,7 @@ class PolicyStore:
             exclusion_entries=exclusion_entries,
         )
 
+    @transactional
     def info(self) -> dict[str, int | str]:
         return {
             "dictionary_path": str(self.directory),
@@ -123,10 +123,12 @@ class PolicyStore:
             "seeded_from_default_version": DEFAULT_DICTIONARY_VERSION,
         }
 
+    @transactional
     def initialize_discovered(self) -> None:
-        if not self.discovered_path.exists():
-            self.replace_discovered(set())
+        if not self._exists(self.discovered_path):
+            self._write_json_atomic(self.discovered_path, {"schema_version": 1, "words": []}, self._read_discovered)
 
+    @transactional
     def load_entries(self, target: PolicyTarget) -> tuple[PolicyEntry, ...]:
         if target not in ("censor", "exclude"):
             raise ValueError("Policy target must be censor or exclude")
@@ -135,24 +137,32 @@ class PolicyStore:
         _default_version, entries = self._read_entry_store(path)
         return tuple(entries.values())
 
+    @transactional
     def load_discovered(self) -> tuple[str, ...]:
-        if not self.discovered_path.exists():
+        if not self._exists(self.discovered_path):
             return ()
         return self._read_discovered(self.discovered_path)
 
     def _read_discovered(self, path: Path) -> tuple[str, ...]:
-        payload = self._read_json(path)
+        return self._validate_discovered(path, self._read_json(path))
+
+    def _validate_discovered(self, path: Path, payload: object) -> tuple[str, ...]:
         if not isinstance(payload, dict) or set(payload) != {"schema_version", "words"}:
             raise PolicyFileError(path, "must contain schema_version and words")
-        if payload["schema_version"] != 1 or not isinstance(payload["words"], list):
+        if type(payload["schema_version"]) is not int or payload["schema_version"] != 1 or not isinstance(payload["words"], list):
             raise PolicyFileError(path, "has an unsupported format")
-        words = {normalize_policy_word(word) for word in payload["words"] if isinstance(word, str)}
-        if len(words) != len(payload["words"]):
+        try:
+            words = {normalize_policy_word(word) for word in payload["words"] if isinstance(word, str)}
+        except ValueError as exc:
+            raise PolicyFileError(path, "words must be normalized strings") from exc
+        if len(words) != len(payload["words"]) or sorted(words) != sorted(payload["words"]):
             raise PolicyFileError(path, "words must be unique normalized strings")
         return tuple(sorted(words))
 
+    @transactional
     def replace_discovered(self, values: set[str]) -> tuple[str, ...]:
-        words = sorted({normalize_policy_word(value) for value in values})
+        policy = self.load()
+        words = sorted({normalize_policy_word(value) for value in values} - policy.censor_words - policy.exclusions)
         self._write_json_atomic(
             self.discovered_path,
             {"schema_version": 1, "words": words},
@@ -160,6 +170,7 @@ class PolicyStore:
         )
         return tuple(words)
 
+    @transactional
     def add_discovered(self, values: set[str]) -> tuple[str, ...]:
         policy = self.load()
         classified = set(policy.censor_words) | set(policy.exclusions)
@@ -172,6 +183,7 @@ class PolicyStore:
         }
         return self.replace_discovered(words - classified)
 
+    @transactional
     def update(
         self,
         target: PolicyTarget,
@@ -217,6 +229,7 @@ class PolicyStore:
             self.replace_discovered(set(self.load_discovered()) - {word})
         return self.load(), True
 
+    @transactional
     def restore_defaults(self) -> ProfanityPolicy:
         censor_words, exclusions = self._load_defaults()
         self._write_dictionary(
@@ -227,6 +240,7 @@ class PolicyStore:
         )
         return self.load()
 
+    @transactional
     def import_dictionary(self, source: Path) -> ProfanityPolicy:
         imported = self._read_dictionary(source.expanduser().resolve())
         self._write_dictionary(
@@ -237,12 +251,21 @@ class PolicyStore:
         )
         return self.load()
 
+    @transactional
     def export_dictionary(self, destination: Path) -> Path:
         policy = self.load()
         destination = destination.expanduser().resolve()
+        self.validate_export_destination(destination)
         self._write_payload(destination, self._payload(policy))
         return destination
 
+    def validate_export_destination(self, destination: Path) -> None:
+        """Portable exports must never replace managed policy or ownership files."""
+        reserved = {self.directory / name for name in STORE_NAMES | {JOURNAL_NAME, LOCK_NAME}}
+        if destination.expanduser().resolve() in reserved:
+            raise PolicyFileError(destination, "Choose an export destination outside the dictionary stores.")
+
+    @transactional
     def export_payload(self) -> dict:
         """Give a guarded publisher the same portable document as the explicit CLI export."""
         return self._payload(self.load())
@@ -253,7 +276,7 @@ class PolicyStore:
 
     def _ensure_entry_store(self, target: PolicyTarget) -> None:
         path = self.censor_path if target == "censor" else self.exclusions_path
-        if path.exists():
+        if self._exists(path):
             return
         try:
             if target == "exclude":
@@ -298,9 +321,8 @@ class PolicyStore:
             exclusion_entries=exclusion_entries,
         )
 
-    @staticmethod
-    def _validated_payload(path: Path) -> dict[str, object]:
-        payload = PolicyStore._read_json(path)
+    def _validated_payload(self, path: Path) -> dict[str, object]:
+        payload = self._read_json(path)
         required_keys = {
             "schema_version",
             "seeded_from_default_version",
@@ -360,8 +382,12 @@ class PolicyStore:
         except ValueError:
             return False
 
-    @staticmethod
-    def _read_json(path: Path) -> object:
+    def _exists(self, path: Path) -> bool:
+        return (self._pending is not None and path.name in self._pending) or path.exists()
+
+    def _read_json(self, path: Path) -> object:
+        if self._pending is not None and path.parent == self.directory and path.name in self._pending:
+            return self._pending[path.name]
         try:
             return json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
@@ -369,7 +395,7 @@ class PolicyStore:
                 path,
                 f"invalid JSON at line {exc.lineno}, column {exc.colno}",
             ) from exc
-        except OSError as exc:
+        except (OSError, UnicodeError) as exc:
             raise PolicyFileError(path, str(exc)) from exc
 
     def _write_dictionary(
@@ -390,22 +416,29 @@ class PolicyStore:
             exclusion_entries = {word: PolicyEntry(word, added_at, source) for word in exclusions}
         self._write_entry_store(self.censor_path, censor_entries, seeded_from_default_version)
         self._write_entry_store(self.exclusions_path, exclusion_entries, seeded_from_default_version)
-        if self.discovered_path.exists():
+        if self._exists(self.discovered_path):
             classified = set(censor_entries) | set(exclusion_entries)
             self.replace_discovered(set(self.load_discovered()) - classified)
 
     def _read_entry_store(self, path: Path) -> tuple[int, dict[str, PolicyEntry]]:
-        payload = self._read_json(path)
+        return self._validate_entry_store(path, self._read_json(path))
+
+    def _validate_entry_store(self, path: Path, payload: object) -> tuple[int, dict[str, PolicyEntry]]:
         required_keys = {"schema_version", "seeded_from_default_version", "entries"}
         if not isinstance(payload, dict) or set(payload) != required_keys:
             raise PolicyFileError(path, f"must contain only {', '.join(sorted(required_keys))}")
-        if payload["schema_version"] != POLICY_SCHEMA_VERSION:
+        if type(payload["schema_version"]) is not int or payload["schema_version"] != POLICY_SCHEMA_VERSION:
             raise PolicyFileError(path, f"unsupported schema version {payload['schema_version']!r}")
         default_version = payload["seeded_from_default_version"]
         if isinstance(default_version, bool) or not isinstance(default_version, int) or default_version < 1:
             raise PolicyFileError(path, "seeded_from_default_version must be a positive integer")
         entries = self._validate_entries(path, "entries", payload["entries"], POLICY_SCHEMA_VERSION)
         return default_version, entries
+
+    def _validate_store_payload(self, path: Path, payload: object) -> object:
+        if path.name == "discovered.json":
+            return self._validate_discovered(path, payload)
+        return self._validate_entry_store(path, payload)
 
     def _write_entry_store(
         self,
@@ -455,6 +488,10 @@ class PolicyStore:
         payload: dict[str, object],
         validate: Callable[[Path], object],
     ) -> None:
+        if self._pending is not None and path.parent == self.directory and path.name in STORE_NAMES:
+            self._validate_store_payload(path, payload)
+            self._pending[path.name] = payload
+            return
         temporary_path: Path | None = None
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -473,12 +510,12 @@ class PolicyStore:
                 temporary_path = Path(temporary_file.name)
 
             validate(temporary_path)
-            # Atomic replacement protects this file, not a multi-file policy transaction.
+            # Portable exports are single-file snapshots; managed stores use the journal.
             os.replace(temporary_path, path)
             temporary_path = None
         except PolicyFileError:
             raise
-        except OSError as exc:
+        except (OSError, UnicodeError) as exc:
             raise PolicyFileError(path, str(exc)) from exc
         finally:
             if temporary_path is not None:

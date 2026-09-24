@@ -88,6 +88,8 @@ The four request workers share a policy store with no transaction lock. Each upd
 
 **Acceptance:** simultaneous adds/removes/classification moves preserve all accepted changes; initialization and reads never expose inconsistent policy; a second app instance cannot bypass ownership.
 
+**2026-09-23 follow-up:** HP-03 implements shared policy locking, recoverable split-store publication, and Electron single-instance ownership. Barrier/process/crash tests and real second-launch/CLI smoke pass. See [validation and limits](HP-03_IMPLEMENTATION_2026-09-23.md).
+
 ### B04 — Setup completion overwrites newer saved settings
 
 Locations: `scripts/desktop_bridge.py:106–124,316–352`; `backend/service/application.py:70–94`.

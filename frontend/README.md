@@ -4,6 +4,8 @@ Electron hosts the React renderer in this directory. This is an installed deskto
 
 Native IPC handlers must use `trustedIpcHandlers` from `electron/ipc-security.ts`. The sandboxed preload is bundled; `renderer-policy.ts` owns trusted document matching and the separate production/development CSPs. After building, run `npm run smoke:security` for real Electron and Vite/HMR boundary tests. Packaged smoke runs the same production checks. See [HP-01 implementation](../docs/HP-01_IMPLEMENTATION_2026-09-17.md).
 
+The shared `scripts/security-checks.mjs` redirect check starts from its inert HTTP fixture. Reloading React immediately before that check can let HashRouter initialization interrupt the pending navigation before the server receives it. The check requires an actual redirect request, prevention of the exact target by Electron, and zero requests to that target; a generic `ERR_FAILED` is not accepted as security evidence.
+
 `electron/native-files.ts` owns the generic backend allowlist and native playback/dictionary actions. After building, `npm run smoke:native-files` tests those actions through actual main/preload handlers and guarded Python operations. See [HP-02 implementation](../docs/HP-02_IMPLEMENTATION_2026-09-17.md).
 
 From `frontend/`:
@@ -55,6 +57,12 @@ See the [renderer developer guide](src/README.md) for module ownership, state ru
 - Waiting jobs show their position and can be removed independently; the running job can be cancelled from its row or the top-level cancel action.
 - The optional persisted setting `processing.auto_censor_after_transcription` promotes each newly verified transcript to the censored-copy queue. `processing.auto_transcode_youtube_downloads` starts the same chain after a completed YouTube download.
 - The renderer never decides that a transcript is safe for transcoding. That mandatory persisted-artifact gate belongs to the Python backend.
+
+## Desktop ownership
+
+`electron/single-instance.ts` claims Electron ownership before startup. A second launch restores/focuses the first window, including requests received before its first paint. The stable profile is `<application-data>/desktop`; `CENSOR_APP_DATA_DIR` isolates both the profile and backend data for tests.
+
+After building, run `npm run smoke:state` to exercise two real launches, one window/bridge owner, startup focus, minimized-window restoration, and concurrent CLI/desktop edits. CI, local validation, and release gates run it sequentially with other native smoke tests.
 
 ## Dictionary behavior
 

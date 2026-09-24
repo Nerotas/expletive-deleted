@@ -79,6 +79,8 @@ desktop.ini
 
 # Temporary & Test Files
 *.tmp
+.policy.lock
+.policy-journal.json
 *.log
 test_*.mp*
 *_segment_*.mp3
