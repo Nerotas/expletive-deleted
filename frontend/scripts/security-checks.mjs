@@ -5,10 +5,13 @@ import path from 'node:path'
 // Exercise the real preload and ipcMain registrations; stub only OS side effects.
 export async function assertRendererSecurity(app, page, { development = false } = {}) {
   const entryUrl = page.url()
+  const redirectRequests = { started: 0, followed: 0 }
   const server = createServer((request, response) => {
     if (request.url === '/redirect') {
-      response.writeHead(302, { Location: '/foreign' }).end()
+      redirectRequests.started += 1
+      response.writeHead(302, { Location: '/redirect-target' }).end()
     } else {
+      if (request.url === '/redirect-target') redirectRequests.followed += 1
       response.setHeader('Content-Type', 'text/html')
       response.end('<!doctype html><title>Untrusted security fixture</title>')
     }
@@ -129,23 +132,39 @@ export async function assertRendererSecurity(app, page, { development = false } 
     // Main-process loads deliberately bypass will-navigate, proving IPC has its own guard.
     await app.evaluate(async (_, url) => { await globalThis.__securitySmoke.window.loadURL(url) }, foreignUrl)
     assertDenied(await exerciseChannels(page))
-    await app.evaluate(async (_, url) => { await globalThis.__securitySmoke.window.loadURL(url) }, entryUrl)
-    await page.waitForLoadState('domcontentloaded')
-
+    // Keep the inert fixture loaded: reloading React here lets HashRouter's
+    // initial replaceState interrupt loadURL before the HTTP request even starts.
     await app.evaluate(async (_, url) => {
       const contents = globalThis.__securitySmoke.window.webContents
-      globalThis.__securitySmoke.redirectEvents = []
-      for (const name of ['will-frame-navigate', 'will-redirect', 'did-fail-load']) {
-        contents.on(name, (event, ...args) => globalThis.__securitySmoke?.redirectEvents.push({ name, url: event.url, prevented: event.defaultPrevented, args }))
+      const events = []
+      let redirect
+      const observers = new Map()
+      for (const name of ['will-redirect', 'did-fail-load', 'did-start-navigation', 'did-navigate-in-page']) {
+        const observe = (event, ...args) => {
+          events.push({ name, url: event.url, prevented: event.defaultPrevented, args })
+          if (name === 'will-redirect') {
+            redirect = { url: event.url, mainFrame: event.isMainFrame, prevented: event.defaultPrevented }
+          }
+        }
+        observers.set(name, observe)
+        contents.on(name, observe)
       }
-      globalThis.__securitySmoke.redirect = new Promise((resolve) => {
-        const timeout = setTimeout(() => resolve(false), 5000)
-        contents.once('will-redirect', (event) => { clearTimeout(timeout); resolve(event.defaultPrevented) })
-      })
-      await contents.loadURL(url).catch((error) => { globalThis.__securitySmoke.redirectError = error.message })
+      try {
+        let error
+        await contents.loadURL(url).catch((reason) => { error = reason.message })
+        globalThis.__securitySmoke.redirectResult = { redirect, error, events }
+      } finally {
+        for (const [name, observe] of observers) contents.removeListener(name, observe)
+      }
     }, foreignUrl.replace('/foreign', '/redirect'))
-    assert.equal(await app.evaluate(() => globalThis.__securitySmoke.redirect), true,
-      await app.evaluate(() => JSON.stringify({ error: globalThis.__securitySmoke.redirectError, events: globalThis.__securitySmoke.redirectEvents })))
+    const redirectResult = await app.evaluate(() => globalThis.__securitySmoke.redirectResult)
+    const diagnostic = JSON.stringify({ requests: redirectRequests, ...redirectResult })
+    // A generic load failure is insufficient: prove the actual guard ran and the
+    // forbidden destination was never fetched, even if loadURL rejects with ERR_FAILED.
+    assert.deepEqual(redirectResult.redirect, {
+      url: foreignUrl.replace('/foreign', '/redirect-target'), mainFrame: true, prevented: true,
+    }, diagnostic)
+    assert.deepEqual(redirectRequests, { started: 1, followed: 0 }, diagnostic)
     await app.evaluate(async (_, url) => { await globalThis.__securitySmoke.window.loadURL(url) }, entryUrl)
 
     // Even another window showing the exact trusted document must have no native authority.
