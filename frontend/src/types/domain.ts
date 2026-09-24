@@ -204,6 +204,15 @@ export type Settings = {
   }
 }
 
+export type SettingsField = {
+  [K in Exclude<keyof Settings, 'schema_version'>]: `${K}.${string & keyof Settings[K]}`
+}[Exclude<keyof Settings, 'schema_version'>]
+export type SettingsValue = string | number | boolean | null
+export type SettingsSnapshot = { settings: Settings; revision: string }
+export type FieldChange = { field: SettingsField; expected: SettingsValue; value: SettingsValue }
+export type SettingsConflict = { field: SettingsField; expected: SettingsValue; current: SettingsValue; proposed: SettingsValue }
+export type SettingsResult = { status: 'saved' | 'conflict'; snapshot: SettingsSnapshot; conflicts: SettingsConflict[] }
+
 export type InstallAction = {
   id: string
   dependencies: string[]
@@ -225,8 +234,10 @@ export type InstallPlan = {
 }
 
 export type InstallStatus = {
+  resolution?: SettingsResult | null
+  verified_values?: Partial<Record<SettingsField, SettingsValue>>
   install_id: string
-  status: 'running' | 'completed' | 'failed' | 'cancelled' | 'canceling'
+  status: 'running' | 'completed' | 'failed' | 'cancelled' | 'canceling' | 'awaiting_resolution' | 'resolving'
   action_id: string | null
   action_index: number | null
   action_count: number | null

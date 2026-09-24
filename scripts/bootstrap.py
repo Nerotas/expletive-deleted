@@ -25,6 +25,7 @@ from backend.runtime import (
     inspect_dependencies,
 )
 from backend.runtime.environment import get_application_runtime_root
+from backend.settings.store import SettingsBusyError
 from backend.settings import (
     DirectoryAccessError,
     SettingsFileError,
@@ -80,11 +81,9 @@ def print_venv_whisper_profile() -> None:
 def initialize_application_settings(store: SettingsStore | None = None) -> tuple[Path, tuple[Path, ...]]:
     """Persist defaults when needed and create the effective working directories."""
     store = store or SettingsStore()
-    persisted_settings = store.load()
-    effective_settings = load_effective_settings(store)
-    statuses = ensure_directories(effective_settings.directories)
-    if not store.path.exists():
-        store.save(persisted_settings)
+    with store.cli_writer():
+        effective_settings = load_effective_settings(store)
+        statuses = ensure_directories(effective_settings.directories)
     return store.path, tuple(status.path for status in statuses)
 
 
@@ -120,7 +119,7 @@ def main() -> int:
 
     try:
         settings_path, working_directories = initialize_application_settings()
-    except (SettingsFileError, DirectoryAccessError) as exc:
+    except (SettingsFileError, DirectoryAccessError, SettingsBusyError) as exc:
         print(f"Settings initialization failed: {exc}")
         return 1
     print(f"Settings file: {settings_path}")

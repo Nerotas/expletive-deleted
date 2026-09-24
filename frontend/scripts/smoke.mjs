@@ -58,9 +58,9 @@ try {
   await window.evaluate(() => { document.documentElement.dataset.theme = 'light' })
 
   const freshSettings = await window.evaluate(() => window.expletiveDeleted.invoke('settings.get'))
-  if (freshSettings.onboarding.completed) throw new Error('Fresh settings should require onboarding')
+  if (freshSettings.settings.onboarding.completed) throw new Error('Fresh settings should require onboarding')
   await window.evaluate((settings) => window.expletiveDeleted.invoke('settings.update', {
-    settings: { ...settings, onboarding: { completed: true } },
+    base: settings, settings: { ...settings.settings, onboarding: { completed: true, last_step: "finish" } },
   }), freshSettings)
   const launchUrl = new URL(window.url())
   launchUrl.searchParams.set('launch', 'completed')

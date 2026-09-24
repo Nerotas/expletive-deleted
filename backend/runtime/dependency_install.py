@@ -14,6 +14,7 @@ from backend.runtime.paths import (
 )
 from backend.runtime.locations import (
     get_directory_size,
+    get_managed_ffmpeg_paths,
 )
 from .dependency_inspection import (
     inspect_dependencies,
@@ -132,6 +133,18 @@ def execute_install_plan(
         _emit(progress_callback, InstallProgress(action.id, "verifying", "Verifying installation"))
         # Verify the approved output, not a runtime override pointing elsewhere.
         verification_paths: dict[str, Path] = {}
+        if {"ffmpeg", "ffprobe"}.issubset(action.dependency_ids) and action.destination is not None:
+            # The approved runtime destination owns the manifest; ambient overrides
+            # must not make a different installation satisfy this verification.
+            ffmpeg, ffprobe = get_managed_ffmpeg_paths(action.destination.parent.parent)
+            if not ffmpeg or not ffprobe:
+                raise DependencyInstallError("The approved FFmpeg/FFprobe destination has no verified pair")
+            for candidate in (ffmpeg, ffprobe):
+                try:
+                    Path(candidate).resolve().relative_to(action.destination.resolve())
+                except ValueError as exc:
+                    raise DependencyInstallError("FFmpeg verification escaped the approved destination") from exc
+            verification_paths.update(ffmpeg_bin=Path(ffmpeg), ffprobe_bin=Path(ffprobe))
         if action.component == "ytdlp" and action.destination is not None:
             verification_paths["ytdlp_bin"] = action.destination / "yt-dlp.exe"
         if action.component == "js_runtime" and action.destination is not None:

@@ -12,7 +12,7 @@ type ComponentsStepProps = {
   onCheckAgain: () => void
 }
 
-export function ComponentsStep({ capabilities, checking, busy, onReviewInstall, onCheckAgain }: ComponentsStepProps) {
+export function ComponentsStep({ capabilities, checking, busy, onReviewInstall, onLocateExisting, onCheckAgain }: ComponentsStepProps) {
   const pythonReady = Boolean(capabilities?.whisper)
   const mediaReady = Boolean(capabilities?.ffmpeg && capabilities?.ffprobe)
   const youtubeReady = Boolean(capabilities?.ytdlp && capabilities?.js_runtime)
@@ -32,9 +32,9 @@ export function ComponentsStep({ capabilities, checking, busy, onReviewInstall, 
     <OnboardingStepHeading title="Prepare this computer" subtitle="Choose which local components to set up. Downloads happen only after you approve them, and your media stays on this computer." />
     <div className="component-list">
       <ComponentRow title="Transcription packages" detail={pythonReady ? 'Pinned faster-whisper packages are verified.' : 'Install the pinned local transcription packages in your local application data.'} ready={pythonReady} checking={checking} busy={busy} />
-      <ComponentRow title="FFmpeg and FFprobe" detail={mediaReady ? `Verified${capabilities?.ffmpeg_version ? ` (${capabilities.ffmpeg_version})` : ''}.` : 'Needed to inspect, remux, and censor local media.'} ready={mediaReady} checking={checking} busy={busy} />
-      <ComponentRow title="YouTube tools" detail={youtubeDetail} ready={youtubeReady} checking={checking} busy={busy} />
-      <ComponentRow title="Whisper large-v3 model" detail="Download the supported speech model when you are ready. It stays on this computer." ready={modelReady} checking={checking} busy={busy} optional />
+      <ComponentRow title="FFmpeg and FFprobe" detail={mediaReady ? `Verified${capabilities?.ffmpeg_version ? ` (${capabilities.ffmpeg_version})` : ''}.` : 'Needed to inspect, remux, and censor local media.'} ready={mediaReady} checking={checking} busy={busy} onLocate={() => onLocateExisting('ffmpeg')} />
+      <ComponentRow title="YouTube tools" detail={youtubeDetail} ready={youtubeReady} checking={checking} busy={busy} onLocate={() => onLocateExisting('ytdlp')} />
+      <ComponentRow title="Whisper large-v3 model" detail="Download the supported speech model when you are ready. It stays on this computer." ready={modelReady} checking={checking} busy={busy} onLocate={() => onLocateExisting('whisper_model')} optional />
     </div>
     {pendingComponents.length ? <div className="onboarding-get-all">
       <div><strong>Set up components</strong><span>You can continue with warnings and return here later to retry anything that is missing.</span></div>

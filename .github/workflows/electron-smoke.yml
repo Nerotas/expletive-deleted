@@ -57,7 +57,7 @@ jobs:
         working-directory: frontend
         run: npm run smoke:native-files
 
-      - name: Verify one desktop owner and concurrent CLI dictionary edits
+      - name: Verify desktop ownership, settings conflicts, and concurrent CLI dictionary edits
         working-directory: frontend
         run: npm run smoke:state
 

@@ -14,6 +14,7 @@ import { QueuePage } from './features/queue/QueuePage'
 import { useQueue } from './features/queue/useQueue'
 import { OnboardingPage } from './features/onboarding/OnboardingPage'
 import { BackendSetupPage } from './features/onboarding/BackendSetupPage'
+import { SettingsConflictDialog } from './features/settings/SettingsConflictDialog'
 import { SettingsPage } from './features/settings/SettingsPage'
 import { useSettingsController } from './features/settings/useSettingsController'
 import { useTheme } from './hooks/use-theme'
@@ -45,7 +46,7 @@ function App() {
   })
   const installDialogOpen = Boolean(
     capabilities.installState
-    && ['running', 'canceling'].includes(capabilities.installState.status)
+    && ['running', 'canceling', 'resolving', 'awaiting_resolution'].includes(capabilities.installState.status)
     && capabilities.installState.install_id !== dismissedInstallId,
   )
   const backendDetail = settings.error instanceof Error ? settings.error.message : settings.error ? String(settings.error) : undefined
@@ -169,7 +170,18 @@ function App() {
           onContinue={() => void capabilities.approveInstall()}
         />
       )}
-      {capabilities.installState && installDialogOpen && (
+      {settings.conflict && <SettingsConflictDialog
+        key={settings.conflict.snapshot.revision}
+        conflicts={settings.conflict.conflicts} busy={settings.busy}
+        onCancel={settings.cancelConflict} onResolve={settings.resolveConflict}
+      />}
+      {capabilities.installState?.status === 'awaiting_resolution' && installDialogOpen && !settings.conflict && <SettingsConflictDialog
+        key={`${capabilities.installState.install_id}:${capabilities.installState.resolution?.snapshot.revision}`}
+        conflicts={capabilities.conflicts} busy={capabilities.resolving} verified error={capabilities.installState.error}
+        onCancel={() => setDismissedInstallId(capabilities.installState?.install_id ?? null)}
+        onResolve={capabilities.resolveConflict}
+      />}
+      {capabilities.installState && installDialogOpen && capabilities.installState.status !== 'awaiting_resolution' && (
         <SetupProgressDialog
           installState={capabilities.installState}
           onClose={() => setDismissedInstallId(capabilities.installState?.install_id ?? null)}

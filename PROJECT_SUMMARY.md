@@ -121,3 +121,5 @@ Renderer module ownership, state rules, and validation commands are documented i
 3. Electron exposes a narrow validated bridge; the renderer uses the typed desktop client.
 4. Transcoding cannot begin until a compatible transcript has been persisted and verified from disk.
 5. Source media is retained on failed or cancelled work, and incomplete output is removed when safe.
+
+HP-04 uses the shared settings transaction mechanism for component setup, normal Settings, and onboarding saves (the shared foundation for HP-09). Field-level comparisons preserve newer unrelated values and return conflicts without publication. Verified setup assets remain available while choices, active media work, or persistence errors delay settings application. See [HP-04 implementation](docs/HP-04_IMPLEMENTATION_2026-09-24.md).

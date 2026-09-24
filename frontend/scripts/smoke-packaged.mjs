@@ -67,16 +67,16 @@ try {
   }
 
   const freshSettings = await window.evaluate(() => window.expletiveDeleted.invoke('settings.get'))
-  if (freshSettings.onboarding.completed) throw new Error('Fresh packaged settings should require onboarding')
+  if (freshSettings.settings.onboarding.completed) throw new Error('Fresh packaged settings should require onboarding')
   const unicodeInput = path.join(appDataDirectory, 'Ready caf\u00e9 \u5bb6\u5ead')
   const savedSettings = await window.evaluate(({ settings, input }) => window.expletiveDeleted.invoke('settings.update', {
-    settings: { ...settings, directories: { ...settings.directories, input } },
+    base: settings, settings: { ...settings.settings, directories: { ...settings.settings.directories, input } },
   }), { settings: freshSettings, input: unicodeInput })
-  if (savedSettings.directories.input !== unicodeInput) throw new Error('Bridge corrupted the Unicode media directory')
+  if (savedSettings.snapshot.settings.directories.input !== unicodeInput) throw new Error('Bridge corrupted the Unicode media directory')
   await access(unicodeInput)
   await window.evaluate((settings) => window.expletiveDeleted.invoke('settings.update', {
-    settings: { ...settings, onboarding: { completed: true } },
-  }), savedSettings)
+    base: settings, settings: { ...settings.settings, onboarding: { completed: true, last_step: "finish" } },
+  }), savedSettings.snapshot)
   const launchUrl = new URL(window.url())
   launchUrl.searchParams.set('launch', 'completed')
   launchUrl.hash = '#/'
@@ -109,7 +109,7 @@ try {
   }
 
   const { settings, capabilities, legacyBridgePresent } = await window.evaluate(async () => ({
-    settings: await window.expletiveDeleted.invoke('settings.get'),
+    settings: (await window.expletiveDeleted.invoke('settings.get')).settings,
     capabilities: await window.expletiveDeleted.invoke('capabilities.get'),
     legacyBridgePresent: 'profanityCensor' in window,
   }))

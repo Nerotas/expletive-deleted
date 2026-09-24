@@ -18,6 +18,10 @@ import type {
   LibraryItem,
   ReviewResult,
   Settings,
+  SettingsSnapshot,
+  SettingsResult,
+  FieldChange,
+  SettingsField,
 } from '../types/domain'
 
 // Keep preload access and wire method names here; features consume typed operations only.
@@ -33,8 +37,9 @@ function invoke<T>(method: string, params?: Record<string, unknown>): Promise<T>
 }
 
 export const desktopClient = {
-  getSettings: () => invoke<Settings>('settings.get'),
-  updateSettings: (settings: Settings) => invoke<Settings>('settings.update', { settings }),
+  getSettings: () => invoke<SettingsSnapshot>('settings.get'),
+  updateSettings: (settings: Settings, base: SettingsSnapshot) => invoke<SettingsResult>('settings.update', { settings, base }),
+  patchSettings: (revision: string, changes: FieldChange[], strict = false) => invoke<SettingsResult>('settings.patch', { revision, changes, strict }),
   getCapabilities: () => invoke<Capabilities>('capabilities.get'),
   getDictionaryInfo: () => invoke<DictionaryInfo>('dictionary.info'),
   getDictionaryExclusions: (
@@ -70,17 +75,19 @@ export const desktopClient = {
     invoke<InstallStatus>('dependencies.status', { install_id: installId }),
   cancelInstall: (installId: string) =>
     invoke<InstallStatus>('dependencies.cancel', { install_id: installId }),
+  resolveInstallConflict: (installId: string, revision: string, choices: Partial<Record<SettingsField, 'keep_current' | 'use_verified'>>) =>
+    invoke<InstallStatus>('dependencies.resolve_conflict', { install_id: installId, revision, choices }),
   inspectExistingFfmpeg: (path: string) =>
     invoke<{ ffmpeg_path: string; ffprobe_path: string; version: string | null }>(
       'dependencies.inspect_ffmpeg',
       { path },
     ),
   locateExistingFfmpeg: (path: string) =>
-    invoke<Capabilities>('dependencies.locate_ffmpeg', { path }),
+    invoke<InstallStatus>('dependencies.locate_ffmpeg', { path }),
   locateExistingModel: (path: string) =>
-    invoke<Capabilities>('dependencies.locate_model', { path }),
+    invoke<InstallStatus>('dependencies.locate_model', { path }),
   locateExistingYtdlp: (path: string) =>
-    invoke<Capabilities>('dependencies.locate_ytdlp', { path }),
+    invoke<InstallStatus>('dependencies.locate_ytdlp', { path }),
   listLibrary: () => invoke<LibraryItem[]>('library.list'),
   archiveSource: (source: string) => invoke<unknown>('library.archive', { source }),
   importSources: (sources: string[]) => invoke<ImportResult[]>('library.import', { sources }),

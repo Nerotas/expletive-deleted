@@ -73,3 +73,9 @@ After building, run `npm run smoke:state` to exercise two real launches, one win
 Electron uses the `com.expletive-deleted.desktop` Windows AppUserModelID, private `expletive-deleted:*` IPC channels, and the narrow typed `window.expletiveDeleted` preload API.
 
 - The Dictionary displays the durable user path and policy metadata; processing loads the same complete policy at job start.
+
+## Settings and component conflicts
+
+`settings.get` returns `{ settings, revision }`. Normal Settings submits a complete draft with its baseline; onboarding submits intended field changes. Both use the shared backend transaction and `SettingsConflictDialog`, retaining drafts while a choice is pending. Setup uses `awaiting_resolution` and `dependencies.resolve_conflict`; retries verify retained files and never approve another installation. All wire operations live in `src/services/desktop-client.ts`.
+
+`npm run smoke:state` runs real Electron/backend settings races, wizard preservation, repeated resolution without installation replay, and CLI ownership checks. Its offline fixture replaces component verification/downloads only; no test installs processing components. Screenshots cover both themes at 1060?720 and 1440?940.

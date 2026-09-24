@@ -5,6 +5,9 @@ from __future__ import annotations
 
 import argparse
 import json
+from contextlib import nullcontext
+from backend.settings.store import SettingsBusyError
+from backend.settings.transactions import snapshot, changes_between
 from dataclasses import replace
 from pathlib import Path
 
@@ -153,14 +156,24 @@ def main(argv: list[str] | None = None, store: SettingsStore | None = None) -> i
     store = store or SettingsStore()
 
     try:
+        with store.cli_writer() if args.command not in {"show", "validate"} else nullcontext():
+            return _run(args, store)
+    except (SettingsValidationError, SettingsFileError, DirectoryAccessError, SettingsBusyError) as exc:
+        print(f"[FAILED] {exc}")
+        return 1
+
+
+def _run(args, store):
+    try:
         settings = store.load()
+        base = snapshot(settings)
         if args.command == "show":
             print(json.dumps(settings_to_dict(settings), indent=2))
             print(f"Settings file: {store.path}")
             return 0
         if args.command == "init":
             ensure_directories(settings.directories)
-            store.save(settings)
+            store.transact(base["revision"], [])
             print(f"Settings initialized: {store.path}")
             return 0
         if args.command == "validate":
@@ -174,12 +187,18 @@ def main(argv: list[str] | None = None, store: SettingsStore | None = None) -> i
             updated = _updated_directories(settings, args)
             if args.create:
                 ensure_directories(updated.directories)
-            store.save(updated)
+            result = store.transact(base["revision"], changes_between(base["settings"], settings_to_dict(updated)))
+            if result["status"] == "conflict":
+                print("[FAILED] Settings changed elsewhere; inspect current settings and retry.")
+                return 1
             print(f"Settings updated: {store.path}")
             return 0
         if args.command == "set-options":
             updated = _updated_options(settings, args)
-            store.save(updated)
+            result = store.transact(base["revision"], changes_between(base["settings"], settings_to_dict(updated)))
+            if result["status"] == "conflict":
+                print("[FAILED] Settings changed elsewhere; inspect current settings and retry.")
+                return 1
             print(f"Settings updated: {store.path}")
             return 0
     except (SettingsValidationError, SettingsFileError, DirectoryAccessError) as exc:

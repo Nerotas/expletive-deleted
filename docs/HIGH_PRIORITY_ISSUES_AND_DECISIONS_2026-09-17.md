@@ -20,7 +20,7 @@ Implementation updates are linked in the status table; the original decisions be
 | HP-01 | Untrusted documents retain desktop bridge access | Restrict the app window to its own interface, validate every IPC caller, and open external links in the default browser | [Implemented; Windows/package checks passed](HP-01_IMPLEMENTATION_2026-09-17.md) |
 | HP-02 | File opening and dictionary export accept unrestricted paths | Restrict playback to verified media within the configured output root; bind JSON exports and overwrite consent to the native Save dialog | [Implemented; Windows/package checks passed](HP-02_IMPLEMENTATION_2026-09-17.md) |
 | HP-03 | Concurrent dictionary edits can lose acknowledged changes | Serialize complete dictionary changes and allow one desktop instance per user | Accepted direction; open |
-| HP-04 | Component setup can overwrite newer settings | Update only verified component fields, preserve unrelated settings, and surface conflicts with manual path edits | Accepted direction; open |
+| HP-04 | Component setup can overwrite newer settings | Update only verified component fields, preserve unrelated settings, and surface conflicts with manual path edits | Implemented and validated locally; see [report](HP-04_IMPLEMENTATION_2026-09-24.md) |
 | HP-05 | Artifact names collide and legacy transcripts lack reliable source identity | Retain as a future issue; defer the identity scheme and legacy migration decision | Deferred; risk remains open |
 | HP-06 | Publication safeguards differ across processing entrypoints | Use shared staging, verification, and safe publication; stop on unexpected collisions | [Implemented; cross-volume hardware qualification remains](HP-06_IMPLEMENTATION_2026-09-17.md) |
 | HP-07 | Destination links can escape configured roots | Allow a configured root to resolve elsewhere, enforce that resolved boundary, and stop on escapes or unexpected target changes | [Implemented Windows guards, including HP-06 integration](HP-07_IMPLEMENTATION_2026-09-17.md) |
@@ -175,7 +175,7 @@ Source: [frontend review, onboarding snapshot finding](FRONTEND_REVIEW_2026-09-1
 | Finding | Recorded resolution | Remaining qualification |
 | --- | --- | --- |
 | Closing the app bypassed processing cleanup | Graceful bridge shutdown, bounded forced fallback, Windows process-tree containment, and staged desktop output publication | Existing tests used controlled workers; this does not establish real-media or clean-machine release qualification |
-| Saving settings lost active download tracking | Settings replacement is blocked while downloads are active, and settings/submission operations share a lifecycle lock | Separate setup/onboarding settings races in HP-04 and HP-09 remain open |
+| Saving settings lost active download tracking | Settings replacement is blocked while downloads are active, and settings/submission operations share a lifecycle lock | HP-04 and the shared onboarding transaction are implemented; see [validation report](HP-04_IMPLEMENTATION_2026-09-24.md). Broader HP-09 acceptance remains separately tracked |
 
 Sources: [Windows build audit](WINDOWS_BUILD_AUDIT_2026-09-16.md); [Windows lifecycle follow-up](WINDOWS_LIFECYCLE_FOLLOWUP_2026-09-16.md). These resolved defects should retain their regression coverage rather than be reopened as unfinished repairs.
 
@@ -184,3 +184,7 @@ Sources: [Windows build audit](WINDOWS_BUILD_AUDIT_2026-09-16.md); [Windows life
 The second document will turn the eight accepted directions into a repair plan and carry HP-05 as a deferred future issue. It should map shared work across frontend, bridge, and backend without counting the same settings or dictionary defect twice.
 
 Other medium-priority findings, architecture improvements, and release-qualification gaps remain in their original reports. They have not all been individually decided in this discussion. If any is necessary to implement an accepted decision safely, the plan should identify that dependency explicitly rather than imply that it was already resolved or separately approved.
+
+## HP-04 implementation follow-up - 2026-09-24
+
+The setup and onboarding write directions now use one locked, revision-aware field transaction. Setup conflicts preserve current settings and verified files; explicit resolution revalidates selected components without replaying installation. Local backend, renderer, and native state validation is recorded in [the implementation report](HP-04_IMPLEMENTATION_2026-09-24.md). This updates local implementation status without closing remote issues or claiming completion of the broader HP-09/HP-08 work.

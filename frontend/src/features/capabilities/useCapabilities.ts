@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { desktopClient, type DesktopClient } from '../../services/desktop-client'
-import type { InstallPlan, InstallStatus } from '../../types/domain'
+import type { InstallPlan, InstallStatus, SettingsField, SettingsConflict } from '../../types/domain'
+import { settingValue } from '../settings/settings-transactions'
 import { errorMessage } from '../../utils/format'
 
 type CapabilitiesOptions = {
@@ -38,19 +39,20 @@ export function useCapabilities({
 
   useEffect(() => {
     if (!installState) return
-    const active = ['running', 'canceling'].includes(installState.status)
-    if (active) return
+    const active = ['running', 'canceling', 'resolving'].includes(installState.status)
+    if (active || installState.status === 'awaiting_resolution') return
 
     const settledKey = `${installState.install_id}:${installState.status}`
     if (settledInstallRef.current === settledKey) return
     settledInstallRef.current = settledKey
 
     void (async () => {
+      // Earlier actions may have verified and saved paths even if a later action failed.
+      await Promise.all([
+        query.refetch(),
+        queryClient.invalidateQueries({ queryKey: ['settings'] }),
+      ])
       if (installState.status === 'completed') {
-        await Promise.all([
-          query.refetch(),
-          queryClient.invalidateQueries({ queryKey: ['settings'] }),
-        ])
         onNotice('Installation complete and verified')
       } else if (installState.status === 'failed') {
         onError(installState.error ?? 'Dependency installation failed')
@@ -59,7 +61,7 @@ export function useCapabilities({
     })()
   }, [installState, onError, onNotice, query, queryClient])
 
-  const activeInstallId = installState && ['running', 'canceling'].includes(installState.status)
+  const activeInstallId = installState && ['running', 'canceling', 'resolving'].includes(installState.status)
     ? installState.install_id
     : null
 
@@ -98,19 +100,37 @@ export function useCapabilities({
     },
     onSuccess: async (updated) => {
       if (!updated) return
-      queryClient.setQueryData(['capabilities'], updated)
-      await queryClient.invalidateQueries({ queryKey: ['settings'] })
-      onNotice('Existing component located and verified')
+      setInstallState(updated)
     },
     onError: (reason) => onError(errorMessage(reason)),
   })
 
+  const resolveMutation = useMutation({
+    mutationFn: (choices: Partial<Record<SettingsField, boolean>>) => {
+      if (!installState?.resolution) throw new Error('No component settings are awaiting review')
+      const selected = Object.fromEntries(Object.entries(choices).map(([field, value]) => [field, value ? 'use_verified' : 'keep_current'])) as Partial<Record<SettingsField, 'keep_current' | 'use_verified'>>
+      return client.resolveInstallConflict(installState.install_id, installState.resolution.snapshot.revision, selected)
+    },
+    onSuccess: setInstallState,
+    onError: (reason) => onError(errorMessage(reason)),
+  })
+  const conflicts: SettingsConflict[] = installState?.resolution
+    ? Object.entries(installState.verified_values ?? {}).map(([field, proposed]) => ({
+      field: field as SettingsField,
+      expected: installState.resolution!.conflicts.find((item) => item.field === field)?.expected ?? null,
+      current: settingValue(installState.resolution!.snapshot.settings, field as SettingsField),
+      proposed: proposed ?? null,
+    })) : []
+
   return {
+    conflicts,
+    resolving: resolveMutation.isPending,
+    resolveConflict: (choices: Partial<Record<SettingsField, boolean>>) => resolveMutation.mutate(choices),
     capabilities: query.data ?? null,
     loading: query.isLoading,
     checking: query.isFetching,
-    busy: planMutation.isPending || installMutation.isPending || locateMutation.isPending || query.isFetching,
-    installing: installMutation.isPending || Boolean(installState && ['running', 'canceling'].includes(installState.status)),
+    busy: Boolean(installState && ['awaiting_resolution', 'running', 'canceling', 'resolving'].includes(installState.status)) || planMutation.isPending || installMutation.isPending || locateMutation.isPending || query.isFetching,
+    installing: installMutation.isPending || Boolean(installState && ['running', 'canceling', 'resolving'].includes(installState.status)),
     installState,
     pendingPlan,
     refresh: async () => { await query.refetch() },

@@ -190,3 +190,13 @@ If replacement reports a `.recovery` file, keep it: it contains the previous out
 ## Managed Download Destinations
 
 Approved yt-dlp and Deno installs write to the managed destination shown in the setup plan and verify that copy. The advanced `CENSOR_YTDLP` and `CENSOR_DENO` environment variables select existing executables for use; they do not redirect installation or overwrite those external executables.
+
+## Component settings need review
+
+Setup can finish retrieving a component while a newer path or preference is saved. **Review component settings** shows the current and verified paths. Choose **Keep current** or **Use verified**, then **Apply choices**. This verifies existing files and saves settings; it does not reinstall or repeat a completed download. Keeping a manual path does not guarantee that path is ready.
+
+If a media job or download is active, finish or cancel it before applying choices again. If saving fails, fix the reported permissions or disk problem and retry the same settings review. Cancel leaves verified files intact and retains the pending review in the current app session; use the top status button to reopen it. After restarting the app, **Locate existing** can verify and select the retained files.
+
+Settings and the setup wizard also pause if the same field changed elsewhere. Choose the current value or your edit; Cancel preserves the draft and current step. A further change may require another choice.
+
+Advanced: CLI settings writers report `settings_busy` while the desktop owns the profile. Close the desktop before running `manage_settings.py init`, `set-options`, or `set-directories`. Read-only settings commands and dictionary CLI transactions remain available. Settings use local thread/process locks; older app versions do not honor these locks, so do not run old and new versions against one profile concurrently.

@@ -62,3 +62,9 @@ The developer CLI uses the same policy transaction without starting a service:
 .\.venv\Scripts\python.exe backend_app.py dictionary remove censor "example word"
 .\.venv\Scripts\python.exe -m unittest tests.test_policy_transactions
 ```
+
+## Settings transactions
+
+`settings/transactions.py` owns canonical revisions, leaf changes, complete merged validation, and structured conflicts. `SettingsStore` locks reads and transactions across threads/processes; INI publication remains atomic. Service lifecycle ownership precedes the settings lock, retains media/download guards, and constructs replacement managers before persistence. No installation or verification holds a settings lock.
+
+The desktop acquires a profile ownership lock before initializing the service; supported CLI settings writers take the same ownership lock and report `settings_busy` if the desktop is open. `desktop/installation.py` captures immutable baseline/model/destination contexts per plan review and inspection, saves verified runtime fields only, and revalidates before conflict application. Onboarding and complete Settings drafts use this same transaction; snapshotless `settings.update` calls are rejected.

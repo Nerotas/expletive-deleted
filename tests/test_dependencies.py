@@ -436,9 +436,16 @@ class DependencyPlanTests(unittest.TestCase):
         self.assertEqual(requirements, PYTHON_REQUIREMENTS)
 
     def test_install_tracking_starts_and_reports_background_state(self):
-        bridge = DesktopBridge()
+        from backend.service import BackendService
+        from backend.settings import AppSettings, SettingsStore
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        bridge = DesktopBridge(BackendService(SettingsStore(root / "settings.ini", AppSettings.defaults(root / "media"))))
+        self.addCleanup(bridge.close)
         plan = build_install_plan(["python"], python_executable=Path("C:\\python.exe"))
         bridge.installations._install_plans[plan.id] = plan
+        bridge.installations._plan_contexts[plan.id] = bridge.installations._capture_context()
 
         running = Event()
         finish = Event()
@@ -466,14 +473,13 @@ class DependencyPlanTests(unittest.TestCase):
 
             finish.set()
 
-            deadline = time.monotonic() + 2
+            # Join the actual worker instead of spinning on a wall-clock deadline.
+            # Publication includes directory validation and can take longer on Windows CI.
+            bridge.installations._install_executor.shutdown(wait=True)
             status = bridge.handle("dependencies.status", {"install_id": started["install_id"]})
-            while status["status"] not in ("completed", "failed") and time.monotonic() < deadline:
-                status = bridge.handle("dependencies.status", {"install_id": started["install_id"]})
             self.assertEqual(status["status"], "completed")
 
         bridge.installations._install_executor.shutdown(wait=True)
-        bridge.close()
 
 
 if __name__ == "__main__":

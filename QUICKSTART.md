@@ -153,3 +153,7 @@ To run the full Windows validation flow from the repository root:
 Use `-SkipPackaged` to omit the Electron package build and packaged smoke test when iterating on backend or renderer code.
 
 Advanced single-file CLI processing requires `--overwrite` to replace existing output. For an offline publication check using already installed FFmpeg/FFprobe, run `python -m scripts.qualify_media_publication` with the repository Python environment. It generates only temporary synthetic media and downloads nothing.
+
+## If setup asks you to review settings
+
+Choose **Keep current** to retain the saved path or **Use verified** to select the component that setup verified. FFmpeg and FFprobe are selected together. Completed downloads stay on your computer, and applying the choice does not download or install again. If another change occurs, review the refreshed values. Wait for active media jobs or downloads to finish before applying settings. Cancel keeps the choice pending; reopen it from the status button at the top of the app.
