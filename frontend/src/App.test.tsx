@@ -33,6 +33,12 @@ describe('desktop application renderer', () => {
     persisted = cloneSettings(defaultSettings)
     vi.spyOn(desktopClient, 'getSettings').mockImplementation(async () => ({ settings: cloneSettings(persisted), revision: JSON.stringify(persisted) }))
     vi.spyOn(desktopClient, 'getAppInfo').mockResolvedValue({ version: '1.4.1', isPackaged: false })
+    vi.spyOn(desktopClient, 'checkForUpdates').mockResolvedValue({
+      currentVersion: '1.4.1',
+      latestVersion: '1.4.1',
+      updateAvailable: false,
+      releaseUrl: 'https://github.com/Nerotas/expletive-deleted/releases/tag/v1.4.1',
+    })
     vi.spyOn(desktopClient, 'updateSettings').mockImplementation(async (settings) => {
       persisted = cloneSettings(settings)
       return { status: 'saved', snapshot: { settings: cloneSettings(persisted), revision: JSON.stringify(persisted) }, conflicts: [] }
@@ -221,6 +227,27 @@ describe('desktop application renderer', () => {
 
     expect(await screen.findByText('Expletive Deleted 1.4.1')).toBeInTheDocument()
     expect(screen.getByText(/Development build.*local processing.*Windows/i)).toBeInTheDocument()
+    expect(desktopClient.checkForUpdates).not.toHaveBeenCalled()
+  })
+
+  it('offers a newer packaged release and opens its installer after user action', async () => {
+    vi.mocked(desktopClient.getAppInfo).mockResolvedValue({ version: '1.4.2', isPackaged: true })
+    vi.mocked(desktopClient.checkForUpdates).mockResolvedValue({
+      currentVersion: '1.4.2',
+      latestVersion: '1.4.3',
+      updateAvailable: true,
+      releaseUrl: 'https://github.com/Nerotas/expletive-deleted/releases/tag/v1.4.3',
+      downloadUrl: 'https://github.com/Nerotas/expletive-deleted/releases/download/v1.4.3/Expletive-Deleted-Setup-1.4.3-x64.exe',
+    })
+    const user = userEvent.setup()
+    renderApp('/')
+
+    expect(await screen.findByText('Version 1.4.3 is available.')).toBeInTheDocument()
+    expect(desktopClient.checkForUpdates).toHaveBeenCalledOnce()
+    await user.click(screen.getByRole('button', { name: 'Download update' }))
+    expect(desktopClient.openExternal).toHaveBeenCalledWith(
+      'https://github.com/Nerotas/expletive-deleted/releases/download/v1.4.3/Expletive-Deleted-Setup-1.4.3-x64.exe',
+    )
   })
 
   it('opens onboarding for fresh settings and shows the missing development runtime instead of a blank step', async () => {

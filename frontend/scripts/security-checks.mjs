@@ -48,7 +48,7 @@ export async function assertRendererSecurity(app, page, { development = false } 
       () => api.openExternal('https://example.invalid/security-fixture'),
       () => api.openTranscodeFolder(), () => api.openOutput('security-fixture.txt'),
       () => api.request('settings.get'), () => api.getAppInfo(), () => api.getBackendState(),
-      ...(hostile ? [() => api.restart()] : []),
+      ...(hostile ? [() => api.checkForUpdates(), () => api.restart()] : []),
     ]
     const results = []
     for (const request of requests) {
@@ -57,7 +57,7 @@ export async function assertRendererSecurity(app, page, { development = false } 
     return results
   }, hostile)
   const assertDenied = (results) => {
-    assert.equal(results.length, 12)
+    assert.equal(results.length, 13)
     for (const result of results) assert.match(result, /trusted application window/)
   }
 
@@ -70,7 +70,7 @@ export async function assertRendererSecurity(app, page, { development = false } 
     assert.equal(await page.evaluate(() => typeof window.require), 'undefined')
     assert.deepEqual(await page.evaluate(() => Object.keys(window.expletiveDeleted).sort()), [
       'desktop', 'invoke', 'request', 'getBackendState', 'onBackendState', 'restart',
-      'getAppInfo',
+      'getAppInfo', 'checkForUpdates',
       'selectDirectory', 'selectFile', 'importDictionary', 'exportDictionary',
       'openExternal', 'openTranscodeFolder', 'openOutput', 'getPathForFile',
     ].sort(), 'Packaged and development preload must expose no fixture controls')
@@ -189,7 +189,7 @@ export async function assertRendererSecurity(app, page, { development = false } 
     await extraPage.waitForLoadState('domcontentloaded')
     assertDenied(await exerciseChannels(extraPage, true))
     assert.equal(await app.evaluate(() => globalThis.__securitySmoke.calls.length), 6)
-    console.log(`Renderer security checks passed (${development ? 'Vite development' : 'production'}): all 11 IPC channels (12 preload operations), CSP, sandbox, navigation, redirects, popups, foreign documents and windows.`)
+    console.log(`Renderer security checks passed (${development ? 'Vite development' : 'production'}): all 12 IPC channels (13 preload operations), CSP, sandbox, navigation, redirects, popups, foreign documents and windows.`)
   } finally {
     await app.evaluate(({ shell, dialog }) => {
       const state = globalThis.__securitySmoke

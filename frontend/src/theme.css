@@ -154,3 +154,9 @@ th,
     display: flex;
   }
 }
+
+.alert.update {
+  border-color: color-mix(in srgb, var(--action-blue) 40%, var(--line));
+  background: color-mix(in srgb, var(--action-blue) 10%, var(--surface));
+  color: var(--action-blue);
+}

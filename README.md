@@ -155,6 +155,8 @@ npm run version:check
 
 The [Release workflow](.github/workflows/release.yml) lets the operator choose a `patch`, `minor`, or `major` increment from the latest stable release, or `none` to use the committed `frontend/package.json` version. It synchronizes version metadata in the build runner, runs backend, renderer, native, packaging, and installed-app checks, then creates a local metadata commit, pushes only its tag, and publishes the Windows installer. The desktop reads that packaged metadata through Electron, and release smoke testing verifies that the application reports the selected version. Generated release notes explicitly start at the immediately preceding stable release, so **What's Changed** contains only release-to-release changes.
 
+Packaged applications check the latest stable GitHub release at most once every 24 hours and show a dismissible notice when a newer version is available. The check sends no media, transcripts, dictionary entries, or settings. Downloading remains an explicit user action and opens the validated GitHub release asset in the default browser; the application never installs an update automatically.
+
 After GitHub publishes the release, the [product-site workflow](.github/workflows/deploy-pages.yml) deploys the tagged `docs/` directory to GitHub Pages. Set GitHub Pages to **GitHub Actions** as its build source before relying on this deployment.
 
 Repository Actions must have **Read and write permissions** so the workflow can push the release tag and create the GitHub Release. It never pushes commits to protected `main` or creates a release pull request. A failed validation does not tag or publish the release.

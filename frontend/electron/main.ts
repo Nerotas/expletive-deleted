@@ -10,6 +10,7 @@ import { createRendererPolicy } from './renderer-policy.js'
 import { nativeFileOperations, assertRendererMethod } from './native-files.js'
 import { respond } from './ipc-response.js'
 import { claimDesktopInstance } from './single-instance.js'
+import { checkForUpdates } from './app-update.js'
 
 let trustedRenderer: TrustedRenderer | undefined
 let bridge: ChildProcessWithoutNullStreams | undefined
@@ -150,6 +151,7 @@ if (desktopInstance.ownsInstance) app.whenReady().then(() => {
   }))
   handle('expletive-deleted:backend-state', () => transport?.snapshot ?? { generation, status: 'unavailable' })
   handle('expletive-deleted:app-info', () => ({ version: app.getVersion(), isPackaged: app.isPackaged }))
+  handle('expletive-deleted:check-for-updates', () => checkForUpdates(app.getVersion()))
   handle('expletive-deleted:restart', () => {
     // Relaunch is a user action. before-quit still applies bounded worker shutdown.
     app.relaunch()
