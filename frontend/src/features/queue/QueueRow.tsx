@@ -1,7 +1,7 @@
 import { ArchiveIcon, CircleStop, FileText, Play, X } from 'lucide-react'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import type { Job, JobEvent, JobSubmissionOptions, LibraryItem } from '../../types/domain'
-import { fileName, formatEta } from '../../utils/format'
+import { fileName, formatDuration, formatEta } from '../../utils/format'
 import { isBulkSelectable } from './queue-model'
 
 export function QueueRow({
@@ -100,6 +100,7 @@ export function QueueRow({
       <span className="file-icon">{remote ? 'YT' : fileName(item.source).split('.').pop()?.toUpperCase()}</span>
       <div><strong>{displayJob?.title ?? fileName(item.source)}</strong><small>{item.source}</small></div>
     </div></td>
+    <td className="length-cell">{item.duration_seconds != null ? formatDuration(item.duration_seconds) : <span className="muted">—</span>}</td>
     <td>{item.date_added ? new Date(item.date_added).toLocaleString() : <span className="muted">—</span>}</td>
     <td><StatusBadge status={status} label={statusLabel} /></td>
     <td className="position-cell">{active ? <strong>Active</strong> : queuePosition != null ? <span>#{queuePosition}</span> : <span className="muted">—</span>}</td>

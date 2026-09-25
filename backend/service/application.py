@@ -76,6 +76,7 @@ class BackendService:
         self._closing = False
         self.store = store or SettingsStore()
         self._manager_factory = manager_factory
+        self._duration_cache: dict[tuple[str, int, int, str], float | None] = {}
         self.settings = load_effective_settings(self.store)
         try:
             ensure_directories(self.settings.directories)
@@ -132,6 +133,7 @@ class BackendService:
             old_jobs, old_downloads = self.jobs, self.downloads
             self.settings = prepared_settings[0]
             self.jobs, self.downloads = replacements
+            self._duration_cache.clear()
             old_jobs.close()
             old_downloads.close()
         return result
@@ -161,6 +163,7 @@ class BackendService:
             ffprobe_bin=str(self.settings.runtime.ffprobe_path)
             if self.settings.runtime.ffprobe_path
             else None,
+            duration_cache=self._duration_cache,
         )
 
     def get_archive(self) -> tuple[ArchiveItem, ...]:

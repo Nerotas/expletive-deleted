@@ -3,7 +3,7 @@ import type { Job, LibraryItem } from '../../types/domain'
 import { buildQueueRows, isBulkSelectable, selectQueueRows } from './queue-model'
 
 const item = (source: string, status: LibraryItem['status'] = 'ready'): LibraryItem => ({
-  source, status, date_added: '2026-09-16T12:00:00Z', transcript: null, output: null,
+  source, status, date_added: '2026-09-16T12:00:00Z', transcript: null, output: null, duration_seconds: null,
 })
 const job = (id: string, source: string, status: Job['status'], extra: Partial<Job> = {}): Job => ({
   id, source, status, mode: 'report_only', progress_percent: null, error: null, ...extra,
