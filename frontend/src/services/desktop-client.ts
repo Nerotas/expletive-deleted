@@ -40,6 +40,7 @@ async function invoke<T>(method: string, params?: Record<string, unknown>, optio
 
 export const desktopClient = {
   getAppInfo: () => bridge().getAppInfo(),
+  checkForUpdates: () => bridge().checkForUpdates(),
   getBackendState: () => bridge().getBackendState(),
   onBackendState: (listener: (state: import('../../shared/bridge').BackendState) => void) => bridge().onBackendState(listener),
   restart: () => bridge().restart(),

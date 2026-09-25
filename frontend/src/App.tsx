@@ -17,6 +17,8 @@ import { BackendSetupPage } from './features/onboarding/BackendSetupPage'
 import { SettingsConflictDialog } from './features/settings/SettingsConflictDialog'
 import { SettingsPage } from './features/settings/SettingsPage'
 import { useSettingsController } from './features/settings/useSettingsController'
+import { UpdateBanner } from './features/updates/UpdateBanner'
+import { useAppUpdate } from './features/updates/useAppUpdate'
 import { useTheme } from './hooks/use-theme'
 import './App.css'
 import './theme.css'
@@ -25,6 +27,7 @@ function App() {
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [dismissedInstallId, setDismissedInstallId] = useState<string | null>(null)
+  const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState<string | null>(null)
   const { theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
   const location = useLocation()
@@ -62,6 +65,16 @@ function App() {
     onError: reportError,
     onNotice: reportNotice,
   })
+  const update = useAppUpdate()
+  const availableUpdate = update.info?.updateAvailable && update.info.latestVersion !== dismissedUpdateVersion
+    ? update.info
+    : undefined
+
+  const openUpdate = useCallback(() => {
+    void update.openUpdate().catch((reason: unknown) => {
+      reportError(reason instanceof Error ? reason.message : String(reason))
+    })
+  }, [reportError, update])
 
   return (
     <div className="app-shell">
@@ -77,6 +90,13 @@ function App() {
       <main>
         {error && <AlertBanner tone="error" message={error} onDismiss={() => setError(null)} />}
         {notice && <AlertBanner tone="success" message={notice} onDismiss={() => setNotice(null)} />}
+        {availableUpdate && (
+          <UpdateBanner
+            info={availableUpdate}
+            onDownload={openUpdate}
+            onDismiss={() => setDismissedUpdateVersion(availableUpdate.latestVersion)}
+          />
+        )}
         {location.pathname !== '/onboarding' && !capabilities.loading && capabilities.capabilities && !(capabilities.capabilities.processing_ready ?? capabilities.capabilities.ready) && (
           <SetupBand
             capabilities={capabilities.capabilities}
@@ -148,6 +168,8 @@ function App() {
                     checkingSystem={capabilities.busy}
                     onCheckSystem={() => void capabilities.refresh()}
                     onOpenOnboarding={() => navigate('/onboarding')}
+                    update={update}
+                    onOpenUpdate={openUpdate}
                   />
                 )
             }

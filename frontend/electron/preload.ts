@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { unwrapInvokeResponse } from './ipc-response.js'
-import type { AppInfo, BackendState, RequestOptions } from '../shared/bridge.js'
+import type { AppInfo, AppUpdateInfo, BackendState, RequestOptions } from '../shared/bridge.js'
 
 async function invoke<T>(method: string, params?: Record<string, unknown>, options?: RequestOptions): Promise<T> {
   return unwrapInvokeResponse(await ipcRenderer.invoke('expletive-deleted:invoke', method, params, options))
@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('expletiveDeleted', {
   request: (method: string, params?: Record<string, unknown>, options?: RequestOptions) =>
     ipcRenderer.invoke('expletive-deleted:invoke', method, params, options),
   getAppInfo: () => ipcRenderer.invoke('expletive-deleted:app-info') as Promise<AppInfo>,
+  checkForUpdates: () => ipcRenderer.invoke('expletive-deleted:check-for-updates') as Promise<AppUpdateInfo>,
   getBackendState: () => ipcRenderer.invoke('expletive-deleted:backend-state') as Promise<BackendState>,
   onBackendState: (listener: (state: BackendState) => void) => {
     const receive = (_event: Electron.IpcRendererEvent, state: BackendState) => {

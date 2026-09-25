@@ -31,6 +31,9 @@ main { max-width: 1480px; margin: 0 auto; padding: 28px 34px 56px; }
 .alert button { border: 0; background: none; font-weight: 700; }
 .alert.error { background: #fff3f1; color: #8d2922; border-color: #efc5c0; }
 .alert.success { background: #eef8f2; color: #256443; border-color: #bfddca; }
+.alert.update { background: #eef5fb; color: #174f70; border-color: #b9d3e2; }
+.alert.update span strong { margin-right: 4px; }
+.alert.update .update-primary { border: 1px solid currentColor; border-radius: 4px; padding: 6px 9px; }
 .setup-band { display: grid; grid-template-columns: minmax(260px, .8fr) 1.4fr auto; gap: 32px; background: #172426; color: white; padding: 22px 26px; border-radius: 6px; margin-bottom: 24px; }
 .setup-band h2 { font: 700 22px var(--display); margin: 4px 0 7px; }
 .setup-band p { margin: 0; color: #aebbbb; font-size: 12px; }
