@@ -191,13 +191,15 @@ class MediaIdentityTests(unittest.TestCase):
     def test_interrupted_sidecar_publication_keeps_media_and_blocks_unverified_use(self):
         output = self.root / "finished.mkv"
         censor = MagicMock(output_provenance=provenance(self.source))
+        # Publication resolves Windows short paths before calling the failure hook.
+        sidecar = provenance_path(output).resolve()
         original_publish = Publication.publish
         def interrupt_metadata(publication, verify):
-            if publication.destination == provenance_path(output):
+            if publication.destination == sidecar:
                 raise OSError("simulated interruption")
             return original_publish(publication, verify)
         with patch.object(Publication, "publish", interrupt_metadata):
-            with self.assertRaises(OSError), Publication(RootBinding.capture(self.root), output) as publication:
+            with self.assertRaisesRegex(OSError, "simulated interruption"), Publication(RootBinding.capture(self.root), output) as publication:
                 publication.stage.write_bytes(b"finished")
                 publish_output(publication, censor)
         self.assertEqual(output.read_bytes(), b"finished")
