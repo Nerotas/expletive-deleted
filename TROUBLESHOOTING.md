@@ -141,7 +141,17 @@ Review the transcript under the configured Transcripts directory, then classify 
 
 If **Play** reports that output cannot be verified, check FFprobe in Settings and that the completed copy remains in the configured output folder. Files moved elsewhere can be opened through Explorer. Dictionary exports accept ordinary `.json` files; if a selection expires or the destination changes during confirmation, select it again. The app retains a competing file instead of replacing it with the backup.
 
-If a surround transcript predates front-center transcription, the backend automatically rejects that cache and transcribes it again.
+If a surround transcript predates front-center transcription, the backend rejects that cache and stops. Choose **Retranscribe** explicitly if you want a fresh transcript; existing transcript files are retained.
+
+### Source identity needs review
+
+Every processing job hashes the original's complete contents before accepting a transcript. A same-length replacement can therefore fail verification even if its filename and timestamp look unchanged. A failed check never triggers automatic retranscription. Startup and library polling show recorded artifact state without hashing the media.
+
+Legacy transcripts and finished copies remain untouched and appear as **Needs review**. They are excluded from bulk processing. Keep them for a future preview-and-confirm mapping workflow, or choose **Retranscribe** for that individual source. Fresh transcripts use names such as `movie.mp4-transcript.json`; older `movie-transcript.json` files remain in place. Previous versions of a new-format transcript are retained under the transcript folder's `.history` directory.
+
+Renamed or relocated files can reuse a uniquely matching, compatible fingerprinted transcript within the configured transcript root during a transcript job. Different matching transcripts require a decision. Unfingerprinted legacy files cannot be matched this way. Finished copies remain in their existing locations; they are not automatically renamed or migrated.
+
+Keep the `.provenance.json` companion with each new finished copy. Playback verifies its source and output fingerprints. If publication was interrupted after media was saved but before its companion was written, the media and original remain intact, but verified playback is blocked. After reviewing the files, explicitly recensor with output replacement to publish a complete pair. Existing copies can still be opened manually through Explorer; doing so does not verify their relationship to an original.
 
 ## FFmpeg Processing Fails
 

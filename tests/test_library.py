@@ -4,6 +4,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
 
+from tests.media_fixtures import provenance
+
 from backend.service import LibraryScanError, scan_library
 from backend.settings import AppSettings, DirectorySettings
 
@@ -36,12 +38,13 @@ class LibraryScannerTests(unittest.TestCase):
                 source.write_bytes(b"source")
             (ready / "notes.txt").write_text("ignored", encoding="utf-8")
 
-            transcript = settings.directories.transcripts / "beta-transcript.json"
+            transcript = settings.directories.transcripts / "beta.mkv-transcript.json"
             transcript.write_text("{}", encoding="utf-8")
-            finished_transcript = settings.directories.transcripts / "Gamma-transcript.json"
+            finished_transcript = settings.directories.transcripts / "Gamma.wav-transcript.json"
             finished_transcript.write_text("{}", encoding="utf-8")
-            output = settings.directories.output / "Gamma-censored.mp3"
+            output = settings.directories.output / "Gamma.wav-censored.mp3"
             output.write_bytes(b"output")
+            provenance(finished_source, output)
 
             with patch(
                 "backend.service.library.transcript_cache_is_compatible",

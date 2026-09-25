@@ -3,6 +3,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from tests.media_fixtures import provenance
+
 from backend.jobs.batch import load_whisper_model, output_path, process_file
 from backend.runtime import RuntimePaths, get_runtime_paths
 
@@ -39,6 +41,7 @@ class BatchLifecycleTests(unittest.TestCase):
             paths, source = self.create_source(temporary_directory)
             destination = output_path(source, paths.finished)
             censor = MagicMock()
+            censor.output_provenance = provenance(source)
 
             def create_output(**options) -> bool:
                 self.assertFalse(options["report_only"])
@@ -70,6 +73,7 @@ class BatchLifecycleTests(unittest.TestCase):
             paths, source = self.create_source(temporary_directory)
             destination = output_path(source, paths.finished)
             censor = MagicMock()
+            censor.output_provenance = provenance(source)
 
             def create_output(**options) -> bool:
                 self.assertFalse(options["report_only"])
@@ -95,6 +99,7 @@ class BatchLifecycleTests(unittest.TestCase):
             archive_path = paths.processed / source.name
             archive_path.write_bytes(b"existing archive")
             censor = MagicMock()
+            censor.output_provenance = provenance(source)
             censor.process.side_effect = lambda **_: Path(factory.call_args.args[1]).write_bytes(b"verified output") > 0
             censor.review_candidates = []
             censor.used_cached_transcript = False
@@ -120,6 +125,7 @@ class BatchLifecycleTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary_directory:
             paths, source = self.create_source(temporary_directory)
             censor = MagicMock()
+            censor.output_provenance = provenance(source)
             censor.process.return_value = False
             censor.review_candidates = []
             censor.used_cached_transcript = False
@@ -142,6 +148,7 @@ class BatchLifecycleTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary_directory:
             paths, source = self.create_source(temporary_directory)
             censor = MagicMock()
+            censor.output_provenance = provenance(source)
             censor.process.return_value = True
             censor.review_candidates = []
             censor.used_cached_transcript = False

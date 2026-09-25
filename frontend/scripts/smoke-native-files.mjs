@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { copyFile, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { _electron as electron } from 'playwright'
 
@@ -26,10 +27,17 @@ try {
   const page = await app.firstWindow()
   await page.getByRole('heading', { name: 'Welcome to Expletive Deleted', exact: true }).waitFor()
   const source = path.join(root, 'Ready/film.mp4')
-  const output = path.join(root, 'Finished/film-censored.mkv')
+  const output = path.join(root, 'Finished/film.mp4-censored.mkv')
   const exported = path.join(root, 'dictionary.json')
   await writeFile(source, 'original')
   await writeFile(output, 'synthetic verified output')
+  const sha256 = (value) => createHash('sha256').update(value).digest('hex')
+  await writeFile(`${output}.provenance.json`, JSON.stringify({
+    schema_version: 1,
+    source_identity: { algorithm: 'sha256', digest: sha256('original'), size_bytes: Buffer.byteLength('original') },
+    transcript_sha256: sha256('synthetic transcript'), processing: {},
+    output_sha256: sha256('synthetic verified output'),
+  }))
   await app.evaluate(({ shell, dialog }) => {
     globalThis.__nativeFiles = { launches: [], selected: undefined, confirmation: 0 }
     shell.openPath = async (file) => { globalThis.__nativeFiles.launches.push(file); return '' }

@@ -8,12 +8,17 @@ import shutil
 import subprocess
 import tempfile
 import time
+import hashlib
+from contextlib import contextmanager
 from collections import defaultdict
 from pathlib import Path
 from threading import Event
 from typing import Callable, List, Dict
 
 from backend.policy import PolicyStore
+from backend.media_identity import verified_source, MediaIdentityError
+from backend.filesystem.operations import locked_file
+from backend.filesystem.paths import RootBinding
 from backend.runtime import (
     available_encoders,
     resolve_media_tools,
@@ -37,6 +42,7 @@ from .transcripts import (
     validate_transcript_data,
     write_transcript_atomic,
     transcript_cache_is_compatible,
+    find_matching_transcript,
 )
 from .ffmpeg import ProcessingCancelled, run_ffmpeg_with_progress, format_seconds
 
@@ -52,13 +58,14 @@ class ProfanityCensor:
                  progress_callback: Callable[[dict[str, object]], None] | None = None,
                  cancellation: Event | None = None, ffmpeg_bin: str | None = None,
                  ffprobe_bin: str | None = None, whisper_cache_dir: Path | None = None,
-                 policy_store: PolicyStore | None = None):
+                 policy_store: PolicyStore | None = None, transcripts_root: Path | None = None):
         self.input_file = input_file
         self.output_file = output_file
         self.model_name = require_whisper_model(model_name)
         self.whisper_library = require_whisper_library(whisper_library)
         self.whisper_device = whisper_device
         self.transcripts_dir = transcripts_dir
+        self.transcripts_root = transcripts_root
         self.whisper_cache_dir = (whisper_cache_dir or get_whisper_cache_dir()).resolve()
         self._shared_model = whisper_model  # pre-loaded (WhisperModel, device) tuple or None
         self.censor_method = censor_method if censor_method in ("mute", "karaoke") else "mute"
@@ -104,6 +111,53 @@ class ProfanityCensor:
         cancellation = getattr(self, "cancellation", None)
         if cancellation is not None and cancellation.is_set():
             raise ProcessingCancelled("Media processing was cancelled")
+
+    @contextmanager
+    def _source_session(self):
+        # Nested processing shares a digest only while the outer source lease remains held.
+        if getattr(self, "_active_source_identity", None) is not None:
+            yield
+            return
+        last_percent = -1
+        def progress(count, size):
+            nonlocal last_percent
+            percent = int(count * 100 / max(1, size))
+            if percent != last_percent:
+                self._emit_progress("verifying", float(percent), message="Checking source contents")
+                last_percent = percent
+        with verified_source(Path(self.input_file), cancellation=getattr(self, "cancellation", None), progress=progress) as identity:
+            self._active_source_identity = identity
+            try:
+                yield
+            finally:
+                # A later job must hash again, even if the path, size, and timestamp are unchanged.
+                self._active_source_identity = None
+
+    def _read_verified_transcript(self, path: Path) -> Dict:
+        with locked_file(RootBinding.capture(path.parent), path):
+            payload = path.read_bytes()
+        data = validate_transcript_data(
+            json.loads(payload.decode("utf-8")), whisper_library=self.whisper_library,
+            whisper_model=self.model_name, require_front_center=self.has_discrete_center_audio(),
+            source_identity=self._active_source_identity,
+        )
+        # Bind output to the exact transcript bytes consumed, including any reviewed edits.
+        self._transcript_digest = hashlib.sha256(payload).hexdigest()
+        return data
+
+    def _record_output_provenance(self, include_undiscovered: bool) -> None:
+        self.output_provenance = {
+            "schema_version": 1,
+            "source_identity": dict(self._active_source_identity),
+            "transcript_sha256": self._transcript_digest,
+            "processing": {
+                "whisper_library": self.whisper_library, "whisper_model": self.model_name,
+                "censor_method": self.censor_method, "padding_before_ms": self.padding_before_ms,
+                "padding_after_ms": self.padding_after_ms, "surround_output": self.surround_output,
+                "video_mode": self.video_mode, "include_undiscovered": include_undiscovered,
+                "censor_words": sorted(self.censor_words), "exclusions": sorted(self.exclude_words),
+            },
+        }
 
     def _emit_progress(
         self,
@@ -214,7 +268,7 @@ class ProfanityCensor:
         """Get path for transcript file."""
         if not self.transcripts_dir:
             return None
-        file_base = os.path.splitext(os.path.basename(self.input_file))[0]
+        file_base = os.path.basename(self.input_file)
         return os.path.join(self.transcripts_dir, f"{file_base}-transcript.json")
 
     def is_audio_only(self) -> bool:
@@ -300,7 +354,7 @@ class ProfanityCensor:
     def get_output_file(self, base_name: str = None) -> str:
         """Get output filename with appropriate extension."""
         if base_name is None:
-            base_name = os.path.splitext(os.path.basename(self.input_file))[0]
+            base_name = os.path.basename(self.input_file)
 
         if self.is_audio_only():
             return f"{base_name}-censored.mp3"
@@ -328,6 +382,10 @@ class ProfanityCensor:
             raise
 
     def transcribe_with_timestamps(self, force: bool = False) -> Dict:
+        with self._source_session():
+            return self._transcribe_with_timestamps(force)
+
+    def _transcribe_with_timestamps(self, force: bool = False) -> Dict:
         """Transcribe audio using Whisper or load from cached transcript."""
         transcript_path = self.get_transcript_path()
         if not transcript_path:
@@ -337,21 +395,29 @@ class ProfanityCensor:
         transcript_file = Path(transcript_path)
         require_front_center = self.has_discrete_center_audio()
 
+        if not transcript_file.exists() and not force:
+            matched = find_matching_transcript(
+                getattr(self, "transcripts_root", None) or transcript_file.parent,
+                self._active_source_identity, whisper_library=self.whisper_library,
+                whisper_model=self.model_name, require_front_center=require_front_center,
+                cancellation=getattr(self, "cancellation", None),
+            )
+            if matched is not None:
+                write_transcript_atomic(transcript_file, matched, whisper_library=self.whisper_library,
+                                        whisper_model=self.model_name, require_front_center=require_front_center,
+                                        source_identity=self._active_source_identity,
+                                        cancellation=getattr(self, "cancellation", None))
+
+        legacy = transcript_file.parent / f"{Path(self.input_file).stem}-transcript.json"
+        if not transcript_file.exists() and legacy.exists() and not force:
+            raise MediaIdentityError("A legacy transcript exists without a confirmed source mapping. It has been preserved. "
+                                     "Choose Retranscribe for a fresh transcript, or retain it for manual mapping.")
+
         if transcript_file.exists() and not force:
             print(f"[*] Loading cached transcript...")
-            try:
-                with transcript_file.open(encoding="utf-8") as f:
-                    transcript_data = json.load(f)
-                validate_transcript_data(
-                    transcript_data,
-                    whisper_library=self.whisper_library,
-                    whisper_model=self.model_name,
-                    require_front_center=require_front_center,
-                )
-                self.used_cached_transcript = True
-                return transcript_data
-            except Exception as e:
-                print(f"[!] Failed to load cached transcript, re-transcribing: {e}")
+            transcript_data = self._read_verified_transcript(transcript_file)
+            self.used_cached_transcript = True
+            return transcript_data
 
         print(f"[*] Transcribing with {self.whisper_library} ({self.model_name})...")
 
@@ -443,6 +509,7 @@ class ProfanityCensor:
                 'audio_source': 'front_center' if temporary_audio else 'full_mix',
                 'whisper_library': self.whisper_library,
                 'whisper_model': self.model_name,
+                'source_identity': dict(self._active_source_identity),
             }
 
             persisted_transcript = write_transcript_atomic(
@@ -451,6 +518,8 @@ class ProfanityCensor:
                 whisper_library=self.whisper_library,
                 whisper_model=self.model_name,
                 require_front_center=require_front_center,
+                source_identity=self._active_source_identity,
+                cancellation=getattr(self, "cancellation", None),
             )
             print(f"[+] Transcript saved and verified: {transcript_path}")
             return persisted_transcript
@@ -764,6 +833,17 @@ class ProfanityCensor:
             return False
 
     def process(
+        self, report_only: bool = False, include_undiscovered: bool = False,
+        force_transcribe: bool = False,
+    ) -> bool:
+        try:
+            with self._source_session():
+                return self._process(report_only, include_undiscovered, force_transcribe)
+        except Exception as exc:
+            self.last_error = str(exc)
+            return False
+
+    def _process(
         self,
         report_only: bool = False,
         include_undiscovered: bool = False,
@@ -810,13 +890,7 @@ class ProfanityCensor:
                 )
             # Re-open the artifact rather than trusting an in-memory result. This is
             # the final gate shared by report-only and censor/transcode jobs.
-            with Path(transcript_path).open(encoding="utf-8") as transcript_file:
-                words_data = validate_transcript_data(
-                    json.load(transcript_file),
-                    whisper_library=self.whisper_library,
-                    whisper_model=self.model_name,
-                    require_front_center=self.has_discrete_center_audio(),
-                )
+            words_data = self._read_verified_transcript(Path(transcript_path))
             self._check_cancelled()
             print(
                 f"[+] Stage 1 complete in {self._format_seconds(time.perf_counter() - stage_started)}"
@@ -848,6 +922,8 @@ class ProfanityCensor:
             # Censor video
             self._emit_progress("censoring", 0.0, message="Censoring started")
             success = self.censor_video(profane_segments)
+            if success:
+                self._record_output_provenance(include_undiscovered)
             print(
                 f"[+] Stage 3 complete in {self._format_seconds(time.perf_counter() - stage_started)}"
             )
@@ -877,6 +953,14 @@ class ProfanityCensor:
             raise RuntimeError("The processed output is missing readable media streams")
 
     def process_verified_transcript(self, include_undiscovered: bool = False) -> bool:
+        try:
+            with self._source_session():
+                return self._process_verified_transcript(include_undiscovered)
+        except Exception as exc:
+            self.last_error = str(exc)
+            return False
+
+    def _process_verified_transcript(self, include_undiscovered: bool = False) -> bool:
         """Create censored output from an already verified transcript without Whisper work."""
         started = time.perf_counter()
         transcript_path = self.get_transcript_path()
@@ -886,13 +970,7 @@ class ProfanityCensor:
                 raise TranscriptValidationError(
                     "A persisted transcript is required before a censored output can be created"
                 )
-            with Path(transcript_path).open(encoding="utf-8") as transcript_file:
-                words_data = validate_transcript_data(
-                    json.load(transcript_file),
-                    whisper_library=self.whisper_library,
-                    whisper_model=self.model_name,
-                    require_front_center=self.has_discrete_center_audio(),
-                )
+            words_data = self._read_verified_transcript(Path(transcript_path))
             self.review_candidates = self.find_review_candidates(words_data)
             policy_store = getattr(self, "policy_store", None)
             if policy_store is not None:
@@ -905,6 +983,8 @@ class ProfanityCensor:
             self._check_cancelled()
             self._emit_progress("censoring", 0.0, message="Censoring started")
             success = self.censor_video(profane_segments)
+            if success:
+                self._record_output_provenance(include_undiscovered)
             print(f"[*] Total elapsed: {self._format_seconds(time.perf_counter() - started)}")
             return success
         except Exception as exc:

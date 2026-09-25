@@ -1,4 +1,6 @@
 import tempfile
+import json
+from tests.media_fixtures import identity, provenance
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
@@ -47,7 +49,10 @@ class BackendServiceTests(unittest.TestCase):
             def submit():
                 submitting.set()
                 return service.submit_job(source, 'report_only')
-            item = LibraryItem(source, 'finished', datetime.now(timezone.utc))
+            output = service.settings.directories.output / 'original.mp4-censored.mkv'
+            output.write_bytes(b'output')
+            provenance(source, output)
+            item = LibraryItem(source, 'finished', datetime.now(timezone.utc), output=output)
             try:
                 with patch.object(service, 'get_library', return_value=(item,)), patch('backend.service.application.move_verified', side_effect=move):
                     with ThreadPoolExecutor(max_workers=2) as executor:
@@ -328,8 +333,9 @@ class BackendServiceTests(unittest.TestCase):
             service = BackendService(self.create_store(root), manager_factory=StubManager)
             source = service.settings.directories.input / "movie.mkv"
             source.write_bytes(b"source")
-            output = service.settings.directories.output / "movie-censored.mkv"
+            output = service.settings.directories.output / "movie.mkv-censored.mkv"
             output.write_bytes(b"output")
+            provenance(source, output)
             active = JobRecord("active-job", source, "censor", "transcribing", 25.0)
             service.jobs.list = lambda: (active,)
             try:
@@ -358,10 +364,15 @@ class BackendServiceTests(unittest.TestCase):
                         source.write_bytes(b"original")
                         other = service.settings.directories.input / "other.mkv"
                         other.write_bytes(b"other original")
-                        artifact = (service.settings.directories.output / "movie-censored.mkv"
+                        artifact = (service.settings.directories.output / "movie.mkv-censored.mkv"
                                     if library_status == "finished" else
-                                    service.settings.directories.transcripts / "movie-transcript.json")
+                                    service.settings.directories.transcripts / "movie.mkv-transcript.json")
                         artifact.write_bytes(b"{}")
+                        if library_status == "finished":
+                            provenance(source, artifact)
+                        else:
+                            artifact.write_text(json.dumps({"source_identity": identity(b"original")}))
+                        artifact_before = artifact.read_bytes()
                         # Resolve equivalent paths before comparing source identity.
                         job_source = source.parent / "nested" / ".." / source.name if same_source else other
                         job = JobRecord("job", job_source, "censor", job_status, 25.0,
@@ -389,7 +400,7 @@ class BackendServiceTests(unittest.TestCase):
                                     self.assertEqual(destination.read_bytes(), b"original")
                             self.assertEqual(service.jobs.list(), (job,))
                             self.assertEqual(other.read_bytes(), b"other original")
-                            self.assertEqual(artifact.read_bytes(), b"{}")
+                            self.assertEqual(artifact.read_bytes(), artifact_before)
                         finally:
                             service.close()
 
@@ -401,9 +412,10 @@ class BackendServiceTests(unittest.TestCase):
             archived.parent.mkdir()
             archived.write_bytes(b"original")
             destination = root / "Ready" / "nested" / "movie.mkv"
-            output = root / "Finished" / "nested" / "movie-censored.mkv"
+            output = root / "Finished" / "nested" / "movie.mkv-censored.mkv"
             output.parent.mkdir()
             output.write_bytes(b"censored")
+            provenance(archived, output)
             try:
                 service.jobs.list = lambda: (
                     JobRecord("active-job", destination, "censor", "transcribing", 25.0),

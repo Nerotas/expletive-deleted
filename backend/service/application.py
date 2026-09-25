@@ -224,6 +224,13 @@ class BackendService:
         if item is None or item.status not in ("transcribed", "finished"):
             raise ArchiveSourceError("Only transcribed or finished Queue files can be archived")
 
+        from backend.media_identity import verified_source, verify_finished, read_record, require_identity
+        with verified_source(source) as source_identity:
+            if item.status == "finished":
+                verify_finished(source_identity, item.output)
+            else:
+                require_identity(read_record(item.transcript), source_identity)
+
         destination = archive_path(source, self.settings.directories.archive, input_root)
         if destination.exists():
             raise ArchiveSourceError(f"Archive destination already exists: {destination}")

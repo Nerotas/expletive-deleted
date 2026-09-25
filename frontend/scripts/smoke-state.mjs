@@ -72,6 +72,14 @@ async function ownership() {
   assert.ok(entries.every((event) => event.owner === ownerPid))
   assert.equal(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length), 1)
 }
+async function waitForFreshChoices(dialog) {
+  // Apply is also disabled during the request; wait for the new, unanswered choices.
+  await dialog.locator('input[type="radio"]').first().waitFor()
+  await dialog.page().waitForFunction((element) => {
+    const radios = [...element.querySelectorAll('input[type="radio"]')]
+    return radios.length > 0 && radios.every((radio) => !radio.checked && !radio.matches(':disabled'))
+  }, await dialog.elementHandle())
+}
 try {
   assert.equal(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length), 0)
   await secondLaunch()
@@ -146,10 +154,7 @@ try {
   await patchSettings({ 'processing.device': 'cpu' })
   await dialog.getByRole('button', { name: 'Apply choices' }).click()
   // A new revision requires another explicit choice; no automatic forced retry.
-  await page.waitForFunction(() => {
-    const button = [...document.querySelectorAll('[role="dialog"] button')].find((item) => item.textContent === 'Apply choices')
-    return button?.disabled === true
-  })
+  await waitForFreshChoices(dialog)
   await dialog.getByRole('radio', { name: /Keep current/ }).check()
   await dialog.getByRole('button', { name: 'Apply choices' }).click()
   await dialog.waitFor({ state: 'hidden' })
@@ -215,7 +220,11 @@ try {
   await wizardDialog.getByRole('radio', { name: /Use my edit/ }).check()
   const duringResolution = await patchSettings({ 'censoring.padding_before_ms': 350 })
   await wizardDialog.getByRole('button', { name: 'Apply choices' }).click()
-  await page.waitForFunction(() => document.querySelector('[role="dialog"] button:last-child')?.disabled === true)
+  await waitForMarker('wizard-resolution')
+  assert.equal(await wizardDialog.getByRole('button', { name: 'Apply choices' }).isDisabled(), true)
+  assert.equal(await wizardDialog.getByRole('radio', { name: /Use my edit/ }).isChecked(), true)
+  await writeFile(path.join(root, 'wizard-resolution.release'), 'go')
+  await waitForFreshChoices(wizardDialog)
   assert.deepEqual(await snapshot(), duringResolution.snapshot, 'A changed revision must require fresh choices')
   for (const radio of await wizardDialog.getByRole('radio', { name: /Use my edit/ }).all()) await radio.check()
   await wizardDialog.getByRole('group', { name: 'Ready / Input folder', exact: true }).getByRole('radio', { name: /Keep current/ }).check()

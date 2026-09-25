@@ -7,7 +7,7 @@ Scope: Windows desktop application, Electron bridge, Python backend, and React f
 
 This is the first document from the consolidated review. It records the issues discussed with the product owner and the decisions reached, before preparing a separate implementation plan in the next phase.
 
-The earlier reports contain nine distinct open high-priority issues after overlapping findings are consolidated. Eight have an accepted repair direction. Source identity, artifact naming, and legacy migration are deferred to a future issue. Two earlier Windows lifecycle findings were already resolved and are recorded separately below.
+The earlier reports contained nine distinct open high-priority issues after overlapping findings were consolidated. Eight initially had an accepted repair direction; source identity was deferred. Following the owner's September 25 implementation request, source fingerprints and new artifact naming are implemented; legacy migration remains deferred. Two earlier Windows lifecycle findings were already resolved and are recorded separately below.
 
 **Accepted decisions are not completed fixes.** This document does not implement repairs or newly reproduce the audit findings. Evidence and validation limits remain in the linked source reports. Detailed implementation choices, sequencing, regression tests, and release qualification belong in the second document.
 
@@ -21,7 +21,7 @@ Implementation updates are linked in the status table; the original decisions be
 | HP-02 | File opening and dictionary export accept unrestricted paths | Restrict playback to verified media within the configured output root; bind JSON exports and overwrite consent to the native Save dialog | [Implemented; Windows/package checks passed](HP-02_IMPLEMENTATION_2026-09-17.md) |
 | HP-03 | Concurrent dictionary edits can lose acknowledged changes | Serialize complete dictionary changes and allow one desktop instance per user | Accepted direction; open |
 | HP-04 | Component setup can overwrite newer settings | Update only verified component fields, preserve unrelated settings, and surface conflicts with manual path edits | Implemented and validated locally; see [report](HP-04_IMPLEMENTATION_2026-09-24.md) |
-| HP-05 | Artifact names collide and legacy transcripts lack reliable source identity | Retain as a future issue; defer the identity scheme and legacy migration decision | Deferred; risk remains open |
+| HP-05 | Artifact names collide and legacy transcripts lack reliable source identity | Verify full-file SHA-256 at use; retain source extensions in new names; preserve unidentified legacy files | [Implemented source identity](SOURCE_IDENTITY_DISCUSSION_2026-09-25.md); legacy mapping and broader hardware qualification remain open |
 | HP-06 | Publication safeguards differ across processing entrypoints | Use shared staging, verification, and safe publication; stop on unexpected collisions | [Implemented; cross-volume hardware qualification remains](HP-06_IMPLEMENTATION_2026-09-17.md) |
 | HP-07 | Destination links can escape configured roots | Allow a configured root to resolve elsewhere, enforce that resolved boundary, and stop on escapes or unexpected target changes | [Implemented Windows guards, including HP-06 integration](HP-07_IMPLEMENTATION_2026-09-17.md) |
 | HP-08 | Setup progress hides communication failures | Provide serialized polling and a visible 30-second reconnection phase, followed by explicit recovery when necessary | Accepted direction; open |
@@ -90,19 +90,19 @@ Sources: [bridge assessment, B04](BRIDGE_ASSESSMENT_2026-09-16.md#b04--setup-com
 
 **Problem:** different sources such as `movie.mp4` and `movie.mkv` can generate the same transcript and output names. Existing transcript compatibility checks do not reliably establish that a transcript belongs to the exact current source content.
 
-**Decision:** retain this as a future issue. The product owner wants it addressed eventually but considers the naming, identity, processing-cost, and migration choices too substantial to settle in this phase. Deferral does not lower or resolve the risk.
+**Decision, updated September 25:** after the initial benchmark and documentation discussion, the owner explicitly requested implementation. New artifacts now use full-file SHA-256 source identity, source-extension naming, job-time verification under read leases, and finished-copy provenance. Legacy files remain untouched and unverified; a preview-and-confirm migration is still deferred. See [implemented behavior and benchmark](SOURCE_IDENTITY_DISCUSSION_2026-09-25.md). The historic section heading is retained for existing links.
 
 **Constraints and discussion to preserve for that future issue:**
 
 - Identification and migration must never alter the original media. Reading a file to identify it does not authorize renaming, moving, rewriting, or deleting it.
 - Avoid unnecessary retranscription; existing transcription times are already a significant concern.
-- Collision-resistant artifact names and content fingerprints were discussed as possible approaches, not a finalized implementation.
-- Fingerprinting would read media without running the transcription model. Its cost depends on file sizes and storage; no timing estimate or benchmark was established.
+- Use SHA-256 over every byte of the original, retaining the full digest. File length, duration, names, timestamps, or sampled bytes are insufficient as authoritative content identity. New artifact names retain the source extension; transcript JSON and finished-copy provenance record the digest.
+- Initial read-only benchmarks on one 1.735 GiB finished copy took approximately 1.42–2.44 seconds across Python and PowerShell implementations. These potentially cached individual runs are not representative external-drive qualification or a speed ranking. Hashing was measured separately from transcription; representative originals, external drives, and disk impact still need assessment.
 - Legacy migration may mainly affect the product owner's existing collection and could be handled by a one-off tool.
 - A preview-and-confirm migration that preserves transcripts and finished copies was discussed. A fingerprint captured today cannot prove which source originally produced an old transcript; a manually confirmed mapping would establish a trusted legacy baseline.
 - Neither blanket regeneration nor a particular legacy-adoption policy was approved. The handling of ambiguous or incompatible legacy entries remains undecided.
 
-The next implementation plan should retain this deferral explicitly. HP-06 can protect publication against collisions without treating the broader artifact-identity problem as solved.
+Legacy mapping remains deferred. HP-06 publication protection is complemented by the new source identity checks; legacy artifacts still cannot establish their source automatically.
 
 Source: [backend review, remaining finding 1](PYTHON_BACKEND_REVIEW_2026-09-16.md#remaining-findings).
 
@@ -181,7 +181,7 @@ Sources: [Windows build audit](WINDOWS_BUILD_AUDIT_2026-09-16.md); [Windows life
 
 ## Boundary for the next phase
 
-The second document will turn the eight accepted directions into a repair plan and carry HP-05 as a deferred future issue. It should map shared work across frontend, bridge, and backend without counting the same settings or dictionary defect twice.
+The original repair plan covered the eight accepted directions and carried HP-05 as deferred. The separately authorized September 25 source-identity implementation is recorded above; legacy migration remains future work. Shared work across frontend, bridge, and backend should not count the same settings or dictionary defect twice.
 
 Other medium-priority findings, architecture improvements, and release-qualification gaps remain in their original reports. They have not all been individually decided in this discussion. If any is necessary to implement an accepted decision safely, the plan should identify that dependency explicitly rather than imply that it was already resolved or separately approved.
 

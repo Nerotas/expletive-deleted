@@ -9,6 +9,7 @@ from backend.filesystem.operations import locked_file
 from backend.filesystem.publication import Publication, move_verified
 from backend.filesystem.discovery import files_within
 from backend.filesystem.paths import version
+from backend.media_identity import publish_output, MediaIdentityError
 import time
 from pathlib import Path
 
@@ -29,7 +30,7 @@ from backend.settings import (
     load_effective_settings,
 )
 
-from .media import MEDIA_EXTENSIONS, archive_path, output_path, transcript_path
+from .media import MEDIA_EXTENSIONS, archive_path, output_path, transcript_path, legacy_output_path
 
 
 def format_seconds(seconds: float) -> str:
@@ -94,6 +95,7 @@ def process_file(
     whisper_cache_dir: Path | None = None,
     whisper_library: str = "faster-whisper",
     whisper_device: str = "auto",
+    force_transcribe: bool = False,
 ) -> tuple[str, set[str], bool, int]:
     started = time.perf_counter()
     destination = output_path(input_file, paths.finished, paths.ready)
@@ -118,6 +120,10 @@ def process_file(
         print(f"[PROCESS] {input_file.name}")
 
     try:
+        legacy = legacy_output_path(input_file, paths.finished, paths.ready)
+        paths.binding(paths.finished).target(legacy)
+        if not transcript.exists() and legacy.exists() and not force_transcribe:
+            raise MediaIdentityError("Legacy output preserved. Use --force-transcribe only to explicitly request a fresh transcript.")
         with ExitStack() as resources:
             resources.enter_context(locked_file(paths.binding(paths.ready), input_file))
             selected_source = version(input_file)
@@ -140,13 +146,17 @@ def process_file(
                 ffmpeg_bin=ffmpeg_bin,
                 ffprobe_bin=ffprobe_bin,
                 whisper_cache_dir=whisper_cache_dir,
+                transcripts_root=paths.transcripts,
             )
-            success = censor.process(report_only=report_only, include_undiscovered=include_undiscovered)
+            options = {"report_only": report_only, "include_undiscovered": include_undiscovered}
+            if force_transcribe:
+                options["force_transcribe"] = True
+            success = censor.process(**options)
             discovered = {c["word"] for c in censor.review_candidates}
             used_cached = censor.used_cached_transcript
             profane_count = censor.profane_count
             if success and publication:
-                publication.publish(lambda _: censor.verify_output())
+                publish_output(publication, censor)
     except Exception as exc:
         print(f"[FAILED] {input_file.name}: {exc}")
         print(f"[FILE {index}/{total}] Elapsed: {format_seconds(time.perf_counter() - started)}")
@@ -212,6 +222,7 @@ def main(argv: list[str] | None = None, store: SettingsStore | None = None) -> i
         help="Create censored media regardless of the persisted mode",
     )
     parser.add_argument("--overwrite", action="store_true", help="Replace an existing censored output")
+    parser.add_argument("--force-transcribe", action="store_true", help="Explicitly create fresh transcripts; preserve legacy files and prior transcript history")
     parser.add_argument(
         "--include-undiscovered",
         action="store_true",
@@ -307,7 +318,7 @@ def main(argv: list[str] | None = None, store: SettingsStore | None = None) -> i
         if settings.runtime.ffprobe_path
         else find_ffprobe()
     )
-    needs_transcription = ffprobe_bin is None or any(
+    needs_transcription = args.force_transcribe or ffprobe_bin is None or any(
         not transcript_cache_is_compatible(
             str(file),
             str(transcript_path(file, paths.transcripts, paths.ready)),
@@ -362,6 +373,7 @@ def main(argv: list[str] | None = None, store: SettingsStore | None = None) -> i
                 whisper_cache_dir=model_cache,
                 whisper_library=whisper_library,
                 whisper_device=settings.processing.device,
+                force_transcribe=args.force_transcribe,
             )
             all_discovered.update(discovered)
             if status == "ok":

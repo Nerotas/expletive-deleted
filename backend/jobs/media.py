@@ -22,12 +22,23 @@ def relative_media_path(input_file: Path, input_root: Path | None = None) -> Pat
 def output_path(input_file: Path, output_dir: Path, input_root: Path | None = None) -> Path:
     extension = ".mp3" if input_file.suffix.lower() in AUDIO_EXTENSIONS else ".mkv"
     relative = relative_media_path(input_file, input_root)
-    return output_dir / relative.parent / f"{input_file.stem}-censored{extension}"
+    return output_dir / relative.parent / f"{input_file.name}-censored{extension}"
 
 
 def transcript_path(input_file: Path, transcript_dir: Path, input_root: Path | None = None) -> Path:
     relative = relative_media_path(input_file, input_root)
+    return transcript_dir / relative.parent / f"{input_file.name}-transcript.json"
+
+
+def legacy_transcript_path(input_file: Path, transcript_dir: Path, input_root: Path | None = None) -> Path:
+    relative = relative_media_path(input_file, input_root)
     return transcript_dir / relative.parent / f"{input_file.stem}-transcript.json"
+
+
+def legacy_output_path(input_file: Path, output_dir: Path, input_root: Path | None = None) -> Path:
+    extension = ".mp3" if input_file.suffix.lower() in AUDIO_EXTENSIONS else ".mkv"
+    relative = relative_media_path(input_file, input_root)
+    return output_dir / relative.parent / f"{input_file.stem}-censored{extension}"
 
 
 def archive_path(input_file: Path, archive_dir: Path, input_root: Path) -> Path:

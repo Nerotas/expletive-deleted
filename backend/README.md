@@ -13,6 +13,7 @@ The backend owns processing policy, settings, dependency readiness, jobs, and me
 | `service/` | Application lifecycle, library/archive operations, and capabilities. |
 | `jobs/` | Job records/events, scheduling, local processing/copy workers, YouTube downloads, and batch CLI compatibility. |
 | `censor/engine.py` | Coordinate transcription, detection, and media rendering for one source. |
+| `media_identity.py` | Cancellable full-file SHA-256 under read leases, source matching, finished-copy provenance publication and verification. Library polling reads records without hashing media. |
 | `censor/transcripts.py` | Validate, persist, and check cached transcripts. |
 | `censor/media.py` | Probe audio layouts and recognize supported center-channel configurations. |
 | `censor/detection.py` | Isolated vendor-dictionary review. |

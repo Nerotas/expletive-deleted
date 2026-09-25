@@ -57,6 +57,7 @@ See the [renderer developer guide](src/README.md) for module ownership, state ru
 - Waiting jobs show their position and can be removed independently; the running job can be cancelled from its row or the top-level cancel action.
 - The optional persisted setting `processing.auto_censor_after_transcription` promotes each newly verified transcript to the censored-copy queue. `processing.auto_transcode_youtube_downloads` starts the same chain after a completed YouTube download.
 - The renderer never decides that a transcript is safe for transcoding. That mandatory persisted-artifact gate belongs to the Python backend.
+- Source hashing appears as **Verifying** with **Checking source contents** progress. Startup and polling never hash media; transcript/output rows describe recorded state. **Needs review** rows preserve unidentified artifacts, disable bulk selection, playback, and archival, and offer an explicit **Retranscribe** action. The backend enforces identity even when submissions bypass these controls.
 
 ## Desktop ownership
 

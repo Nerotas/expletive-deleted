@@ -1,6 +1,7 @@
 import io
 import json
 import tempfile
+from tests.media_fixtures import identity
 import unittest
 from pathlib import Path
 from threading import Event
@@ -271,9 +272,10 @@ class DesktopBridgeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             source = root / "movie.mkv"
-            transcript = root / "movie-transcript.json"
+            source.write_bytes(b"source")
+            transcript = root / "movie.mkv-transcript.json"
             transcript.write_text(
-                json.dumps({"words": [
+                json.dumps({"source_identity": identity(), "words": [
                     {"word": "weirdo", "start": 3.0, "end": 3.4},
                     {"word": "fuck", "start": 4.0, "end": 4.4},
                 ]}),
@@ -299,9 +301,11 @@ class DesktopBridgeTests(unittest.TestCase):
             service.settings.directories.transcripts = root / "Transcripts"
             nested = root / "Transcripts" / "family"
             nested.mkdir(parents=True)
-            (nested / "movie-transcript.json").write_text('{"words":[]}', encoding="utf-8")
+            (root / "Ready" / "family").mkdir(parents=True)
+            (root / "Ready" / "family" / "movie.mkv").write_bytes(b"source")
+            (nested / "movie.mkv-transcript.json").write_text(json.dumps({"words": [], "source_identity": identity()}), encoding="utf-8")
             # An identically named top-level transcript must not be reviewed.
-            (root / "Transcripts" / "movie-transcript.json").write_text('invalid', encoding="utf-8")
+            (root / "Transcripts" / "movie.mkv-transcript.json").write_text('invalid', encoding="utf-8")
             bridge = DesktopBridge(service, MagicMock())
             result = bridge.handle("reviews.list", {"source": str(root / "Ready" / "family" / "movie.mkv")})
             self.assertEqual(result["candidates"], [])

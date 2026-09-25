@@ -62,6 +62,7 @@ assert 'backend.runtime' not in sys.modules
             transcript.write_text(json.dumps({
                 'text': '家庭 café', 'words': [], 'audio_source': 'full_mix',
                 'whisper_library': 'faster-whisper', 'whisper_model': 'large-v3',
+                'source_identity': {'algorithm': 'sha256', 'digest': '0' * 64, 'size_bytes': 0},
             }, ensure_ascii=False), encoding='utf-8')
             # Treat default-encoding use as an error even on a UTF-8 developer host.
             self.run_isolated("""

@@ -45,6 +45,18 @@ installation.execute_install_plan = execute
 installation.inspect_whisper_model = lambda *args, **kwargs: SimpleNamespace(ready=True, detail='offline fixture')
 installation.inspect_ytdlp = inspect_ytdlp
 service = BackendService(SettingsStore(defaults=AppSettings.defaults(root / 'media')))
+original_patch_settings = service.patch_settings
+
+
+def patch_settings(revision, changes, *, strict=False):
+    result = original_patch_settings(revision, changes, strict=strict)
+    # Hold the real conflict response so smoke must distinguish pending from refreshed choices.
+    if strict and result['status'] == 'conflict' and any(change['field'] == 'directories.input' for change in changes):
+        barrier('wizard-resolution')
+    return result
+
+
+service.patch_settings = patch_settings
 service.get_capabilities = lambda: {
     'ready': False, 'processing_ready': False, 'app_runtime': 'ready',
     'ffmpeg': True, 'ffprobe': True, 'whisper': True, 'whisper_library': 'faster-whisper',

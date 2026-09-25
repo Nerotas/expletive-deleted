@@ -8,6 +8,10 @@ from threading import Event
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+from tests.media_fixtures import provenance
+from backend.jobs.media import output_path
+from backend.media_identity import MediaIdentityError
+
 from backend.desktop.native_files import NativeFiles, NativeFileError
 from backend.filesystem.paths import PathSafetyError
 from backend.filesystem.publication import PublicationError
@@ -31,8 +35,9 @@ class OutputAccessTests(unittest.TestCase):
         self.addCleanup(self.native.close)
         self.source = directories.input / 'film.mp4'
         self.source.write_bytes(b'original')
-        self.output = directories.output / 'film-censored.mkv'
+        self.output = output_path(self.source, directories.output)
         self.output.write_bytes(b'synthetic output')
+        provenance(self.source, self.output)
         self.probe = self.enterContext(patch('backend.service.outputs.verify_playback'))
 
     def prepare(self, source=None):
@@ -63,12 +68,13 @@ class OutputAccessTests(unittest.TestCase):
     def test_audio_and_archived_job_source(self):
         source = self.source.with_suffix('.wav')
         source.write_bytes(b'audio')
-        output = self.output.with_suffix('.mp3')
+        output = output_path(source, self.settings.directories.output)
         output.write_bytes(b'audio output')
+        provenance(source, output)
         token = self.prepare(source)
         self.assertEqual(self.native.handle('native.output.check', {'token': token})['path'], str(output))
         self.native.release(token)
-        self.source.unlink()
+        self.source.rename(self.settings.directories.archive / self.source.name)
         job = SimpleNamespace(source=self.source, mode='censor', status='completed')
         self.service.output_context = lambda: (self.settings, [job])
         self.native.release(self.prepare())
@@ -85,14 +91,14 @@ class OutputAccessTests(unittest.TestCase):
         self.output.unlink()
         with self.assertRaises(OSError): self.prepare()
         self.output.touch()
-        with self.assertRaises(OutputAccessError): self.prepare()
+        with self.assertRaises((OutputAccessError, MediaIdentityError)): self.prepare()
         self.output.unlink()
         os.link(self.source, self.output)
         with self.assertRaises(PathSafetyError): self.prepare()
         self.output.unlink()
         self.output.write_bytes(b'output')
         self.probe.side_effect = OutputAccessError('verification failed')
-        with self.assertRaises(OutputAccessError): self.prepare()
+        with self.assertRaises((OutputAccessError, MediaIdentityError)): self.prepare()
         self.output.write_bytes(b'unlocked')
 
     def test_expiration_close_and_changed_settings(self):

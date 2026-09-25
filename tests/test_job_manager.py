@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 from backend.jobs import JobManager, JobSubmissionError
 from backend.jobs.media import output_path
+from tests.media_fixtures import provenance, identity
 from backend.settings import AppSettings, DirectorySettings
 
 
@@ -29,6 +30,7 @@ class FakeCensor:
         self.output_file = Path(output_file)
         self.transcripts_dir = Path(args[1])
         self.options = kwargs
+        self.output_provenance = provenance(self.input_file)
         self.__class__.instances.append(self)
 
     def process(self, report_only=False, force_transcribe=False):
@@ -48,7 +50,7 @@ class FakeCensor:
         if self.options["cancellation"].is_set():
             return False
         self.transcripts_dir.mkdir(parents=True, exist_ok=True)
-        (self.transcripts_dir / f"{self.input_file.stem}-transcript.json").write_text(
+        (self.transcripts_dir / f"{self.input_file.name}-transcript.json").write_text(
             json.dumps(
                 {
                     "text": "example",
@@ -56,6 +58,7 @@ class FakeCensor:
                     "audio_source": "full_mix",
                     "whisper_library": "faster-whisper",
                     "whisper_model": "large",
+                    "source_identity": identity(b"original"),
                 }
             ),
             encoding="utf-8",
@@ -179,7 +182,7 @@ class JobManagerTests(unittest.TestCase):
         return AppSettings(directories=directories)
 
     def write_verified_transcript(self, settings: AppSettings, source: Path) -> None:
-        (settings.directories.transcripts / f"{source.stem}-transcript.json").write_text(
+        (settings.directories.transcripts / f"{source.name}-transcript.json").write_text(
             json.dumps(
                 {
                     "text": "example",

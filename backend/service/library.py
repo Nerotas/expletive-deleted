@@ -8,13 +8,14 @@ from pathlib import Path
 from typing import Literal
 
 from backend.censor import transcript_cache_is_compatible
-from backend.jobs.media import MEDIA_EXTENSIONS, output_path, transcript_path
+from backend.jobs.media import MEDIA_EXTENSIONS, output_path, transcript_path, legacy_transcript_path, legacy_output_path
+from backend.media_identity import read_record, valid_provenance, provenance_path
 from backend.runtime import find_ffprobe
 from backend.settings import AppSettings
 from backend.filesystem.discovery import files_within
 
 
-LibraryStatus = Literal["ready", "transcribed", "finished"]
+LibraryStatus = Literal["ready", "transcribed", "finished", "unverified"]
 
 
 class LibraryScanError(RuntimeError):
@@ -89,7 +90,20 @@ def scan_library(
         output = output_path(source, paths.finished, paths.ready)
         settings.directories.binding(paths.transcripts).target(transcript)
         settings.directories.binding(paths.finished).target(output)
-        if output.is_file():
+        legacy_transcript = legacy_transcript_path(source, paths.transcripts, paths.ready)
+        legacy_output = legacy_output_path(source, paths.finished, paths.ready)
+        settings.directories.binding(paths.transcripts).target(legacy_transcript)
+        settings.directories.binding(paths.finished).target(legacy_output)
+        sidecar = provenance_path(output)
+        settings.directories.binding(paths.finished).target(sidecar)
+        try:
+            metadata = read_record(sidecar) if sidecar.is_file() else {}
+            # Polling reads recorded metadata only; equal size never proves matching contents.
+            recorded_output = (valid_provenance(metadata)
+                               and metadata["source_identity"]["size_bytes"] == source.stat().st_size)
+        except (OSError, ValueError, RuntimeError):
+            recorded_output = False
+        if output.is_file() and recorded_output:
             items.append(
                 LibraryItem(
                     source=source,
@@ -106,9 +120,11 @@ def scan_library(
             settings.whisper.library,
             settings.whisper.model,
         ):
-            items.append(LibraryItem(source, "transcribed", date_added, transcript=transcript))
+            items.append(LibraryItem(source, "transcribed", date_added, transcript=transcript,
+                                     output=output if output.is_file() else None))
         else:
-            items.append(LibraryItem(source, "ready", date_added))
+            has_artifacts = any(path.exists() for path in (transcript, output, legacy_transcript, legacy_output))
+            items.append(LibraryItem(source, "unverified" if has_artifacts else "ready", date_added))
     return tuple(items)
 
 

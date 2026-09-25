@@ -3,6 +3,7 @@ import json
 import os
 import io
 import tempfile
+from tests.media_fixtures import identity
 import unittest
 from pathlib import Path
 from threading import Event
@@ -371,7 +372,8 @@ class RuntimeTests(unittest.TestCase):
             model = MagicMock()
             model.transcribe.return_value = (iter(()), MagicMock())
             censor._shared_model = (model, "cpu")
-            censor.input_file = "input.mkv"
+            censor.input_file = str(Path(temporary_directory) / "input.mkv")
+            Path(censor.input_file).write_bytes(b"source")
             censor.model_name = "large"
             censor.whisper_library = "faster-whisper"
             censor.transcripts_dir = temporary_directory
@@ -390,17 +392,19 @@ class RuntimeTests(unittest.TestCase):
 
     def test_existing_compatible_transcript_skips_model_transcription(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
-            transcript_path = Path(temporary_directory) / "movie-transcript.json"
+            transcript_path = Path(temporary_directory) / "movie.mkv-transcript.json"
             transcript = {
                 "text": "hello",
                 "words": [{"word": "hello", "start": 0.0, "end": 0.5}],
                 "audio_source": "full_mix",
                 "whisper_library": "faster-whisper",
                 "whisper_model": "large",
+                "source_identity": identity(),
             }
             transcript_path.write_text(json.dumps(transcript), encoding="utf-8")
             censor = object.__new__(ProfanityCensor)
-            censor.input_file = "movie.mkv"
+            censor.input_file = str(Path(temporary_directory) / "movie.mkv")
+            Path(censor.input_file).write_bytes(b"source")
             censor.model_name = "large"
             censor.whisper_library = "faster-whisper"
             censor.transcripts_dir = temporary_directory
@@ -422,7 +426,8 @@ class RuntimeTests(unittest.TestCase):
             segment = MagicMock(text=" hello", words=[word], start=29.0, end=30.0)
             model.transcribe.return_value = (iter([segment]), MagicMock())
             censor._shared_model = (model, "cpu")
-            censor.input_file = "input.mkv"
+            censor.input_file = str(Path(temporary_directory) / "input.mkv")
+            Path(censor.input_file).write_bytes(b"source")
             censor.model_name = "large"
             censor.whisper_library = "faster-whisper"
             censor.transcripts_dir = temporary_directory
@@ -514,7 +519,7 @@ class RuntimeTests(unittest.TestCase):
                 )
 
             transcript_path.write_text(
-                '{"text": "", "words": [], "audio_source": "front_center"}'
+                json.dumps({"text": "", "words": [], "audio_source": "front_center", "source_identity": identity()})
             )
             with patch("backend.censor.transcripts.probe_audio_stream", return_value=(6, "5.1")):
                 self.assertTrue(
@@ -529,6 +534,7 @@ class RuntimeTests(unittest.TestCase):
                 "audio_source": "full_mix",
                 "whisper_library": "faster-whisper",
                 "whisper_model": "large",
+                "source_identity": identity(),
             },
             whisper_library="faster-whisper",
             whisper_model="large",
@@ -548,7 +554,7 @@ class RuntimeTests(unittest.TestCase):
 
     def test_atomic_transcript_failure_preserves_prior_artifact(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
-            transcript_path = Path(temporary_directory) / "movie-transcript.json"
+            transcript_path = Path(temporary_directory) / "movie.mkv-transcript.json"
             transcript_path.write_text("prior transcript", encoding="utf-8")
             transcript = {
                 "text": "",
@@ -556,6 +562,7 @@ class RuntimeTests(unittest.TestCase):
                 "audio_source": "full_mix",
                 "whisper_library": "faster-whisper",
                 "whisper_model": "large",
+                "source_identity": identity(),
             }
 
             with (
@@ -575,6 +582,9 @@ class RuntimeTests(unittest.TestCase):
 
     def create_gated_pipeline(self, transcript_path: Path, transcription_result):
         censor = object.__new__(ProfanityCensor)
+        censor.input_file = str(transcript_path.parent / "source.mkv")
+        Path(censor.input_file).write_bytes(b"source")
+        censor._record_output_provenance = MagicMock()
         censor.get_transcript_path = MagicMock(return_value=str(transcript_path))
         censor.estimate_processing_seconds = MagicMock(
             return_value={"total": 0.0, "transcribe": 0.0, "detect": 0.0, "censor": 0.0, "source": "test"}
@@ -602,6 +612,7 @@ class RuntimeTests(unittest.TestCase):
                 "audio_source": "full_mix",
                 "whisper_library": "faster-whisper",
                 "whisper_model": "large",
+                "source_identity": identity(),
             }
             censor = self.create_gated_pipeline(transcript_path, valid_in_memory)
 
@@ -609,17 +620,18 @@ class RuntimeTests(unittest.TestCase):
 
         self.assertFalse(success)
         censor.censor_video.assert_not_called()
-        self.assertIn("No such file", censor.last_error)
+        self.assertRegex(censor.last_error, "No such file|cannot find")
 
     def test_malformed_persisted_transcript_never_unlocks_transcoding(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
-            transcript_path = Path(temporary_directory) / "movie-transcript.json"
+            transcript_path = Path(temporary_directory) / "movie.mkv-transcript.json"
             malformed = {
                 "text": "hello",
                 "words": [{"word": "hello"}],
                 "audio_source": "full_mix",
                 "whisper_library": "faster-whisper",
                 "whisper_model": "large",
+                "source_identity": identity(),
             }
             transcript_path.write_text(json.dumps(malformed), encoding="utf-8")
             censor = self.create_gated_pipeline(transcript_path, malformed)
@@ -632,7 +644,7 @@ class RuntimeTests(unittest.TestCase):
 
     def test_transcription_failure_never_invokes_transcoding(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
-            transcript_path = Path(temporary_directory) / "movie-transcript.json"
+            transcript_path = Path(temporary_directory) / "movie.mkv-transcript.json"
             censor = self.create_gated_pipeline(
                 transcript_path,
                 RuntimeError("Whisper could not transcribe the file"),
@@ -646,13 +658,14 @@ class RuntimeTests(unittest.TestCase):
 
     def test_verified_zero_word_transcript_unlocks_transcoding(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
-            transcript_path = Path(temporary_directory) / "movie-transcript.json"
+            transcript_path = Path(temporary_directory) / "movie.mkv-transcript.json"
             transcript = {
                 "text": "",
                 "words": [],
                 "audio_source": "full_mix",
                 "whisper_library": "faster-whisper",
                 "whisper_model": "large",
+                "source_identity": identity(),
             }
             transcript_path.write_text(json.dumps(transcript), encoding="utf-8")
             censor = self.create_gated_pipeline(transcript_path, transcript)
@@ -664,13 +677,14 @@ class RuntimeTests(unittest.TestCase):
 
     def test_force_retranscription_bypasses_the_cached_transcript_path(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
-            transcript_path = Path(temporary_directory) / "movie-transcript.json"
+            transcript_path = Path(temporary_directory) / "movie.mkv-transcript.json"
             transcript = {
                 "text": "",
                 "words": [],
                 "audio_source": "full_mix",
                 "whisper_library": "faster-whisper",
                 "whisper_model": "large",
+                "source_identity": identity(),
             }
             transcript_path.write_text(json.dumps(transcript), encoding="utf-8")
             censor = self.create_gated_pipeline(transcript_path, transcript)
