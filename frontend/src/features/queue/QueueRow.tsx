@@ -49,7 +49,8 @@ export function QueueRow({
 }) {
   // Historical success must not hide a newer queued or running action on the same file.
   const displayJob = pendingJob ?? job
-  const status = displayJob?.status ?? item.status
+  // Older job success cannot authorize artifacts whose identity now needs review.
+  const status = pendingJob?.status ?? (item.status === 'unverified' ? item.status : displayJob?.status ?? item.status)
   const statusLabel = status === 'queued' && displayJob
     ? ({ copy: 'Queued: copy', report_only: 'Queued: transcript', censor: 'Queued: transcode' } as const)[displayJob.mode]
     : undefined
@@ -67,15 +68,17 @@ export function QueueRow({
       : busy
         ? 'Wait for the current queue action to finish'
         : undefined
-  const detail = event?.fps
+  const detail = pendingJob && event?.message ? event.message : event?.fps
     ? `${Math.round(event.fps)} FPS${event.eta_seconds != null ? ` · ${formatEta(event.eta_seconds)} left` : ''}`
     : event?.eta_seconds != null
       ? `${formatEta(event.eta_seconds)} left`
       : displayJob?.error?.detail
         ?? (status === 'transcribed'
-          ? 'Transcript verified'
+          ? 'Transcript recorded; source checked when used'
           : ['completed', 'finished'].includes(status)
-            ? 'Output verified'
+            ? 'Output recorded; source checked when used'
+            : status === 'unverified'
+              ? 'Identity unverified. Existing files preserved.'
             : status === 'queued'
               ? 'Waiting for earlier jobs'
               : pendingJob
@@ -102,7 +105,7 @@ export function QueueRow({
     <td className="position-cell">{active ? <strong>Active</strong> : queuePosition != null ? <span>#{queuePosition}</span> : <span className="muted">—</span>}</td>
     <td>{percent != null ? <div className="progress-wrap"><div className={`progress-track progress-${status}`}><span style={{ width: `${percent}%` }} /></div><span>{Math.round(percent)}%</span></div> : <span className="muted">—</span>}</td>
     <td className="actions-cell">
-      <span className="row-detail">{detail}</span>
+      <span className="row-detail" title={detail}>{detail}</span>
       {displayJob?.error?.diagnostic && <details className="job-diagnostic">
         <summary>Technical details</summary>
         <pre>{displayJob.error.diagnostic}</pre>
@@ -112,12 +115,13 @@ export function QueueRow({
         {outputFile && <button className="play-action" title="Open the verified censored file in your default media player" onClick={() => void onOpenOutput(item.source)}><Play size={13} />Play</button>}
         {active && displayJob && <button disabled={busy} title="Cancel this running job and keep the source file" onClick={() => void onCancelRunning(displayJob)}><CircleStop size={13} />Cancel job</button>}
         {pendingJob?.status === 'queued' && <button disabled={busy} title="Remove this waiting job without cancelling the active job" onClick={() => void onRemoveQueued(pendingJob)}><X size={13} />Remove from queue</button>}
+        {/* An incomplete media/provenance pair needs an explicit replacement action. */}
         {!remote && item.status === 'transcribed' && <button
           className="censor-action"
           disabled={processingDisabled}
-          title={processingReason ?? 'Create censored media from this verified transcript'}
-          onClick={() => void onSubmit(item.source, 'censor')}
-        ><Play size={13} />Censor</button>}
+          title={processingReason ?? (item.output ? 'Replace this copy and rebuild its provenance after source verification' : 'Create censored media after verifying the source and transcript')}
+          onClick={() => void onSubmit(item.source, 'censor', item.output ? { overwrite_output: true } : undefined)}
+        ><Play size={13} />{item.output ? 'Recensor' : 'Censor'}</button>}
         {!remote && item.status === 'finished' && <button
           className="censor-action"
           disabled={processingDisabled}
@@ -130,7 +134,7 @@ export function QueueRow({
           disabled={transcribeDisabled}
           title={processingReason ?? (item.status === 'ready'
             ? 'Create and verify a transcript, then stop'
-            : 'Replace the existing transcript with a newly generated and verified transcript')}
+            : 'Create a fresh transcript; retain legacy files and previous transcript history')}
           onClick={() => void onSubmit(
             item.source,
             'report_only',

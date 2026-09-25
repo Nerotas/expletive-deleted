@@ -25,6 +25,7 @@ export function formatBytes(bytes: number): string {
 export function statusLabel(status: LibraryStatus | JobStatus): string {
   return {
     ready: 'Ready',
+    unverified: 'Needs review',
     transcribed: 'Transcribed',
     finished: 'Finished',
     queued: 'Queued',

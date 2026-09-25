@@ -42,7 +42,9 @@ Closing the desktop app cancels active work and allows up to 15 seconds for clea
 4. In the **Transcribed** Queue view, select verified transcripts and choose **Queue censor** to create censored copies in **Finished**. Alternatively, enable **Automatically create a censored copy after transcription** in Settings to queue this step after each successful transcription.
 5. Review the finished file. The original remains in Ready unless you deliberately archive it after success.
 
-Transcoding uses only a persisted, verified transcript. It never begins a second Whisper transcription. **Retranscribe** replaces an existing transcript while retaining finished media.
+Transcoding uses only a persisted, verified transcript. It never begins a second Whisper transcription. Each processing job checks the original's full SHA-256 before using a transcript; startup and Queue polling do not hash your collection. **Retranscribe** creates a fresh transcript, retaining prior transcript versions in `.history` and leaving finished media in place.
+
+Older files without source fingerprints appear as **Needs review**. They are preserved and excluded from bulk processing; they are never silently adopted or retranscribed. New artifact names retain the source extension, and finished copies have a `.provenance.json` companion file. Keep that companion with the output. See [source identity and compatibility](docs/SOURCE_IDENTITY_DISCUSSION_2026-09-25.md) for details and benchmark results.
 
 ## From YouTube to family-ready
 

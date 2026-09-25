@@ -293,6 +293,8 @@ class JobManager:
                 status: JobStatus = "copying"
             elif stage == "censoring":
                 status = "censoring"
+            elif stage == "verifying":
+                status = "verifying"
             else:
                 status = "transcribing"
             percent_value = progress.get("percent")

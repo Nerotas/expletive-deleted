@@ -73,7 +73,7 @@ Whisper `large-v3` is required for reliable word-level censor timing. Smaller mo
    If YouTube requires sign-in or verification, the app shows a browser-session dialog. Choose the visible browser session only when you are ready to retry. **Open YouTube** is optional, opens no browser until you press it, and does not retry the download. Your password is never requested or handled by Expletive Deleted; yt-dlp reads the selected browser's local cookies.
 3. Return to **Queue** and choose an action for one file:
    - **Transcribe only** creates and verifies a transcript without creating media output.
-   - **Retranscribe** replaces an existing transcript with a newly generated, verified transcript while retaining any finished output.
+   - **Retranscribe** explicitly creates a fresh transcript while retaining any finished output, legacy transcript, and previous transcript history.
    - **Archive** moves an original with a verified transcript or output to Processed when that file has no queued or active job. Other files can continue processing or waiting in the queue.
 4. To process selected files, check Ready rows and choose **Queue transcript only**. In the **Transcribed** view, check verified transcript rows and choose **Queue censor**. Valid files remain queued if another selected file is rejected.
 5. Use the status filters and sort control to inspect Ready, Queued, Active, Transcribed, or Finished files. The active row can be cancelled from its Actions group; waiting rows show their queue position and can be removed independently.
@@ -82,6 +82,8 @@ Whisper `large-v3` is required for reliable word-level censor timing. Smaller mo
 Downloads, copies, transcription, and censoring use separate queue states. Transcription and censoring share the media-processing resources, so only one of those heavy jobs runs at a time; the other remains Queued until resources are available. You can add files to Ready while another job is active; imported files are not queued automatically. Completed output is written to Finished/Output. Transcripts are reusable, and originals remain in Ready/Input unless explicitly archived.
 
 Transcoding never begins from an in-memory transcription alone. The app must validate and persist the transcript, then re-open and verify the saved artifact. A valid transcript containing no words is accepted for media with no speech. If transcription or transcript persistence fails, no censored output is created and the source remains intact.
+
+Before processing, **Checking source contents** reads the selected original and computes its SHA-256. This does not run transcription. Startup and Queue refreshes do not hash media. A source mismatch stops the job for review. **Needs review** identifies existing artifacts without usable identity metadata; leave them in place for manual mapping, or deliberately choose **Retranscribe** to create a fresh transcript. There is no automatic legacy migration. Keep each new finished copy's `.provenance.json` companion file for verified playback.
 
 ## Backend and command line (advanced)
 

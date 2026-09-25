@@ -8,7 +8,7 @@ Source baseline inspected: `845ced9` on `refactor/python-backend-modules`.
 
 This is the second document following [High-priority issues and product decisions](HIGH_PRIORITY_ISSUES_AND_DECISIONS_2026-09-17.md). Those product decisions control this plan. Module names, APIs, test names, and CI steps described as new below are proposed implementation specifications, not existing capabilities or completed verification.
 
-Eight issues are in the repair scope. **HP-05, source identity and legacy migration, stays deferred.** Do not rename existing artifacts, hash the user's collection, regenerate transcripts, migrate legacy data, or silently introduce an identity scheme as part of another fix.
+Eight issues were in the original repair scope. **September 25 update:** the owner separately authorized source identity implementation, recorded in [source identity behavior and benchmark](SOURCE_IDENTITY_DISCUSSION_2026-09-25.md). Legacy migration remains deferred. Existing artifacts are not renamed, adopted, or regenerated automatically, and startup/polling never hash the user's collection.
 
 Implementation must preserve original media, complete settings drafts, existing dictionary entries, explicit setup consent, and the Python-only installer distribution model. No model, FFmpeg, yt-dlp, Deno, or processing package is to be added to the installer. No product-site publishing, release, tag, commit, or push is authorized by writing this plan.
 
@@ -170,11 +170,13 @@ CI owner: Backend CI, Frontend Tests, Frontend Quality for the coordinated contr
 
 ## HP-05: Deferred source identity and legacy migration
 
-No implementation or automatic migration is scheduled. Preserve existing names and transcript compatibility behavior during the other changes. Publication collision protection does not prove a cached transcript belongs to the right source.
+The historic heading is retained for existing links. The owner subsequently requested implementation on September 25. Full-file SHA-256 now binds new transcripts and outputs to sources; publication collision protection alone does not establish this relationship. Legacy names and artifacts are preserved, with unidentified entries requiring review.
 
-The future issue must separately choose a naming/identity format, benchmark fingerprinting on representative local/external-drive files, define source-change detection, and review a one-off preview/confirm legacy migration. It must measure hashing separately from transcription and cannot impose blanket regeneration without a new decision.
+The [September 25 implementation record and initial benchmark](SOURCE_IDENTITY_DISCUSSION_2026-09-25.md) describe source digests in transcript JSON, provenance companions for finished copies, source-extension naming, and verification at use rather than startup or library polling. The standalone [PowerShell benchmark](../scripts/measure_file_sha256.ps1) remains available. Initial measurements substantially reduced the owner's timing concern, but do not qualify external-drive performance.
 
-Future validation will require same-stem/different-extension sources, changed contents, relocated files, ambiguous legacy matches, interrupted migration, and byte-identical originals. Those are future acceptance requirements, **not enabled CI gates or tests that currently pass**. Do not add a permanent expected-failure test or silently normalize old artifacts while implementing HP-06/HP-07. Keep the unresolved risk visible in the release notes and issue register.
+The implementation uses cancellable chunked SHA-256, existing Windows read leases, explicit failure on mismatches, unique compatible fingerprinted-transcript lookup for relocated files, and preserved transcript history. Remaining qualification covers representative originals on local/external drives and disk impact. A one-off preview/confirm legacy mapping tool remains future work. Benchmark authorization is limited to explicitly selected files, not a collection-wide scan.
+
+Regression coverage now includes same-stem/different-extension naming, same-size source changes, renamed-file reuse and ambiguity, cancellation, original-byte preservation, transcript history, provenance interruption/retry, and hash-free polling. Existing CI discovers the tests and native Electron smoke covers legacy review and verified playback. No expected-failure tests or automatic legacy normalization were added. Migration recovery tests remain deferred with the migration tool.
 
 ## HP-06: Shared verified publication
 
@@ -343,7 +345,7 @@ Then run the updated local release validation or the separately authorized relea
 | HP-02 | Valid output playback works; executable/outside paths and export bypasses never reach OS operations; rejected exports preserve sentinels |
 | HP-03 | Thread/process edit races and journal crash recovery pass; native second launch focuses the only instance |
 | HP-04 | Setup/locate preserves newer preferences and pauses conflicting runtime writes without reinstalling |
-| HP-05 | Remains deferred; no closure claim or identity/migration behavior introduced |
+| HP-05 | Source identity and new artifact naming implemented after separate authorization; legacy mapping and representative hardware qualification remain open |
 | HP-06 | All affected entrypoints pass common failure/cancel/collision/replace safety cases; shutdown regressions remain green |
 | HP-07 | Actual Windows root/child junction and target-swap cases pass, including cleanup and archive/submission races |
 | HP-08 | Real and fake-time reconnection cases pass; no silent progress stall, installer replay, or loss of valid completed downloads |

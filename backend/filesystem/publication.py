@@ -24,9 +24,11 @@ class Publication:
     """Own one staging file; cleanup can never delete another writer's result."""
 
     def __init__(self, root: RootBinding, destination: Path, *, source: Path | None = None,
-                 overwrite=False, cancellation: Event | None = None, expected_version=_UNSET):
+                 overwrite=False, cancellation: Event | None = None, expected_version=_UNSET,
+                 allow_empty=False):
         self.root, self.destination, self.source = root, destination, source
         self.overwrite = overwrite
+        self.allow_empty = allow_empty
         self.cancellation = cancellation or Event()
         self._stack = ExitStack()
         self.stage = None
@@ -58,7 +60,7 @@ class Publication:
 
     def publish(self, verify):
         self.check_cancelled()
-        if not self.stage.is_file() or self.stage.stat().st_size == 0:
+        if not self.stage.is_file() or (self.stage.stat().st_size == 0 and not self.allow_empty):
             raise PublicationError('Processing produced an empty or missing output')
         verify(self.stage)
         self.check_cancelled()

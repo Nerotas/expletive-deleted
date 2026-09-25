@@ -11,8 +11,9 @@ from backend.settings import AppSettings
 from backend.filesystem.operations import locked_file
 from backend.filesystem.publication import Publication, copy_verified, move_verified
 from backend.filesystem.paths import version, PathSafetyError
+from backend.media_identity import publish_output, MediaIdentityError
 
-from .media import archive_path, output_path, transcript_path
+from .media import archive_path, output_path, transcript_path, legacy_output_path
 from .models import JobError, JobStatus
 
 
@@ -61,6 +62,11 @@ class JobRuntime:
                 resources.enter_context(directories.binding(directories.transcripts).lease(transcript, create_parent=True))
                 if cancellation.is_set():
                     raise InterruptedError("Job cancelled")
+                legacy_output = legacy_output_path(source, directories.output, directories.input)
+                directories.binding(directories.output).target(legacy_output)
+                if job.mode == "report_only" and not transcript.exists() and legacy_output.exists() and not job.force_transcribe:
+                    raise MediaIdentityError("A legacy finished copy exists without a confirmed source mapping. It is preserved. "
+                                             "Choose Retranscribe if you want a fresh transcript for this source.")
                 publication = None
                 if job.mode == "censor":
                     if not transcript.is_file():
@@ -85,6 +91,7 @@ class JobRuntime:
                     ffmpeg_bin=self._configured_runtime_path("FFmpeg", self.settings.runtime.ffmpeg_path),
                     ffprobe_bin=self._configured_runtime_path("FFprobe", self.settings.runtime.ffprobe_path),
                     whisper_cache_dir=resolve_whisper_cache_dir(self.settings.runtime.whisper_cache),
+                    transcripts_root=directories.transcripts,
                 )
                 if job.mode == "report_only":
                     self._on_status(job_id, "transcribing", 0.0, None, None)
@@ -104,7 +111,7 @@ class JobRuntime:
                         raise RuntimeError(f"Processing completed without a verified transcript: {transcript}")
                 else:
                     self._on_status(job_id, "verifying", 100.0, None, None)
-                    publication.publish(lambda _: censor.verify_output())
+                    publish_output(publication, censor)
                     published = True
             # Release the read lease before obtaining DELETE access for optional archiving.
             if job.mode == "report_only":

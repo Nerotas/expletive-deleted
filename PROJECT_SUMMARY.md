@@ -119,7 +119,7 @@ Renderer module ownership, state rules, and validation commands are documented i
 1. Jobs, statuses, structured events, and cancellation are owned by the backend.
 2. Queue execution is session-only. Copy and download work use separate lanes; transcription and censor work are independently queued but share one heavy-processing resource slot.
 3. Electron exposes a narrow validated bridge; the renderer uses the typed desktop client.
-4. Transcoding cannot begin until a compatible transcript has been persisted and verified from disk.
+4. Transcoding cannot begin until a compatible transcript has been persisted and verified from disk, including a fresh full-file SHA-256 match against the source held under a Windows read lease. Polling never hashes media. New names retain the input extension; finished media records source, transcript, output fingerprints, and processing settings in a provenance companion. Legacy artifacts remain unverified until an explicit decision; no migration or automatic retranscription occurs. See [identity behavior and benchmarks](docs/SOURCE_IDENTITY_DISCUSSION_2026-09-25.md).
 5. Source media is retained on failed or cancelled work, and incomplete output is removed when safe.
 
 HP-04 uses the shared settings transaction mechanism for component setup, normal Settings, and onboarding saves (the shared foundation for HP-09). Field-level comparisons preserve newer unrelated values and return conflicts without publication. Verified setup assets remain available while choices, active media work, or persistence errors delay settings application. See [HP-04 implementation](docs/HP-04_IMPLEMENTATION_2026-09-24.md).

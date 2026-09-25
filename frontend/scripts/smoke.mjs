@@ -1,4 +1,4 @@
-import { access, mkdir, rm } from 'node:fs/promises'
+import { access, mkdir, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 const electronTempDirectory = process.env.TEMP
@@ -59,9 +59,13 @@ try {
 
   const freshSettings = await window.evaluate(() => window.expletiveDeleted.invoke('settings.get'))
   if (freshSettings.settings.onboarding.completed) throw new Error('Fresh settings should require onboarding')
-  await window.evaluate((settings) => window.expletiveDeleted.invoke('settings.update', {
-    base: settings, settings: { ...settings.settings, onboarding: { completed: true, last_step: "finish" } },
-  }), freshSettings)
+  const directories = Object.fromEntries(['input', 'output', 'archive', 'transcripts'].map((name) => [name, path.join(appDataDirectory, 'media', name)]))
+  await Promise.all(Object.values(directories).map((directory) => mkdir(directory, { recursive: true })))
+  await writeFile(path.join(directories.input, 'Legacy example.mkv'), 'synthetic media')
+  await writeFile(path.join(directories.transcripts, 'Legacy example-transcript.json'), '{}')
+  await window.evaluate(({ settings, directories }) => window.expletiveDeleted.invoke('settings.update', {
+    base: settings, settings: { ...settings.settings, directories, onboarding: { completed: true, last_step: "finish" } },
+  }), { settings: freshSettings, directories })
   const launchUrl = new URL(window.url())
   launchUrl.searchParams.set('launch', 'completed')
   launchUrl.hash = '#/'
@@ -157,6 +161,17 @@ try {
   await window.getByRole('heading', { name: 'Queue', exact: true }).waitFor()
 
   await window.screenshot({ path: path.join(results, 'desktop-queue.png'), fullPage: true })
+  const legacyRow = window.getByRole('row').filter({ hasText: 'Legacy example.mkv' })
+  await legacyRow.getByText('Needs review', { exact: true }).waitFor()
+  if (await legacyRow.getByRole('checkbox').isEnabled()) throw new Error('Legacy media must not enter bulk processing')
+  if (await legacyRow.getByRole('button', { name: 'Play', exact: true }).count()) throw new Error('Legacy output identity must not be assumed')
+  for (const width of [1060, 1440]) {
+    await window.setViewportSize({ width, height: width === 1060 ? 720 : 900 })
+    for (const theme of ['light', 'dark']) {
+      await window.evaluate((theme) => { document.documentElement.dataset.theme = theme }, theme)
+      await window.screenshot({ path: path.join(results, `desktop-identity-${width}-${theme}.png`), fullPage: true })
+    }
+  }
   if (rendererErrors.length) throw new Error(`Renderer errors: ${rendererErrors.join('; ')}`)
   console.log(`Electron smoke passed: ${await window.title()}`)
 } finally {

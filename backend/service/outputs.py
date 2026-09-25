@@ -11,6 +11,7 @@ from backend.filesystem.operations import locked_file
 from backend.filesystem.paths import PathSafetyError, reject_alias, validate_path
 from backend.jobs.media import MEDIA_EXTENSIONS, archive_path, output_path
 from backend.runtime import find_ffprobe
+from backend.media_identity import verified_source, verify_finished
 
 
 class OutputAccessError(RuntimeError):
@@ -59,6 +60,10 @@ def prepare_output(service, source: str, resources: ExitStack):
     canonical = root.target(destination)
     if original.exists():
         reject_alias(original, canonical)
+        source_identity = resources.enter_context(verified_source(original))
+        verify_finished(source_identity, canonical)
+    else:
+        raise OutputAccessError('The original is unavailable for identity verification. Open retained copies through Explorer.')
     if canonical.suffix.lower() not in {'.mp3', '.mkv'} or canonical.stat().st_size == 0:
         raise OutputAccessError('The censored output is empty or unsupported. Recreate it before playing.')
     verify_playback(canonical, str(settings.runtime.ffprobe_path) if settings.runtime.ffprobe_path else find_ffprobe())

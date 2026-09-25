@@ -1,6 +1,6 @@
 export type Page = 'queue' | 'dictionary' | 'settings'
 export type Theme = 'light' | 'dark'
-export type LibraryStatus = 'ready' | 'transcribed' | 'finished'
+export type LibraryStatus = 'ready' | 'transcribed' | 'finished' | 'unverified'
 export type JobStatus =
   | 'queued'
   | 'downloading'

@@ -12,6 +12,7 @@ from backend.policy import PolicyStore, ProfanityPolicy
 from backend.censor import find_review_candidates
 from backend.jobs.media import transcript_path
 from backend.service import BackendService
+from backend.media_identity import verified_source, read_record, require_identity
 
 
 class DictionaryController:
@@ -63,7 +64,11 @@ class DictionaryController:
             if not transcript.is_file():
                 raise ValueError("No transcript is available for this file. Run Report only first.")
             try:
-                words_data = json.loads(transcript.read_text(encoding="utf-8"))
+                self.service.settings.directories.binding(self.service.settings.directories.input).target(source)
+                self.service.settings.directories.binding(self.service.settings.directories.transcripts).target(transcript)
+                with verified_source(source) as identity:
+                    words_data = read_record(transcript)
+                    require_identity(words_data, identity)
             except json.JSONDecodeError as exc:
                 raise ValueError(f"Transcript could not be read: {transcript}") from exc
             policy = self.policy_store.load()
