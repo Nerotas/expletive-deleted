@@ -225,4 +225,6 @@ See [QUICKSTART.md](QUICKSTART.md) for complete installed-app, source-build, and
 
 Component setup and onboarding save only their intended settings changes. If a path changed during setup, **Review component settings** offers **Keep current** or **Use verified**. Completed downloads are retained; applying a choice verifies the existing component without reinstalling it.
 
+The walkthrough preserves newer component paths and unrelated preferences at every step. If one of your edits conflicts, **Settings changed elsewhere** offers **Keep current** or **Use my edit**. Cancel keeps your draft on the same step. A further change requires another choice before saving.
+
 If setup loses contact with the local service, it shows **Reconnecting to setup** with elapsed time for up to 30 seconds. **Retry connection** checks existing progress only. If the service exits, recovery appears immediately. **Restart app** is explicit; completed files stay on your computer, and any further installation requires reviewing and approving a fresh plan.

@@ -10,10 +10,10 @@ import { useSettingsController } from './useSettingsController'
 
 const base: SettingsSnapshot = { settings: defaultSettings, revision: 'base' }
 function saved(snapshot: SettingsSnapshot): SettingsResult { return { status: 'saved', snapshot, conflicts: [] } }
-function setup() {
+function setup(onSaved = vi.fn()) {
   const query = createQueryClient()
   const onError = vi.fn()
-  const hook = renderHook(() => useSettingsController({ onError, onNotice: vi.fn(), onSaved: vi.fn() }), {
+  const hook = renderHook(() => useSettingsController({ onError, onNotice: vi.fn(), onSaved }), {
     wrapper: ({ children }: { children: ReactNode }) => <QueryClientProvider client={query}>{children}</QueryClientProvider>,
   })
   return { ...hook, query, onError }
@@ -81,7 +81,7 @@ describe('settings transactions controller', () => {
     const draft = structuredClone(base.settings)
     draft.onboarding.last_step = 'components'
     let pending!: Promise<SettingsSnapshot | null>
-    act(() => { pending = result.current.saveDraft(draft, base) })
+    act(() => { pending = result.current.saveWizardDraft(draft, base, { last_step: 'components' }) })
     await waitFor(() => expect(result.current.conflict).not.toBeNull())
     await act(async () => { result.current.cancelConflict(); expect(await pending).toBeNull() })
     expect(draft.onboarding.last_step).toBe('components')
@@ -130,5 +130,60 @@ describe('settings transactions controller', () => {
     expect(result.current.draft?.processing.device).toBe('cpu')
     expect(result.current.dirty).toBe(true)
     expect(onError).toHaveBeenCalledWith('Disk full')
+  })
+
+  it('restricts wizard patches and preserves pre-existing normal Settings edits', async () => {
+    const { result } = setup()
+    await waitFor(() => expect(result.current.draft).not.toBeNull())
+    act(() => result.current.updateGroup('processing', { ...defaultSettings.processing, device: 'cpu' }))
+    const wizard = structuredClone(defaultSettings)
+    wizard.runtime.ffmpeg_path = 'C:/stale/ffmpeg.exe'
+    wizard.censoring.padding_before_ms = 999
+    wizard.censoring.stereo_method = 'karaoke'
+    const persisted = structuredClone(base)
+    persisted.revision = 'wizard-saved'
+    persisted.settings.censoring.stereo_method = 'karaoke'
+    persisted.settings.runtime.ffmpeg_path = 'C:/verified/ffmpeg.exe'
+    persisted.settings.onboarding.last_step = 'add-media'
+    vi.mocked(desktopClient.patchSettings).mockResolvedValue(saved(persisted))
+    await act(() => result.current.saveWizardDraft(wizard, base, { last_step: 'add-media' }))
+    expect(desktopClient.patchSettings).toHaveBeenCalledWith('base', [
+      { field: 'censoring.stereo_method', expected: 'drop_audio', value: 'karaoke' },
+      { field: 'onboarding.last_step', expected: 'finish', value: 'add-media' },
+    ])
+    expect(result.current.draft?.processing.device).toBe('cpu')
+    expect(result.current.draft?.runtime.ffmpeg_path).toBe('C:/verified/ffmpeg.exe')
+    expect(result.current.dirty).toBe(true)
+    act(() => result.current.discard())
+    expect(result.current.draft?.processing.device).toBe(defaultSettings.processing.device)
+  })
+
+  it('does not submit incomplete conflict choices or duplicate a resolution', async () => {
+    vi.mocked(desktopClient.updateSettings).mockResolvedValue({ status: 'conflict', snapshot: base,
+      conflicts: [{ field: 'processing.device', expected: 'auto', current: 'cuda', proposed: 'cpu' }] })
+    const { result } = setup()
+    await waitFor(() => expect(result.current.draft).not.toBeNull())
+    act(() => result.current.updateGroup('processing', { ...defaultSettings.processing, device: 'cpu' }))
+    let pending!: Promise<void>
+    act(() => { pending = result.current.save() })
+    await waitFor(() => expect(result.current.conflict).not.toBeNull())
+    act(() => result.current.resolveConflict({}))
+    expect(desktopClient.patchSettings).not.toHaveBeenCalled()
+    await act(async () => {
+      result.current.resolveConflict({ 'processing.device': true })
+      result.current.resolveConflict({ 'processing.device': true })
+      await pending
+    })
+    expect(desktopClient.patchSettings).toHaveBeenCalledOnce()
+  })
+
+  it('returns a confirmed save even if the subsequent readiness refresh fails', async () => {
+    const { result, onError } = setup(vi.fn().mockRejectedValue(new Error('Readiness refresh failed')))
+    await waitFor(() => expect(result.current.draft).not.toBeNull())
+    await act(async () => {
+      expect(await result.current.saveWizardDraft(base.settings, base, { last_step: 'components' })).toEqual(base)
+    })
+    expect(onError).toHaveBeenCalledWith('Readiness refresh failed')
+    expect(desktopClient.patchSettings).toHaveBeenCalledOnce()
   })
 })

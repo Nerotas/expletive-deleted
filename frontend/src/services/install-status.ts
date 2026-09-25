@@ -12,6 +12,8 @@ export function decodeInstallStatus(value: unknown, expectedId?: string): Instal
     if (value[field] !== null && (typeof value[field] !== 'number' || !Number.isFinite(value[field]) || value[field] < 0)) return invalid()
   }
   if (value.status === 'awaiting_resolution') {
+    // The conflict dialog needs a usable current snapshot and verified paths;
+    // an incompatible payload must enter recovery rather than offer a save.
     const result = value.resolution
     if (!object(result) || result.status !== 'conflict' || !object(result.snapshot)
       || typeof result.snapshot.revision !== 'string' || !object(result.snapshot.settings)

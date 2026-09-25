@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useForm, useWatch } from 'react-hook-form'
 import { desktopClient, type DesktopClient } from '../../services/desktop-client'
 import type { Settings, SettingsSnapshot, SettingsResult, SettingsField, FieldChange } from '../../types/domain'
-import { settingChanges, settingValue, applySettingChanges } from './settings-transactions'
+import { settingChanges, settingValue, applySettingChanges, wizardChanges, type WizardProgress } from './settings-transactions'
 import { errorMessage } from '../../utils/format'
 
 type SettingsControllerOptions = {
@@ -23,6 +23,7 @@ export function useSettingsController({
   const form = useForm<Settings>()
   const [baseline, setBaseline] = useState<SettingsSnapshot | null>(null)
   const saving = useRef(false)
+  const [conflictFocusTarget, setConflictFocusTarget] = useState<HTMLElement | null>(null)
   const [busy, setBusy] = useState(false)
   const [conflict, setConflict] = useState<SettingsResult | null>(null)
   const choiceResolver = useRef<((choices: Partial<Record<SettingsField, boolean>> | null) => void) | null>(null)
@@ -47,17 +48,22 @@ export function useSettingsController({
     if (settingsQuery.error) onError(errorMessage(settingsQuery.error))
   }, [onError, settingsQuery.error])
 
-  const saveDraft = async (nextSettings: Settings, wizardBase?: SettingsSnapshot): Promise<SettingsSnapshot | null> => {
+  const saveDraft = async (nextSettings: Settings, wizard?: { base: SettingsSnapshot; progress: WizardProgress }): Promise<SettingsSnapshot | null> => {
     if (saving.current) return null
-    const base = wizardBase ?? baseline
+    const base = wizard?.base ?? baseline
     if (!base) return null
+    // Disabling Save can blur it before the conflict response arrives. Capture
+    // its focus target now so cancellation returns to the original action.
+    setConflictFocusTarget(document.activeElement instanceof HTMLElement ? document.activeElement : null)
     saving.current = true
     setBusy(true)
     const submitted = structuredClone(nextSettings)
     const formAtSubmit = structuredClone(form.getValues())
-    let changes: FieldChange[] = settingChanges(base.settings, submitted)
+    // A wizard save must also preserve edits already waiting on normal Settings.
+    const formEditBase = wizard ? baseline?.settings ?? formAtSubmit : formAtSubmit
+    let changes: FieldChange[] = wizard ? wizardChanges(base.settings, submitted, wizard.progress) : settingChanges(base.settings, submitted)
     try {
-      let result = wizardBase
+      let result = wizard
         ? await client.patchSettings(base.revision, changes)
         : await client.updateSettings(submitted, base)
       while (result.status === 'conflict') {
@@ -73,16 +79,20 @@ export function useSettingsController({
           expected: settingValue(result.snapshot.settings, change.field),
           value: choices[change.field] === false ? settingValue(result.snapshot.settings, change.field) : change.value,
         }))
+        // Choices apply only to the snapshot the user reviewed. Strict revision
+        // checking turns any intervening write into another explicit conflict.
         result = await client.patchSettings(result.snapshot.revision, changes, true)
       }
       const updated = result.snapshot
-      const laterEdits = settingChanges(formAtSubmit, form.getValues())
+      const laterEdits = settingChanges(formEditBase, form.getValues())
       setBaseline(updated)
       queryClient.setQueryData(['settings'], updated)
       form.reset(updated.settings)
       if (laterEdits.length) form.reset(applySettingChanges(updated.settings, laterEdits), { keepDefaultValues: true })
-      await onSaved()
+      // Persistence already succeeded. A failed readiness refresh must not turn
+      // that confirmed save into a failed wizard step or invite resubmission.
       onNotice('Settings saved')
+      try { await onSaved() } catch (reason) { onError(errorMessage(reason)) }
       return updated
     } catch (reason) {
       onError(errorMessage(reason))
@@ -149,10 +159,21 @@ export function useSettingsController({
 
   return {
     persisted: settingsQuery.data?.settings ?? null,
+    persistedSnapshot: settingsQuery.data ?? null,
     snapshot: baseline,
     conflict,
-    cancelConflict: () => choiceResolver.current?.(null),
-    resolveConflict: (choices: Partial<Record<SettingsField, boolean>>) => choiceResolver.current?.(choices),
+    conflictFocusTarget,
+    cancelConflict: () => {
+      const resolve = choiceResolver.current
+      choiceResolver.current = null
+      resolve?.(null)
+    },
+    resolveConflict: (choices: Partial<Record<SettingsField, boolean>>) => {
+      if (!conflict || conflict.conflicts.some(({ field }) => typeof choices[field] !== 'boolean')) return
+      const resolve = choiceResolver.current
+      choiceResolver.current = null
+      resolve?.(choices)
+    },
     draft,
     loading: settingsQuery.isLoading,
     error: settingsQuery.error,
@@ -162,7 +183,7 @@ export function useSettingsController({
     updateGroup,
     discard,
     save,
-    saveDraft,
+    saveWizardDraft: (draft: Settings, base: SettingsSnapshot, progress: WizardProgress) => saveDraft(draft, { base, progress }),
     chooseDirectory,
     chooseFfmpeg,
     chooseWhisperCache,

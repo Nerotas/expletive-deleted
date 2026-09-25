@@ -38,3 +38,7 @@ jobs:
       - name: Test with coverage
         working-directory: frontend
         run: npm run test:coverage
+
+      - name: Require shared settings, conflict dialog, and wizard regressions
+        working-directory: frontend
+        run: npm test -- --run src/features/settings/useSettingsController.test.tsx src/features/settings/SettingsConflictDialog.test.tsx src/features/onboarding/OnboardingPage.test.tsx

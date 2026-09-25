@@ -78,6 +78,10 @@ Electron uses the `com.expletive-deleted.desktop` Windows AppUserModelID, privat
 
 `settings.get` returns `{ settings, revision }`. Normal Settings submits a complete draft with its baseline; onboarding submits intended field changes. Both use the shared backend transaction and `SettingsConflictDialog`, retaining drafts while a choice is pending. Setup uses `awaiting_resolution` and `dependencies.resolve_conflict`; retries verify retained files and never approve another installation. All wire operations live in `src/services/desktop-client.ts`.
 
+The wizard starts from `persistedSnapshot`, separately from the normal Settings form. Its baseline changes only after a successful `saveWizardDraft`; `wizardChanges` limits patches to its controls plus explicit saved-step/Finish intent. Background cache updates cannot reset its step or draft. A picker result arriving during a save remains editable on the current step. Conflict retries compare against the returned revision with strict checking; a newer revision requires fresh choices. The dialog stays mounted across revisions so Escape/Cancel restores focus to the original trigger.
+
+CI explicitly runs `useSettingsController.test.tsx`, `SettingsConflictDialog.test.tsx`, and `OnboardingPage.test.tsx`, alongside the full frontend suite and backend settings/component transaction gates. Native state smoke additionally checks wizard conflict cancellation, keyboard radio choices and focus trapping/restoration, another write during resolution, and saved-step resume after reload.
+
 `npm run smoke:state` runs real Electron/backend settings races, wizard preservation, repeated resolution without installation replay, and CLI ownership checks. Its offline fixture replaces component verification/downloads only; no test installs processing components. Screenshots cover both themes at 1060?720 and 1440?940.
 
 ## Setup connection and recovery

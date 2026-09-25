@@ -47,6 +47,8 @@ const env = {
 const requiredCases = [
   'second-launch-during-startup', 'second-launch-restores-and-focuses', 'cli-and-desktop-edits-survive',
   'setup-conflict-repeated-resolution-without-reinstall', 'inspection-preserves-newer-preferences',
+  'wizard-conflict-cancel-keyboard-and-repeated-choices',
+  'wizard-resumes-saved-step',
   'wizard-back-and-finish-preserve-component-settings', 'cli-settings-blocked-by-desktop-owner',
 ]
 const cases = []
@@ -178,19 +180,66 @@ try {
   await page.getByRole('heading', { name: 'Choose your settings', exact: true }).waitFor()
   await page.getByRole('button', { name: /^Keep my current dictionary/ }).click()
   await page.getByRole('button', { name: 'Karaoke', exact: true }).click()
+  const wizardInput = path.join(root, 'wizard-input')
+  const currentInput = path.join(root, 'current-input')
+  await page.getByRole('textbox', { name: 'Ready / Input', exact: true }).fill(wizardInput)
+  const beforeConflict = await patchSettings({ 'directories.input': currentInput })
   await page.getByRole('button', { name: 'Save & Continue' }).click()
+  const wizardDialog = page.getByRole('dialog', { name: 'Settings changed elsewhere' })
+  await wizardDialog.waitFor()
+  assert.deepEqual(await snapshot(), beforeConflict.snapshot, 'A conflicting wizard save must publish nothing')
+  assert.equal(await page.getByRole('heading', { name: 'Choose your settings', exact: true }).isVisible(), true)
+  for (const [width, height] of [[1060, 720], [1440, 940]]) {
+    await app.evaluate(({ BrowserWindow }, [w, h]) => BrowserWindow.getAllWindows()[0].setSize(w, h), [width, height])
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate((value) => { document.documentElement.dataset.theme = value }, theme)
+      await page.screenshot({ path: `test-results/onboarding-conflict-${theme}-${width}.png` })
+      assert.ok(await wizardDialog.evaluate((element) => element.scrollWidth <= element.clientWidth), 'Wizard conflict must fit horizontally')
+    }
+  }
+  await page.keyboard.press('Tab')
+  assert.equal(await wizardDialog.getByRole('radio', { name: /Keep current/ }).evaluate((element) => element === document.activeElement), true)
+  await page.keyboard.press('ArrowDown')
+  assert.equal(await wizardDialog.getByRole('radio', { name: /Use my edit/ }).isChecked(), true)
+  await wizardDialog.getByRole('button', { name: 'Apply choices' }).focus()
+  await page.keyboard.press('Tab')
+  assert.equal(await wizardDialog.getByRole('radio', { name: /Keep current/ }).evaluate((element) => element === document.activeElement), true)
+  await page.keyboard.press('Shift+Tab')
+  assert.equal(await wizardDialog.getByRole('button', { name: 'Apply choices' }).evaluate((element) => element === document.activeElement), true)
+  await page.keyboard.press('Escape')
+  await wizardDialog.waitFor({ state: 'hidden' })
+  await page.waitForFunction(() => document.activeElement?.textContent === 'Save & Continue')
+  assert.equal(await page.getByRole('textbox', { name: 'Ready / Input', exact: true }).inputValue(), wizardInput)
+  assert.deepEqual(await snapshot(), beforeConflict.snapshot)
+  await page.keyboard.press('Enter')
+  await wizardDialog.getByRole('radio', { name: /Use my edit/ }).check()
+  const duringResolution = await patchSettings({ 'censoring.padding_before_ms': 350 })
+  await wizardDialog.getByRole('button', { name: 'Apply choices' }).click()
+  await page.waitForFunction(() => document.querySelector('[role="dialog"] button:last-child')?.disabled === true)
+  assert.deepEqual(await snapshot(), duringResolution.snapshot, 'A changed revision must require fresh choices')
+  for (const radio of await wizardDialog.getByRole('radio', { name: /Use my edit/ }).all()) await radio.check()
+  await wizardDialog.getByRole('group', { name: 'Ready / Input folder', exact: true }).getByRole('radio', { name: /Keep current/ }).check()
+  await wizardDialog.getByRole('button', { name: 'Apply choices' }).click()
   await page.getByRole('heading', { name: 'Add a first file', exact: true }).waitFor()
   let current = (await snapshot()).settings
+  assert.equal(current.directories.input, currentInput)
   assert.equal(current.runtime.ytdlp_path, verifiedYtdlp)
   assert.equal(current.runtime.whisper_cache, manualCache)
-  assert.equal(current.censoring.padding_before_ms, 325)
+  assert.equal(current.censoring.padding_before_ms, 350)
   assert.equal(current.censoring.padding_after_ms, 425)
   assert.equal(current.censoring.stereo_method, 'karaoke')
   assert.equal(current.processing.device, 'cpu')
   assert.equal(current.source.scan_subdirectories, false)
   assert.equal(current.onboarding.last_step, 'add-media')
+  cases.push('wizard-conflict-cancel-keyboard-and-repeated-choices')
   await page.getByRole('button', { name: 'Back', exact: true }).click()
+  assert.equal((await snapshot()).settings.onboarding.last_step, 'add-media')
   await page.getByRole('button', { name: 'Save & Continue' }).click()
+  // A renderer reload reconstructs the wizard from persisted progress, without
+  // reusing its previous in-memory baseline or draft.
+  await page.reload()
+  await page.getByRole('heading', { name: 'Add a first file', exact: true }).waitFor()
+  cases.push('wizard-resumes-saved-step')
   await page.getByRole('button', { name: 'Save & Continue' }).click()
   await page.getByRole('button', { name: 'Save & Continue' }).click()
   await page.getByRole('button', { name: 'Finish setup', exact: true }).click()
@@ -198,6 +247,8 @@ try {
   current = (await snapshot()).settings
   assert.equal(current.onboarding.completed, true)
   assert.equal(current.runtime.ytdlp_path, verifiedYtdlp)
+  assert.equal(current.directories.input, currentInput)
+  assert.equal(current.onboarding.last_step, 'finish')
   cases.push('wizard-back-and-finish-preserve-component-settings')
 
   const cli = await promisify(execFile)(python, ['manage_settings.py', 'set-options', '--device', 'cuda'], { cwd: repository, env, windowsHide: true }).then(() => null, (error) => error)

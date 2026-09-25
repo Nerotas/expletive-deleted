@@ -9,6 +9,8 @@ export function useInstallStatus(client: Pick<DesktopClient, 'getBackendState' |
   const [connection, setConnection] = useState<ConnectionState>({ phase: 'connected', elapsedMs: 0 })
   useEffect(() => {
     if (!observation) return
+    // A new operation or explicit retry gets its own observer and deadline.
+    // Cleanup invalidates the previous operation's timers and in-flight replies.
     const observer = new InstallationConnection(client, observation.target, setConnection, received)
     observer.start(observation.failure)
     return () => observer.dispose()

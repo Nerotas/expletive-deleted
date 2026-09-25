@@ -92,6 +92,8 @@ export class InstallationConnection {
     if (this.disposed || this.state.phase === 'recovery') return
     if (immediateRecovery(reason)) { this.recover(errorCode(reason)!); return }
     if (this.deadline === null) {
+      // Only the first failure starts the window; retries cannot extend it,
+      // and wall-clock adjustments must not change the recovery deadline.
       this.deadline = performance.now() + RECONNECT_WINDOW_MS
       this.emit({ phase: 'reconnecting', elapsedMs: 0 })
       this.later(() => this.recover('request_timeout'), RECONNECT_WINDOW_MS)
@@ -115,6 +117,8 @@ export class InstallationConnection {
       const request = 'installId' in this.target
         ? this.client.getInstallStatus(this.target.installId, timeout, this.generation)
         : this.client.getActiveInstall(this.target.planId, timeout, this.generation)
+      // Bound renderer waiting too, even if IPC itself becomes unresponsive.
+      // The epoch check below prevents a late reply from reviving this observer.
       const result = await Promise.race([request, new Promise<never>((_resolve, reject) => {
         timeoutTimer = this.later(() => reject({ code: 'request_timeout' }), timeout)
       })])
@@ -125,6 +129,8 @@ export class InstallationConnection {
       this.clearTimers(); this.deadline = null; this.failures = 0
       this.emit({ phase: 'connected', elapsedMs: 0 })
       this.received(status)
+      // Schedule after settlement to avoid overlap. A settings choice pauses
+      // polling but keeps exit notifications active while the user decides.
       if (active(status)) this.later(() => void this.poll(), 1200)
       else if (status.status !== 'awaiting_resolution') this.dispose()
     } catch (reason) {

@@ -30,4 +30,4 @@ The recovery fixture replaces downloads and verification with local synthetic fi
 
 Backend CI explicitly runs setup-control, installation-conflict and settings-transaction tests. Existing frontend test/type/lint gates discover the new modules. `npm run smoke:recovery` is required by Electron Smoke, the unpublished-release validation path, `scripts/run_all_tests.ps1` and `scripts/build_local_release.ps1`. Electron Smoke now allows 45 minutes and retains failure screenshots and case summaries through its existing artifact upload. Release triggers, permissions and publishing behavior are unchanged.
 
-Changes remain in the working tree. No HP-08 commit, push, tag or remote issue update was made.
+Inline notes explain observer lifetime, deadline ownership, stale-response rejection, protocol decoding and conflict-payload validation. The user authorized committing HP-08 after this review. No push, tag or remote issue update was made.

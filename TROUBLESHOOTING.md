@@ -199,6 +199,8 @@ If a media job or download is active, finish or cancel it before applying choice
 
 Settings and the setup wizard also pause if the same field changed elsewhere. Choose the current value or your edit; Cancel preserves the draft and current step. A further change may require another choice.
 
+In **Settings changed elsewhere**, every listed field needs an explicit **Keep current** or **Use my edit** choice. Press Escape or **Cancel** to return to the draft without saving. If saving fails, correct the reported problem and retry; your edits remain. **Discard** on normal Settings restores the latest saved values. Replaying onboarding starts from saved settings and leaves unsaved normal Settings edits available for a separate save or discard.
+
 Advanced: CLI settings writers report `settings_busy` while the desktop owns the profile. Close the desktop before running `manage_settings.py init`, `set-options`, or `set-directories`. Read-only settings commands and dictionary CLI transactions remain available. Settings use local thread/process locks; older app versions do not honor these locks, so do not run old and new versions against one profile concurrently.
 
 ### Setup reconnecting or outcome unknown
