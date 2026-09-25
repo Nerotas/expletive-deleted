@@ -60,6 +60,41 @@ class SettingsTransactionTests(unittest.TestCase):
         for _ in range(2):
             self.assertEqual(self.store.transact(self.base['revision'], changes)['status'], 'saved')
 
+    def test_wizard_same_field_conflict_preserves_all_edits_and_progress_until_resolution(self):
+        changes = [self.change('directories.input', str(self.root / 'wizard-input')),
+                   self.change('censoring.stereo_method', 'karaoke'),
+                   self.change('onboarding.last_step', 'add-media')]
+        current_input = str(self.root / 'current-input')
+        self.store.transact(self.base['revision'], [self.change('directories.input', current_input),
+                                                   self.change('runtime.ytdlp_path', str(self.root / 'verified.exe'))])
+        before = self.store.path.read_bytes()
+        conflict = self.store.transact(self.base['revision'], changes)
+        self.assertEqual(conflict['status'], 'conflict')
+        self.assertEqual(self.store.path.read_bytes(), before)
+        latest = conflict['snapshot']
+        selected = [self.change('directories.input', current_input, latest),
+                    self.change('censoring.stereo_method', 'karaoke', latest),
+                    self.change('onboarding.last_step', 'add-media', latest)]
+        self.store.transact(latest['revision'], [self.change('processing.device', 'cpu', latest)])
+        newer = self.store.path.read_bytes()
+        repeated = self.store.transact(latest['revision'], selected, strict=True)
+        self.assertEqual(repeated['status'], 'conflict')
+        self.assertEqual(self.store.path.read_bytes(), newer)
+        fresh = repeated['snapshot']
+        selected = [self.change(change['field'], change['value'], fresh) for change in selected]
+        result = self.store.transact(fresh['revision'], selected, strict=True)
+        self.assertEqual(result['status'], 'saved')
+        self.assertEqual(result['snapshot']['settings']['runtime']['ytdlp_path'], str(self.root / 'verified.exe'))
+        self.assertEqual(result['snapshot']['settings']['directories']['input'], current_input)
+        self.assertEqual(result['snapshot']['settings']['onboarding']['last_step'], 'add-media')
+
+    def test_explicit_unchanged_progress_detects_another_writers_progress(self):
+        self.store.transact(self.base['revision'], [self.change('onboarding.last_step', 'settings')])
+        before = self.store.path.read_bytes()
+        result = self.store.transact(self.base['revision'], [self.change('onboarding.last_step', self.base['settings']['onboarding']['last_step'])])
+        self.assertEqual(result['status'], 'conflict')
+        self.assertEqual(self.store.path.read_bytes(), before)
+
     def test_invalid_fields_values_and_merged_result_do_not_write(self):
         cases = [
             [self.change('processing.device', 'invalid')],

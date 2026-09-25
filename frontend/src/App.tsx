@@ -172,12 +172,14 @@ function App() {
         />
       )}
       {settings.conflict && <SettingsConflictDialog
-        key={settings.conflict.snapshot.revision}
+        revision={settings.conflict.snapshot.revision}
+        returnFocusTo={settings.conflictFocusTarget}
         conflicts={settings.conflict.conflicts} busy={settings.busy}
         onCancel={settings.cancelConflict} onResolve={settings.resolveConflict}
       />}
       {capabilities.installState?.status === 'awaiting_resolution' && installDialogOpen && capabilities.connection.phase === 'connected' && !settings.conflict && <SettingsConflictDialog
-        key={`${capabilities.installState.install_id}:${capabilities.installState.resolution?.snapshot.revision}`}
+        key={capabilities.installState.install_id}
+        revision={capabilities.installState.resolution?.snapshot.revision}
         conflicts={capabilities.conflicts} busy={capabilities.resolving} verified error={capabilities.installState.error}
         onCancel={() => setDismissedInstallId(`${capabilities.installState?.install_id}:${capabilities.connection.phase}`)}
         onResolve={capabilities.resolveConflict}

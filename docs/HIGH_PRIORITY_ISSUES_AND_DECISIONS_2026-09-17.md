@@ -175,7 +175,7 @@ Source: [frontend review, onboarding snapshot finding](FRONTEND_REVIEW_2026-09-1
 | Finding | Recorded resolution | Remaining qualification |
 | --- | --- | --- |
 | Closing the app bypassed processing cleanup | Graceful bridge shutdown, bounded forced fallback, Windows process-tree containment, and staged desktop output publication | Existing tests used controlled workers; this does not establish real-media or clean-machine release qualification |
-| Saving settings lost active download tracking | Settings replacement is blocked while downloads are active, and settings/submission operations share a lifecycle lock | HP-04 and the shared onboarding transaction are implemented; see [validation report](HP-04_IMPLEMENTATION_2026-09-24.md). Broader HP-09 acceptance remains separately tracked |
+| Saving settings lost active download tracking | Settings replacement is blocked while downloads are active, and settings/submission operations share a lifecycle lock | HP-04 and HP-09 share one transaction; see [component validation](HP-04_IMPLEMENTATION_2026-09-24.md) and [onboarding validation](HP-09_IMPLEMENTATION_2026-09-24.md) |
 
 Sources: [Windows build audit](WINDOWS_BUILD_AUDIT_2026-09-16.md); [Windows lifecycle follow-up](WINDOWS_LIFECYCLE_FOLLOWUP_2026-09-16.md). These resolved defects should retain their regression coverage rather than be reopened as unfinished repairs.
 
@@ -192,3 +192,7 @@ The setup and onboarding write directions now use one locked, revision-aware fie
 ## HP-08 local implementation - 2026-09-24
 
 Serial bounded polling, visible 30-second reconnection, status-only reconciliation and explicit restart recovery are implemented locally. Backend controls remain responsive under worker saturation, and verified-component settings continue through the shared HP-04 conflict state. Validation and test-harness limits are recorded in [the HP-08 implementation report](HP-08_IMPLEMENTATION_2026-09-24.md). Remote issue status is unchanged.
+
+## HP-09 local implementation - 2026-09-24
+
+Onboarding now keeps its baseline and draft separate from background settings and normal Settings edits. It submits only wizard controls and explicit progress through the HP-04 transaction, retains edits on cancellation/failure, and requires new choices after another concurrent write. The shared dialog preserves keyboard focus through repeated conflicts. See [the HP-09 implementation report](HP-09_IMPLEMENTATION_2026-09-24.md) for validation and limits. Remote issue status is unchanged.

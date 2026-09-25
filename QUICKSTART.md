@@ -50,6 +50,8 @@ npm run dev
 
 The walkthrough has six sections: Welcome, Get ready, Your settings, Add a file, Process safely, and Finish. Each section is implemented under `frontend/src/features/onboarding/` so developers can change and test it without editing the rest of the walkthrough. The app saves progress when you choose **Save & Continue**, so an unfinished first run resumes at the last saved section. Reopening a completed walkthrough starts at Welcome and leaves its completed status intact until you finish again.
 
+Each save preserves components verified during the walkthrough and preferences changed elsewhere. If the same field changed, choose **Keep current** or **Use my edit**, then **Apply choices**. **Cancel** leaves your edits and current step intact. **Back** moves to the previous section without saving; only a successful save advances saved progress.
+
 If the private local processing service cannot start in an installed build, the Electron window explains that the application needs repair. A source checkout may still direct a developer to install Python. No media is uploaded or changed while the service is unavailable.
 
 The first launch checks the local system for:

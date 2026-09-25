@@ -4,6 +4,8 @@ import { settingsFieldLabel } from './settings-transactions'
 import './settings.css'
 
 type Props = {
+  revision?: string
+  returnFocusTo?: HTMLElement | null
   conflicts: SettingsConflict[]
   busy: boolean
   verified?: boolean
@@ -12,15 +14,17 @@ type Props = {
   onResolve: (choices: Partial<Record<SettingsField, boolean>>) => void
 }
 
-export function SettingsConflictDialog({ conflicts, busy, verified, error, onCancel, onResolve }: Props) {
+export function SettingsConflictDialog({ revision, returnFocusTo, conflicts, busy, verified, error, onCancel, onResolve }: Props) {
   const title = useId()
   const panel = useRef<HTMLElement>(null)
-  const [choices, setChoices] = useState<Partial<Record<SettingsField, boolean>>>({})
+  const conflictRevision = revision ?? JSON.stringify(conflicts)
+  const [selection, setSelection] = useState<{ revision: string; choices: Partial<Record<SettingsField, boolean>> }>({ revision: conflictRevision, choices: {} })
+  const choices = selection.revision === conflictRevision ? selection.choices : {}
   const cancel = useRef(onCancel)
   const pending = useRef(busy)
   useEffect(() => { cancel.current = onCancel; pending.current = busy }, [onCancel, busy])
   useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null
+    const previous = returnFocusTo ?? document.activeElement as HTMLElement | null
     panel.current?.focus()
     const keydown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && !pending.current) { event.preventDefault(); cancel.current() }
@@ -35,14 +39,25 @@ export function SettingsConflictDialog({ conflicts, busy, verified, error, onCan
       }
     }
     document.addEventListener('keydown', keydown)
-    return () => { document.removeEventListener('keydown', keydown); previous?.focus() }
-  }, [])
+    return () => {
+      document.removeEventListener('keydown', keydown)
+      previous?.focus()
+      // The wizard re-enables its Save button after the controller's promise
+      // settles. Wait for that commit if the immediate restoration was blocked.
+      if (previous?.matches(':disabled')) requestAnimationFrame(() => {
+        if (previous.isConnected && document.activeElement === document.body) previous.focus()
+      })
+    }
+  }, [returnFocusTo])
+  // Refresh choices without remounting the dialog: repeated conflicts must keep
+  // the original focus-restoration target, even after their revision changes.
+  useEffect(() => { panel.current?.focus() }, [conflictRevision])
 
   const choose = (field: SettingsField, value: boolean) => {
     // A verified FFmpeg/FFprobe installation is selected as a pair.
     const pair = verified && ['runtime.ffmpeg_path', 'runtime.ffprobe_path'].includes(field)
-    setChoices((current) => ({ ...current, [field]: value,
-      ...(pair ? { 'runtime.ffmpeg_path': value, 'runtime.ffprobe_path': value } : {}) }))
+    setSelection({ revision: conflictRevision, choices: { ...choices, [field]: value,
+      ...(pair ? { 'runtime.ffmpeg_path': value, 'runtime.ffprobe_path': value } : {}) } })
   }
   return <div className="modal-backdrop">
     <section ref={panel} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby={title} className="modal settings-conflict">

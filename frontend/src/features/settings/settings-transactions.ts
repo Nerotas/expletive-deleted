@@ -14,6 +14,25 @@ export function settingChanges(base: Settings, draft: Settings): FieldChange[] {
     }) : [])
 }
 
+export type WizardProgress = Pick<Settings['onboarding'], 'last_step'> & Partial<Pick<Settings['onboarding'], 'completed'>>
+
+// Only controls owned by the wizard belong in its patch. Runtime paths and
+// preferences edited on the normal Settings page have independent owners.
+const WIZARD_FIELDS: ReadonlySet<SettingsField> = new Set([
+  'directories.input', 'directories.output', 'directories.archive', 'directories.transcripts',
+  'censoring.stereo_method', 'processing.auto_censor_after_transcription',
+  'processing.auto_transcode_youtube_downloads', 'source.archive_after_success',
+])
+
+export function wizardChanges(base: Settings, draft: Settings, progress: WizardProgress): FieldChange[] {
+  const changes = settingChanges(base, draft).filter(({ field }) => WIZARD_FIELDS.has(field))
+  // Progress is an explicit action even when it equals the baseline (Finish on
+  // replay, or Continue after Back). A competing progress edit must be compared.
+  changes.push({ field: 'onboarding.last_step', expected: base.onboarding.last_step, value: progress.last_step })
+  if (progress.completed !== undefined) changes.push({ field: 'onboarding.completed', expected: base.onboarding.completed, value: progress.completed })
+  return changes
+}
+
 export function applySettingChanges(settings: Settings, changes: FieldChange[]): Settings {
   const result = structuredClone(settings)
   for (const { field, value } of changes) {
