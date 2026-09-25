@@ -29,12 +29,6 @@ const updates = [
     },
   },
   {
-    file: path.join(frontendRoot, 'src', 'features', 'settings', 'SettingsPage.tsx'),
-    patterns: [
-      [/(\{APPLICATION_DISPLAY_NAME\}\s+)\d+\.\d+\.\d+/, `$1${version}`],
-    ],
-  },
-  {
     file: path.join(repositoryRoot, 'README.md'),
     patterns: [
       [/Version \*\*\d+\.\d+\.\d+\*\*/, `Version **${version}**`],

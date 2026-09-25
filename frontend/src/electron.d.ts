@@ -1,5 +1,5 @@
 import type { DictionaryMutationResult, NativeFileResult } from './types/domain'
-import type { BackendState, RequestOptions } from '../shared/bridge'
+import type { AppInfo, BackendState, RequestOptions } from '../shared/bridge'
 
 declare global {
   interface Window {
@@ -7,6 +7,7 @@ declare global {
       desktop: boolean
       invoke: <T>(method: string, params?: Record<string, unknown>, options?: RequestOptions) => Promise<T>
       request: <T>(method: string, params?: Record<string, unknown>, options?: RequestOptions) => Promise<import('../shared/ipc-response').InvokeResponse<T>>
+      getAppInfo: () => Promise<AppInfo>
       getBackendState: () => Promise<BackendState>
       onBackendState: (listener: (state: BackendState) => void) => () => void
       restart: () => Promise<void>

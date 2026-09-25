@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { unwrapInvokeResponse } from './ipc-response.js'
-import type { BackendState, RequestOptions } from '../shared/bridge.js'
+import type { AppInfo, BackendState, RequestOptions } from '../shared/bridge.js'
 
 async function invoke<T>(method: string, params?: Record<string, unknown>, options?: RequestOptions): Promise<T> {
   return unwrapInvokeResponse(await ipcRenderer.invoke('expletive-deleted:invoke', method, params, options))
@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('expletiveDeleted', {
   // structured envelope until the typed renderer client creates its Error.
   request: (method: string, params?: Record<string, unknown>, options?: RequestOptions) =>
     ipcRenderer.invoke('expletive-deleted:invoke', method, params, options),
+  getAppInfo: () => ipcRenderer.invoke('expletive-deleted:app-info') as Promise<AppInfo>,
   getBackendState: () => ipcRenderer.invoke('expletive-deleted:backend-state') as Promise<BackendState>,
   onBackendState: (listener: (state: BackendState) => void) => {
     const receive = (_event: Electron.IpcRendererEvent, state: BackendState) => {

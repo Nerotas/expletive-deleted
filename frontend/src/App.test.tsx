@@ -32,6 +32,7 @@ describe('desktop application renderer', () => {
   beforeEach(() => {
     persisted = cloneSettings(defaultSettings)
     vi.spyOn(desktopClient, 'getSettings').mockImplementation(async () => ({ settings: cloneSettings(persisted), revision: JSON.stringify(persisted) }))
+    vi.spyOn(desktopClient, 'getAppInfo').mockResolvedValue({ version: '1.4.1', isPackaged: false })
     vi.spyOn(desktopClient, 'updateSettings').mockImplementation(async (settings) => {
       persisted = cloneSettings(settings)
       return { status: 'saved', snapshot: { settings: cloneSettings(persisted), revision: JSON.stringify(persisted) }, conflicts: [] }
@@ -213,6 +214,13 @@ describe('desktop application renderer', () => {
 
     expect(await screen.findByRole('heading', { name: 'Welcome to Expletive Deleted' })).toBeInTheDocument()
     expect(desktopClient.updateSettings).not.toHaveBeenCalled()
+  })
+
+  it('shows the application version reported by Electron', async () => {
+    renderApp('/settings')
+
+    expect(await screen.findByText('Expletive Deleted 1.4.1')).toBeInTheDocument()
+    expect(screen.getByText(/Development build.*local processing.*Windows/i)).toBeInTheDocument()
   })
 
   it('opens onboarding for fresh settings and shows the missing development runtime instead of a blank step', async () => {
