@@ -1,4 +1,4 @@
-import { access, mkdir, rm } from 'node:fs/promises'
+import { access, mkdir, readFile, rm } from 'node:fs/promises'
 import path from 'node:path'
 import { assertRendererSecurity } from './security-checks.mjs'
 
@@ -6,6 +6,7 @@ const executable = process.env.PACKAGED_EXECUTABLE
   ? path.resolve(process.env.PACKAGED_EXECUTABLE)
   : path.resolve('release', 'win-unpacked', 'Expletive Deleted.exe')
 const requireBundledRuntime = process.argv.includes('--require-bundled-runtime') || process.env.REQUIRE_BUNDLED_RUNTIME === '1'
+const expectedAppVersion = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')).version
 await access(executable)
 
 const temporaryDirectory = path.resolve('node_modules', '.tmp', 'playwright-packaged')
@@ -49,6 +50,11 @@ try {
   const rendererErrors = []
   window.on('pageerror', (error) => rendererErrors.push(error.message))
   await window.waitForLoadState('domcontentloaded')
+  const appInfo = await window.evaluate(() => window.expletiveDeleted.getAppInfo())
+  if (!appInfo.isPackaged) throw new Error('Packaged application reported itself as a development build')
+  if (appInfo.version !== expectedAppVersion) {
+    throw new Error(`Packaged application reported version ${appInfo.version}; expected ${expectedAppVersion}`)
+  }
   const startupOutcome = await Promise.race([
     window.getByRole('heading', { name: 'Welcome to Expletive Deleted', exact: true }).waitFor().then(() => 'ready'),
     window.getByRole('heading', { name: 'Repair Expletive Deleted', exact: true }).waitFor().then(() => 'repair'),

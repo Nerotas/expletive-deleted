@@ -47,7 +47,7 @@ export async function assertRendererSecurity(app, page, { development = false } 
       () => api.importDictionary(), () => api.exportDictionary(),
       () => api.openExternal('https://example.invalid/security-fixture'),
       () => api.openTranscodeFolder(), () => api.openOutput('security-fixture.txt'),
-      () => api.request('settings.get'), () => api.getBackendState(),
+      () => api.request('settings.get'), () => api.getAppInfo(), () => api.getBackendState(),
       ...(hostile ? [() => api.restart()] : []),
     ]
     const results = []
@@ -57,7 +57,7 @@ export async function assertRendererSecurity(app, page, { development = false } 
     return results
   }, hostile)
   const assertDenied = (results) => {
-    assert.equal(results.length, 11)
+    assert.equal(results.length, 12)
     for (const result of results) assert.match(result, /trusted application window/)
   }
 
@@ -70,6 +70,7 @@ export async function assertRendererSecurity(app, page, { development = false } 
     assert.equal(await page.evaluate(() => typeof window.require), 'undefined')
     assert.deepEqual(await page.evaluate(() => Object.keys(window.expletiveDeleted).sort()), [
       'desktop', 'invoke', 'request', 'getBackendState', 'onBackendState', 'restart',
+      'getAppInfo',
       'selectDirectory', 'selectFile', 'importDictionary', 'exportDictionary',
       'openExternal', 'openTranscodeFolder', 'openOutput', 'getPathForFile',
     ].sort(), 'Packaged and development preload must expose no fixture controls')
@@ -117,7 +118,7 @@ export async function assertRendererSecurity(app, page, { development = false } 
     const trustedResults = await exerciseChannels(page)
     assert.deepEqual(trustedResults.slice(0, 7), Array(7).fill('allowed'))
     assert.match(trustedResults[7], /absolute path/)
-    assert.deepEqual(trustedResults.slice(8), ['allowed', 'allowed'])
+    assert.deepEqual(trustedResults.slice(8), ['allowed', 'allowed', 'allowed'])
     for (const method of ['dictionary.import', 'dictionary.export', 'native.output.prepare', 'native.output.check', 'native.export.prepare', 'native.dictionary.export', 'native.dictionary.import', 'native.release', 'test.silence', 'test.exit', 'dependencies.test_silence']) {
       await assert.rejects(page.evaluate((method) => window.expletiveDeleted.invoke(method, {}), method), /approved native file selection/)
     }
@@ -188,7 +189,7 @@ export async function assertRendererSecurity(app, page, { development = false } 
     await extraPage.waitForLoadState('domcontentloaded')
     assertDenied(await exerciseChannels(extraPage, true))
     assert.equal(await app.evaluate(() => globalThis.__securitySmoke.calls.length), 6)
-    console.log(`Renderer security checks passed (${development ? 'Vite development' : 'production'}): all 10 IPC channels (11 preload operations), CSP, sandbox, navigation, redirects, popups, foreign documents and windows.`)
+    console.log(`Renderer security checks passed (${development ? 'Vite development' : 'production'}): all 11 IPC channels (12 preload operations), CSP, sandbox, navigation, redirects, popups, foreign documents and windows.`)
   } finally {
     await app.evaluate(({ shell, dialog }) => {
       const state = globalThis.__securitySmoke

@@ -149,6 +149,7 @@ if (desktopInstance.ownsInstance) app.whenReady().then(() => {
     return invoke(method, params, options)
   }))
   handle('expletive-deleted:backend-state', () => transport?.snapshot ?? { generation, status: 'unavailable' })
+  handle('expletive-deleted:app-info', () => ({ version: app.getVersion(), isPackaged: app.isPackaged }))
   handle('expletive-deleted:restart', () => {
     // Relaunch is a user action. before-quit still applies bounded worker shutdown.
     app.relaunch()

@@ -1,7 +1,8 @@
-import { access, mkdir, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 const electronTempDirectory = process.env.TEMP
+const expectedAppVersion = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')).version
 const tempDirectory = path.join(process.cwd(), 'node_modules', '.tmp', 'playwright')
 await mkdir(tempDirectory, { recursive: true })
 const appDataDirectory = path.join(tempDirectory, 'fresh-app-data')
@@ -35,12 +36,17 @@ try {
   await window.waitForLoadState('domcontentloaded')
   await window.getByRole('heading', { name: 'Welcome to Expletive Deleted', exact: true }).waitFor()
 
-  const { desktop, legacyBridgePresent } = await window.evaluate(() => ({
+  const { appInfo, desktop, legacyBridgePresent } = await window.evaluate(async () => ({
+    appInfo: await window.expletiveDeleted.getAppInfo(),
     desktop: window.expletiveDeleted.desktop,
     legacyBridgePresent: 'profanityCensor' in window,
   }))
   if (!desktop) throw new Error('Context-isolated desktop bridge was not exposed')
   if (legacyBridgePresent) throw new Error('Obsolete preload bridge is still exposed')
+  if (appInfo.isPackaged) throw new Error('Development application reported itself as packaged')
+  if (appInfo.version !== expectedAppVersion) {
+    throw new Error(`Development application reported version ${appInfo.version}; expected ${expectedAppVersion}`)
+  }
   if (await window.getByRole('dialog').count()) {
     throw new Error('Fresh onboarding began dependency retrieval without consent')
   }

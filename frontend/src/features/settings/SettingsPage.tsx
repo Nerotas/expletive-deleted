@@ -8,6 +8,7 @@ import type { SettingsController } from './useSettingsController'
 import './settings.css'
 import { APPLICATION_DISPLAY_NAME } from '../../constants/application'
 import { desktopClient } from '../../services/desktop-client'
+import { useQuery } from '@tanstack/react-query'
 
 const SUPPORT_URL = 'https://ko-fi.com/nicholaserotas'
 
@@ -28,6 +29,11 @@ const DIRECTORY_LABELS: Record<keyof Settings['directories'], string> = {
 
 export function SettingsPage({ controller, capabilities, checkingSystem, onCheckSystem, onOpenOnboarding }: SettingsPageProps) {
   const settings = controller.draft
+  const appInfo = useQuery({
+    queryKey: ['app-info'],
+    queryFn: desktopClient.getAppInfo,
+    staleTime: Infinity,
+  })
   if (!settings) return <div className="loading-row">Loading settings</div>
 
   const setGroup = <K extends keyof Settings>(group: K, value: Settings[K]) => {
@@ -83,8 +89,8 @@ export function SettingsPage({ controller, capabilities, checkingSystem, onCheck
 
         <SettingsSection title="About" description="Desktop application identity">
           <div className="about-setting">
-            <strong>{APPLICATION_DISPLAY_NAME} 1.4.1</strong>
-            <span>Electron desktop · local processing · Windows</span>
+            <strong>{APPLICATION_DISPLAY_NAME}{appInfo.data ? ` ${appInfo.data.version}` : ''}</strong>
+            <span>{appInfo.data?.isPackaged === false ? 'Development build' : 'Electron desktop'} · local processing · Windows</span>
           </div>
         </SettingsSection>
 

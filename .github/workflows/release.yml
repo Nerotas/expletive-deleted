@@ -2,6 +2,17 @@ name: Release
 
 on:
   workflow_dispatch:
+    inputs:
+      bump:
+        description: Version increment for a manual release
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+          - none
 
 permissions:
   contents: write
@@ -14,7 +25,7 @@ concurrency:
 
 jobs:
   release:
-    name: Validate and publish
+    name: Version, validate, and publish
     outputs:
       version: ${{ steps.version.outputs.version }}
       published: ${{ steps.version.outputs.published }}
@@ -40,23 +51,14 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Validate release version
+      - name: Choose release version
         id: version
         shell: pwsh
+        env:
+          MANUAL_BUMP: ${{ inputs.bump }}
         run: |
-          $version = node -p "require('./frontend/package.json').version"
+          $packageVersion = node -p "require('./frontend/package.json').version"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-          Push-Location frontend
-          npm run version:check
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Pop-Location
-
-          try {
-            $parsedVersion = [version]$version
-          } catch {
-            throw "frontend/package.json must contain a major.minor.patch release version; received $version"
-          }
 
           $releaseTagsJson = gh release list --exclude-drafts --exclude-pre-releases --limit 100 --repo '${{ github.repository }}' --json tagName
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -74,6 +76,26 @@ jobs:
           )
           $previousRelease = $stableReleases | Sort-Object Version -Descending | Select-Object -First 1
 
+          if ($null -ne $previousRelease) {
+            $parts = $previousRelease.Version.ToString().Split('.') | ForEach-Object { [int]$_ }
+            switch ($env:MANUAL_BUMP) {
+              'major' { $version = "$(1 + $parts[0]).0.0" }
+              'minor' { $version = "$($parts[0]).$(1 + $parts[1]).0" }
+              'patch' { $version = "$($parts[0]).$($parts[1]).$(1 + $parts[2])" }
+              'none' { $version = $packageVersion }
+              default { throw "Unsupported version bump: $env:MANUAL_BUMP" }
+            }
+          } else {
+            $version = $packageVersion
+          }
+
+          Push-Location frontend
+          npm version $version --no-git-tag-version --allow-same-version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run version:sync
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Pop-Location
+
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           "previous_tag=$($previousRelease.Tag)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
@@ -81,13 +103,8 @@ jobs:
             "published=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
             Write-Host "Version $version is already published; nothing to do."
           } else {
-            if ($null -ne $previousRelease) {
-              if ($parsedVersion -le $previousRelease.Version) {
-                throw "Committed version $version must be greater than latest published version $($previousRelease.Version)."
-              }
-            }
             "published=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-            Write-Host "Preparing committed source version $version."
+            Write-Host "Preparing version $version. Version metadata changes remain local to this build."
           }
           exit 0
 
@@ -215,7 +232,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          git add frontend/package.json frontend/package-lock.json frontend/src/features/settings/SettingsPage.tsx README.md docs/index.html
+          git add frontend/package.json frontend/package-lock.json README.md docs/index.html
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git fetch --tags origin
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
