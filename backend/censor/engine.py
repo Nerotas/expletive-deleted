@@ -354,7 +354,9 @@ class ProfanityCensor:
     def get_output_file(self, base_name: str = None) -> str:
         """Get output filename with appropriate extension."""
         if base_name is None:
-            base_name = os.path.basename(self.input_file)
+            base_name = Path(self.input_file).stem
+        else:
+            base_name = Path(base_name).stem
 
         if self.is_audio_only():
             return f"{base_name}-censored.mp3"

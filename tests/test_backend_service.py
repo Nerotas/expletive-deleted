@@ -49,7 +49,7 @@ class BackendServiceTests(unittest.TestCase):
             def submit():
                 submitting.set()
                 return service.submit_job(source, 'report_only')
-            output = service.settings.directories.output / 'original.mp4-censored.mkv'
+            output = service.settings.directories.output / 'original-censored.mkv'
             output.write_bytes(b'output')
             provenance(source, output)
             item = LibraryItem(source, 'finished', datetime.now(timezone.utc), output=output)
@@ -333,7 +333,7 @@ class BackendServiceTests(unittest.TestCase):
             service = BackendService(self.create_store(root), manager_factory=StubManager)
             source = service.settings.directories.input / "movie.mkv"
             source.write_bytes(b"source")
-            output = service.settings.directories.output / "movie.mkv-censored.mkv"
+            output = service.settings.directories.output / "movie-censored.mkv"
             output.write_bytes(b"output")
             provenance(source, output)
             active = JobRecord("active-job", source, "censor", "transcribing", 25.0)
@@ -364,7 +364,7 @@ class BackendServiceTests(unittest.TestCase):
                         source.write_bytes(b"original")
                         other = service.settings.directories.input / "other.mkv"
                         other.write_bytes(b"other original")
-                        artifact = (service.settings.directories.output / "movie.mkv-censored.mkv"
+                        artifact = (service.settings.directories.output / "movie-censored.mkv"
                                     if library_status == "finished" else
                                     service.settings.directories.transcripts / "movie.mkv-transcript.json")
                         artifact.write_bytes(b"{}")
@@ -412,7 +412,7 @@ class BackendServiceTests(unittest.TestCase):
             archived.parent.mkdir()
             archived.write_bytes(b"original")
             destination = root / "Ready" / "nested" / "movie.mkv"
-            output = root / "Finished" / "nested" / "movie.mkv-censored.mkv"
+            output = root / "Finished" / "nested" / "movie-censored.mkv"
             output.parent.mkdir()
             output.write_bytes(b"censored")
             provenance(archived, output)

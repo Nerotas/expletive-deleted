@@ -64,6 +64,7 @@ class BatchLifecycleTests(unittest.TestCase):
                 )
 
             self.assertEqual(result[0], "ok")
+            self.assertEqual(destination.name, "movie-censored.mkv")
             self.assertTrue(destination.is_file())
             self.assertFalse(source.exists())
             self.assertTrue((paths.processed / source.name).is_file())

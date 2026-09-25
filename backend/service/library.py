@@ -10,7 +10,7 @@ import subprocess
 from typing import Literal
 
 from backend.censor import transcript_cache_is_compatible
-from backend.jobs.media import MEDIA_EXTENSIONS, output_path, transcript_path, legacy_transcript_path, legacy_output_path
+from backend.jobs.media import MEDIA_EXTENSIONS, output_path, output_paths, transcript_path, legacy_transcript_path
 from backend.media_identity import read_record, valid_provenance, provenance_path
 from backend.runtime import find_ffprobe
 from backend.settings import AppSettings
@@ -90,6 +90,11 @@ def scan_library(
 
     items: list[LibraryItem] = []
     current_duration_keys: set[tuple[str, int, int, str]] = set()
+    output_counts: dict[Path, int] = {}
+    for source in sources:
+        destination = output_path(source, paths.finished, paths.ready)
+        output_counts[destination] = output_counts.get(destination, 0) + 1
+    ambiguous_outputs = {path for path, count in output_counts.items() if count > 1}
     for source in sources:
         source_stat = source.stat()
         date_added = datetime.fromtimestamp(source_stat.st_ctime, tz=timezone.utc)
@@ -102,30 +107,40 @@ def scan_library(
             if duration_cache is not None:
                 duration_cache[duration_key] = duration_seconds
         transcript = transcript_path(source, paths.transcripts, paths.ready)
-        output = output_path(source, paths.finished, paths.ready)
+        output, legacy_output = output_paths(source, paths.finished, paths.ready)
         settings.directories.binding(paths.transcripts).target(transcript)
-        settings.directories.binding(paths.finished).target(output)
         legacy_transcript = legacy_transcript_path(source, paths.transcripts, paths.ready)
-        legacy_output = legacy_output_path(source, paths.finished, paths.ready)
         settings.directories.binding(paths.transcripts).target(legacy_transcript)
-        settings.directories.binding(paths.finished).target(legacy_output)
-        sidecar = provenance_path(output)
-        settings.directories.binding(paths.finished).target(sidecar)
-        try:
-            metadata = read_record(sidecar) if sidecar.is_file() else {}
-            # Polling reads recorded metadata only; equal size never proves matching contents.
-            recorded_output = (valid_provenance(metadata)
-                               and metadata["source_identity"]["size_bytes"] == source.stat().st_size)
-        except (OSError, ValueError, RuntimeError):
-            recorded_output = False
-        if output.is_file() and recorded_output:
+        for candidate in (output, legacy_output):
+            settings.directories.binding(paths.finished).target(candidate)
+            settings.directories.binding(paths.finished).target(provenance_path(candidate))
+        verified_output = None
+        for candidate in (output, legacy_output):
+            if candidate == output and output in ambiguous_outputs:
+                continue
+            sidecar = provenance_path(candidate)
+            try:
+                metadata = read_record(sidecar) if sidecar.is_file() else {}
+                # Polling reads recorded metadata only; equal size never proves matching contents.
+                recorded_output = (valid_provenance(metadata)
+                                   and metadata["source_identity"]["size_bytes"] == source_stat.st_size)
+            except (OSError, ValueError, RuntimeError):
+                recorded_output = False
+            if candidate.is_file() and recorded_output:
+                verified_output = candidate
+                break
+        associated_output = next((
+            candidate for candidate in (output, legacy_output)
+            if candidate.is_file() and not (candidate == output and output in ambiguous_outputs)
+        ), None)
+        if verified_output:
             items.append(
                 LibraryItem(
                     source=source,
                     status="finished",
                     date_added=date_added,
                     transcript=transcript if transcript.is_file() else None,
-                    output=output,
+                    output=verified_output,
                     duration_seconds=duration_seconds,
                 )
             )
@@ -137,7 +152,7 @@ def scan_library(
             settings.whisper.model,
         ):
             items.append(LibraryItem(source, "transcribed", date_added, transcript=transcript,
-                                     output=output if output.is_file() else None,
+                                     output=associated_output,
                                      duration_seconds=duration_seconds))
         else:
             has_artifacts = any(path.exists() for path in (transcript, output, legacy_transcript, legacy_output))

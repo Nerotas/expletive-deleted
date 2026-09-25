@@ -16,7 +16,13 @@ from backend.settings.directories import bind_directories
 from backend.filesystem.paths import version
 
 from .events import JobEvent
-from .media import MEDIA_EXTENSIONS, output_path, relative_media_path
+from .media import (
+    MEDIA_EXTENSIONS,
+    conflicting_output_source,
+    output_path,
+    output_paths,
+    relative_media_path,
+)
 from .models import (
     JobError,
     JobMode,
@@ -116,9 +122,25 @@ class JobManager:
                 "invalid_mode",
                 "Output replacement can only be requested for a censor job",
             )
-        destination = output_path(source, self.settings.directories.output, self.settings.directories.input) if selected_mode == 'censor' else None
+        destinations = output_paths(source, self.settings.directories.output, self.settings.directories.input) if selected_mode == 'censor' else ()
+        destination = destinations[0] if destinations else None
         if destination:
-            self.settings.directories.binding(self.settings.directories.output).target(destination)
+            output_root = self.settings.directories.binding(self.settings.directories.output)
+            for candidate in destinations:
+                output_root.target(candidate)
+            try:
+                conflict = conflicting_output_source(
+                    source,
+                    self.settings.directories.output,
+                    self.settings.directories.input,
+                )
+            except OSError as exc:
+                raise JobSubmissionError("unavailable", f"Could not check output naming conflicts: {exc}") from exc
+            if conflict:
+                raise JobSubmissionError(
+                    "existing_output",
+                    f"{source.name} and {conflict.name} would both create {destination.name}. Rename one source before censoring.",
+                )
         job = JobRecord(
             uuid4().hex,
             source,
@@ -148,11 +170,9 @@ class JobManager:
                         "existing_output",
                         f"A file named {source.name} is already in Ready",
                     )
-            elif selected_mode == "censor" and not overwrite_output and output_path(
-                source,
-                self.settings.directories.output,
-                self.settings.directories.input,
-            ).exists():
+            elif selected_mode == "censor" and not overwrite_output and any(
+                candidate.exists() for candidate in destinations
+            ):
                 raise JobSubmissionError(
                     "existing_output",
                     f"Output already exists for {source.name}",
@@ -271,7 +291,12 @@ class JobManager:
             and not self._closing
             and current.mode == "report_only"
             and (self.settings.processing.auto_censor_after_transcription or current.auto_censor_after_transcription)
-            and not output_path(current.source, self.settings.directories.output, self.settings.directories.input).exists()
+            and not any(candidate.exists() for candidate in output_paths(
+                current.source, self.settings.directories.output, self.settings.directories.input,
+            ))
+            and conflicting_output_source(
+                current.source, self.settings.directories.output, self.settings.directories.input,
+            ) is None
         ):
             self.submit(current.source, "censor")
         return updated
