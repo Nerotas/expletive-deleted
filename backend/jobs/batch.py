@@ -30,7 +30,15 @@ from backend.settings import (
     load_effective_settings,
 )
 
-from .media import MEDIA_EXTENSIONS, archive_path, output_path, transcript_path, legacy_output_path
+from .media import (
+    MEDIA_EXTENSIONS,
+    archive_path,
+    conflicting_output_source,
+    legacy_output_path,
+    output_path,
+    output_paths,
+    transcript_path,
+)
 
 
 def format_seconds(seconds: float) -> str:
@@ -99,16 +107,29 @@ def process_file(
 ) -> tuple[str, set[str], bool, int]:
     started = time.perf_counter()
     destination = output_path(input_file, paths.finished, paths.ready)
+    existing_output = next((candidate for candidate in output_paths(
+        input_file, paths.finished, paths.ready,
+    ) if candidate.exists()), None)
     transcript = transcript_path(input_file, paths.transcripts, paths.ready)
     print(f"\n[FILE {index}/{total}] {input_file.name}")
     if report_only:
         print(f"[FILE {index}/{total}] Mode: report-only")
     else:
         print(f"[FILE {index}/{total}] Target: {destination.name}")
-    if not report_only and destination.exists() and not overwrite:
-        print(f"[SKIP] Output already exists: {destination.name}")
+    if not report_only and existing_output and not overwrite:
+        print(f"[SKIP] Output already exists: {existing_output.name}")
         print(f"[FILE {index}/{total}] Elapsed: {format_seconds(time.perf_counter() - started)}")
         return "skip", set(), False, 0
+
+    if not report_only:
+        try:
+            conflict = conflicting_output_source(input_file, paths.finished, paths.ready)
+        except OSError as exc:
+            print(f"[FAILED] Could not check output naming conflicts: {exc}")
+            return "fail", set(), False, 0
+        if conflict:
+            print(f"[FAILED] {input_file.name} and {conflict.name} would both create {destination.name}. Rename one source before censoring.")
+            return "fail", set(), False, 0
 
     if report_only:
         print(f"[REPORT] {input_file.name}")
@@ -116,6 +137,8 @@ def process_file(
         print(f"[PROCESS] {input_file.name} (including undiscovered vendor-list matches)")
     elif overwrite and destination.exists():
         print(f"[PROCESS] {input_file.name} (overwriting {destination.name})")
+    elif overwrite and existing_output:
+        print(f"[PROCESS] {input_file.name} (previous output preserved as {existing_output.name})")
     else:
         print(f"[PROCESS] {input_file.name}")
 

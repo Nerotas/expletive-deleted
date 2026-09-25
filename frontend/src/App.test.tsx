@@ -195,7 +195,7 @@ describe('desktop application renderer', () => {
       speech_model: 'ready',
     })
     vi.mocked(desktopClient.listLibrary).mockResolvedValueOnce([{
-      source: 'C:\\Media\\Ready\\movie.mp4', status: 'ready', date_added: '', transcript: null, output: null,
+      source: 'C:\\Media\\Ready\\movie.mp4', status: 'ready', date_added: '', transcript: null, output: null, duration_seconds: null,
     }])
     renderApp('/')
 
@@ -657,6 +657,7 @@ describe('desktop application renderer', () => {
       date_added: '2026-09-01T12:00:00Z',
       transcript: null,
       output: null,
+      duration_seconds: null,
     }])
     const user = userEvent.setup()
     renderApp('/')
@@ -782,6 +783,7 @@ describe('desktop application renderer', () => {
       date_added: '2026-09-01T12:00:00Z',
       transcript: 'C:\\Media\\Transcripts\\movie-transcript.json',
       output: 'C:\\Media\\Finished\\movie-censored.mkv',
+      duration_seconds: null,
     }])
     const user = userEvent.setup()
     renderApp('/')
@@ -811,6 +813,7 @@ describe('desktop application renderer', () => {
       date_added: '2026-09-01T12:00:00Z',
       transcript: 'C:\\Media\\Transcripts\\movie-transcript.json',
       output: 'C:\\Media\\Finished\\movie-censored.mkv',
+      duration_seconds: null,
     }])
     vi.mocked(desktopClient.getReview).mockResolvedValueOnce({
       source,
@@ -836,8 +839,8 @@ describe('desktop application renderer', () => {
     const alpha = 'C:\\Media\\Ready\\alpha.mkv'
     const zulu = 'C:\\Media\\Ready\\zulu.mkv'
     vi.mocked(desktopClient.listLibrary).mockResolvedValue([
-      { source: zulu, status: 'ready', date_added: '2026-09-02T12:00:00Z', transcript: null, output: null },
-      { source: alpha, status: 'ready', date_added: '2026-09-01T12:00:00Z', transcript: null, output: null },
+      { source: zulu, status: 'ready', date_added: '2026-09-02T12:00:00Z', transcript: null, output: null, duration_seconds: null },
+      { source: alpha, status: 'ready', date_added: '2026-09-01T12:00:00Z', transcript: null, output: null, duration_seconds: null },
     ])
     vi.mocked(desktopClient.submitJobs).mockResolvedValueOnce([
       {
@@ -867,6 +870,7 @@ describe('desktop application renderer', () => {
       date_added: '2026-09-01T12:00:00Z',
       transcript: 'C:\\Media\\Transcripts\\movie-transcript.json',
       output: null,
+      duration_seconds: null,
     }])
     vi.mocked(desktopClient.submitJobs).mockResolvedValueOnce([{
       source,
@@ -891,6 +895,7 @@ describe('desktop application renderer', () => {
       date_added: '2026-09-01T12:00:00Z',
       transcript: 'C:\\Media\\Transcripts\\movie-transcript.json',
       output: null,
+      duration_seconds: null,
     }])
     vi.mocked(desktopClient.submitJob).mockResolvedValue({
       id: 'censor-job', source, mode: 'censor', status: 'queued', progress_percent: 0, error: null,
@@ -908,9 +913,9 @@ describe('desktop application renderer', () => {
     const first = 'C:\\Media\\Ready\\first.mkv'
     const second = 'C:\\Media\\Ready\\second.mkv'
     vi.mocked(desktopClient.listLibrary).mockResolvedValue([
-      { source: second, status: 'ready', date_added: '2026-09-03T12:00:00Z', transcript: null, output: null },
-      { source: active, status: 'ready', date_added: '2026-09-02T12:00:00Z', transcript: null, output: null },
-      { source: first, status: 'ready', date_added: '2026-09-01T12:00:00Z', transcript: null, output: null },
+      { source: second, status: 'ready', date_added: '2026-09-03T12:00:00Z', transcript: null, output: null, duration_seconds: null },
+      { source: active, status: 'ready', date_added: '2026-09-02T12:00:00Z', transcript: null, output: null, duration_seconds: null },
+      { source: first, status: 'ready', date_added: '2026-09-01T12:00:00Z', transcript: null, output: null, duration_seconds: null },
     ])
     vi.mocked(desktopClient.listJobs).mockResolvedValue([
       { id: 'active-job', source: active, mode: 'censor', status: 'transcribing', progress_percent: 20, error: null },
@@ -996,7 +1001,7 @@ describe('desktop application renderer', () => {
   it('shows completed YouTube media through its local Ready row', async () => {
     const source = 'C:\\Media\\Ready\\Example YouTube Video [dQw4w9WgXcQ].mp4'
     vi.mocked(desktopClient.listLibrary).mockResolvedValue([{
-      source, status: 'ready', date_added: '2026-09-01T12:00:00Z', transcript: null, output: null,
+      source, status: 'ready', date_added: '2026-09-01T12:00:00Z', transcript: null, output: null, duration_seconds: null,
     }])
     vi.mocked(desktopClient.listDownloads).mockResolvedValue([{
       id: 'youtube-job', source: 'https://youtu.be/dQw4w9WgXcQ', source_type: 'youtube',
@@ -1028,8 +1033,8 @@ describe('desktop application renderer', () => {
 
   it('sorts visible queue rows by file name', async () => {
     vi.mocked(desktopClient.listLibrary).mockResolvedValue([
-      { source: 'C:\\Media\\Ready\\zulu.mkv', status: 'ready', date_added: '2026-09-02T12:00:00Z', transcript: null, output: null },
-      { source: 'C:\\Media\\Ready\\alpha.mkv', status: 'ready', date_added: '2026-09-01T12:00:00Z', transcript: null, output: null },
+      { source: 'C:\\Media\\Ready\\zulu.mkv', status: 'ready', date_added: '2026-09-02T12:00:00Z', transcript: null, output: null, duration_seconds: null },
+      { source: 'C:\\Media\\Ready\\alpha.mkv', status: 'ready', date_added: '2026-09-01T12:00:00Z', transcript: null, output: null, duration_seconds: null },
     ])
     const user = userEvent.setup()
     renderApp('/')
@@ -1048,6 +1053,7 @@ describe('desktop application renderer', () => {
       vi.mocked(desktopClient.listLibrary).mockResolvedValue(sources.map((source, index) => ({
         source, status: index === 0 ? 'finished' : 'transcribed', date_added: '2026-09-01T12:00:00Z',
         transcript: 'C:/Media/Transcripts/movie.json', output: index === 0 ? 'C:/Media/Finished/movie.mkv' : null,
+        duration_seconds: null,
       })))
       vi.mocked(desktopClient.listJobs).mockResolvedValue([{
         id: 'unrelated', source: 'C:/Media/Ready/other.mkv', mode: 'censor', status, progress_percent: 25, error: null,
@@ -1071,7 +1077,7 @@ describe('desktop application renderer', () => {
     'disables Archive for its own %s job even with later terminal history', async (status) => {
       const source = 'C:/Media/Ready/movie.mkv'
       vi.mocked(desktopClient.listLibrary).mockResolvedValue([{
-        source, status: 'finished', date_added: '2026-09-01T12:00:00Z', transcript: null, output: 'C:/Media/Finished/movie.mkv',
+        source, status: 'finished', date_added: '2026-09-01T12:00:00Z', transcript: null, output: 'C:/Media/Finished/movie.mkv', duration_seconds: null,
       }])
       vi.mocked(desktopClient.listJobs).mockResolvedValue([
         { id: 'pending', source, mode: 'censor', status, progress_percent: 25, error: null },

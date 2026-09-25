@@ -2,6 +2,7 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from tests.media_fixtures import provenance
@@ -42,14 +43,14 @@ class LibraryScannerTests(unittest.TestCase):
             transcript.write_text("{}", encoding="utf-8")
             finished_transcript = settings.directories.transcripts / "Gamma.wav-transcript.json"
             finished_transcript.write_text("{}", encoding="utf-8")
-            output = settings.directories.output / "Gamma.wav-censored.mp3"
+            output = settings.directories.output / "Gamma-censored.mp3"
             output.write_bytes(b"output")
             provenance(finished_source, output)
 
             with patch(
                 "backend.service.library.transcript_cache_is_compatible",
                 side_effect=lambda _source, candidate, _ffprobe, *_profile: Path(candidate) == transcript,
-            ):
+            ), patch("backend.service.library._probe_duration", return_value=125.25):
                 items = scan_library(settings, ffprobe_bin="ffprobe")
 
         self.assertEqual([item.source.name for item in items], ["Alpha.mp4", "beta.mkv", "Gamma.wav"])
@@ -60,6 +61,42 @@ class LibraryScannerTests(unittest.TestCase):
         self.assertIsInstance(items[0].date_added, datetime)
         self.assertEqual(items[0].date_added.tzinfo, timezone.utc)
         self.assertEqual(items[0].to_dict()["date_added"], items[0].date_added.isoformat())
+        self.assertEqual(items[0].to_dict()["duration_seconds"], 125.25)
+
+    def test_scan_recognizes_the_previous_full_filename_output(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            settings = self.create_settings(Path(temporary_directory))
+            source = settings.directories.input / "movie.mp4"
+            source.write_bytes(b"source")
+            previous_output = settings.directories.output / "movie.mp4-censored.mkv"
+            previous_output.write_bytes(b"output")
+            provenance(source, previous_output)
+
+            with patch("backend.service.library._probe_duration", return_value=None):
+                item = scan_library(settings, ffprobe_bin="ffprobe")[0]
+
+        self.assertEqual(item.status, "finished")
+        self.assertEqual(item.output, previous_output)
+
+    def test_scan_caches_duration_until_the_source_changes(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            settings = self.create_settings(Path(temporary_directory))
+            source = settings.directories.input / "movie.mp4"
+            source.write_bytes(b"source")
+            cache = {}
+            completed = SimpleNamespace(returncode=0, stdout="3723.4\n")
+
+            with patch("backend.service.library.subprocess.run", return_value=completed) as run:
+                first = scan_library(settings, ffprobe_bin="ffprobe", duration_cache=cache)
+                second = scan_library(settings, ffprobe_bin="ffprobe", duration_cache=cache)
+                source.write_bytes(b"changed source")
+                third = scan_library(settings, ffprobe_bin="ffprobe", duration_cache=cache)
+
+        self.assertEqual(first[0].duration_seconds, 3723.4)
+        self.assertEqual(second[0].duration_seconds, 3723.4)
+        self.assertEqual(third[0].duration_seconds, 3723.4)
+        self.assertEqual(run.call_count, 2)
+        self.assertIn("file,pipe", run.call_args.args[0])
 
     def test_missing_input_directory_is_reported(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

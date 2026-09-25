@@ -20,6 +20,7 @@ export type LibraryItem = {
   date_added: string
   transcript: string | null
   output: string | null
+  duration_seconds: number | null
 }
 
 export type ArchiveItem = {

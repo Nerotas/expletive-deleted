@@ -9,7 +9,7 @@ import { selectQueueRows, type QueueRowModel, type QueueFilter, type QueueSort, 
 import { QueueRow } from './QueueRow'
 import type { QueueController } from './useQueue'
 
-type QueueColumn = 'file' | 'dateAdded' | 'status' | 'queue' | 'progress' | 'actions'
+type QueueColumn = 'file' | 'length' | 'dateAdded' | 'status' | 'queue' | 'progress' | 'actions'
 type DisplayRow = ReturnType<typeof selectQueueRows>['rows'][number]
 
 export function QueueView({
@@ -46,6 +46,7 @@ export function QueueView({
   const [sortDirection, setSortDirection] = useState<SortDirection>('ascending')
   const { columnWidths, startColumnResize, resizeColumnBy } = useColumnResize<QueueColumn>({
     file: '18vw',
+    length: '7vw',
     dateAdded: '11vw',
     status: '8vw',
     queue: '9vw',
@@ -202,16 +203,17 @@ export function QueueView({
         <colgroup>
           <col className="select-column" />
           <col style={{ width: columnWidths.file }} />
+          <col style={{ width: columnWidths.length }} />
           <col style={{ width: columnWidths.dateAdded }} />
           <col style={{ width: columnWidths.status }} />
           <col style={{ width: columnWidths.queue }} />
           <col style={{ width: columnWidths.progress }} />
           <col style={{ width: columnWidths.actions }} />
         </colgroup>
-        <thead><tr><th className="select-column"><span className="sr-only">Select</span></th>{sortHeader('name', 'File')}{sortHeader('dateAdded', 'Date added')}{sortHeader('status', 'Status')}{sortHeader('queue', 'Queue position')}<th className="resizable-header">Progress{resizeHandle('progress', 'Progress')}</th><th className="resizable-header">Actions{resizeHandle('actions', 'Actions')}</th></tr></thead>
+        <thead><tr><th className="select-column"><span className="sr-only">Select</span></th>{sortHeader('name', 'File')}<th className="resizable-header">Length{resizeHandle('length', 'Length')}</th>{sortHeader('dateAdded', 'Date added')}{sortHeader('status', 'Status')}{sortHeader('queue', 'Queue position')}<th className="resizable-header">Progress{resizeHandle('progress', 'Progress')}</th><th className="resizable-header">Actions{resizeHandle('actions', 'Actions')}</th></tr></thead>
         <tbody>
           {visibleRows.map(queueRow)}
-          {!queue.loading && !visibleRows.length && <tr><td colSpan={7}><div className="empty-state">
+          {!queue.loading && !visibleRows.length && <tr><td colSpan={8}><div className="empty-state">
             <Upload size={28} />
             <strong>{mergedRows.length ? `No ${filter} files` : 'Drop media here to add it'}</strong>
             <span>{mergedRows.length ? 'Choose another filter to see the rest of the queue.' : 'Files are copied to Ready; your originals stay where they are.'}</span>

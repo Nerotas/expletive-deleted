@@ -9,8 +9,8 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from tests.media_fixtures import provenance
-from backend.jobs.media import output_path
-from backend.media_identity import MediaIdentityError
+from backend.jobs.media import legacy_output_path, output_path
+from backend.media_identity import MediaIdentityError, provenance_path
 
 from backend.desktop.native_files import NativeFiles, NativeFileError
 from backend.filesystem.paths import PathSafetyError
@@ -65,6 +65,16 @@ class OutputAccessTests(unittest.TestCase):
         self.native.release(token)
         self.output.rename(self.output.with_suffix('.old'))
 
+    def test_previous_full_filename_output_remains_playable(self):
+        previous = legacy_output_path(self.source, self.settings.directories.output)
+        previous_sidecar = provenance_path(previous)
+        self.output.rename(previous)
+        provenance_path(self.output).rename(previous_sidecar)
+
+        token = self.prepare()
+        self.assertEqual(self.native.handle('native.output.check', {'token': token}), {'path': str(previous)})
+        self.native.release(token)
+
     def test_audio_and_archived_job_source(self):
         source = self.source.with_suffix('.wav')
         source.write_bytes(b'audio')
@@ -89,7 +99,7 @@ class OutputAccessTests(unittest.TestCase):
 
     def test_empty_missing_alias_and_failed_verification_release_leases(self):
         self.output.unlink()
-        with self.assertRaises(OSError): self.prepare()
+        with self.assertRaises(OutputAccessError): self.prepare()
         self.output.touch()
         with self.assertRaises((OutputAccessError, MediaIdentityError)): self.prepare()
         self.output.unlink()

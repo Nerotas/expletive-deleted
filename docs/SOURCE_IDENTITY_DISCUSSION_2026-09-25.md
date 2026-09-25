@@ -35,7 +35,7 @@ Record relationships when artifacts are created. The transcript and finished med
 | Transcript | Source SHA-256 and transcription model/settings |
 | Finished copy | Source SHA-256, hash of the transcript used, and censoring/output settings |
 
-New artifact names include the complete input filename: `movie.mp4-transcript.json`, `movie.mkv-transcript.json`, `movie.mp4-censored.mkv`, and `movie.mkv-censored.mkv`. Relative input folders are preserved. Names locate artifacts; hashes establish content identity. Existing legacy names remain untouched.
+Transcript names include the complete input filename: `movie.mp4-transcript.json` and `movie.mkv-transcript.json`. Censored output names omit the source container, such as `movie-censored.mkv`; prior full-filename outputs such as `movie.mp4-censored.mkv` remain recognized and are not renamed or deleted. Relative input folders are preserved. Because two same-stem source files in one folder would share an output name, censor submission rejects that collision until one source is renamed. Names locate artifacts; hashes establish content identity.
 
 Finished copies have a `<output filename>.provenance.json` companion with `schema_version: 1`, `source_identity`, `transcript_sha256`, `output_sha256`, and `processing`. The transcript and output hashes cover their exact complete bytes. Processing records include the model/library, censor method, padding, video/audio settings, include-undiscovered choice, and the censor/exclusion lists used. These records stay local. The transcript's own hash is stored in output provenance, avoiding self-reference.
 

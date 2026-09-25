@@ -10,6 +10,15 @@ export function formatEta(seconds: number): string {
   return minutes ? `${minutes}m ${total % 60}s` : `${total}s`
 }
 
+export function formatDuration(seconds: number): string {
+  const total = Math.max(0, Math.round(seconds))
+  const hours = Math.floor(total / 3600)
+  const minutes = Math.floor(total % 3600 / 60)
+  const remainingSeconds = total % 60
+  const clock = `${minutes.toString().padStart(hours ? 2 : 1, '0')}:${remainingSeconds.toString().padStart(2, '0')}`
+  return hours ? `${hours}:${clock}` : clock
+}
+
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   const units = ['KB', 'MB', 'GB', 'TB']

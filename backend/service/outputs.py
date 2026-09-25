@@ -9,7 +9,7 @@ from pathlib import Path
 
 from backend.filesystem.operations import locked_file
 from backend.filesystem.paths import PathSafetyError, reject_alias, validate_path
-from backend.jobs.media import MEDIA_EXTENSIONS, archive_path, output_path
+from backend.jobs.media import MEDIA_EXTENSIONS, archive_path, output_paths
 from backend.runtime import find_ffprobe
 from backend.media_identity import verified_source, verify_finished
 
@@ -54,16 +54,33 @@ def prepare_output(service, source: str, resources: ExitStack):
     if original.exists():
         source_root = directories.input if original == selected else directories.archive
         resources.enter_context(locked_file(directories.binding(source_root), original))
-    destination = output_path(selected, directories.output, directories.input)
     root = directories.binding(directories.output)
-    resources.enter_context(locked_file(root, destination))
-    canonical = root.target(destination)
     if original.exists():
-        reject_alias(original, canonical)
         source_identity = resources.enter_context(verified_source(original))
-        verify_finished(source_identity, canonical)
     else:
         raise OutputAccessError('The original is unavailable for identity verification. Open retained copies through Explorer.')
+    destination = None
+    canonical = None
+    verification_error = None
+    for candidate in output_paths(selected, directories.output, directories.input):
+        root.target(candidate)
+        if not candidate.is_file():
+            continue
+        try:
+            resources.enter_context(locked_file(root, candidate))
+            checked = root.target(candidate)
+            reject_alias(original, checked)
+            verify_finished(source_identity, checked)
+        except (OSError, ValueError, RuntimeError) as exc:
+            verification_error = exc
+            continue
+        destination = candidate
+        canonical = checked
+        break
+    if canonical is None or destination is None:
+        if verification_error:
+            raise verification_error
+        raise OutputAccessError('The censored output is unavailable. Recreate it before playing.')
     if canonical.suffix.lower() not in {'.mp3', '.mkv'} or canonical.stat().st_size == 0:
         raise OutputAccessError('The censored output is empty or unsupported. Recreate it before playing.')
     verify_playback(canonical, str(settings.runtime.ffprobe_path) if settings.runtime.ffprobe_path else find_ffprobe())

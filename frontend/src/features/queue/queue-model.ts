@@ -35,13 +35,14 @@ export function buildQueueRows(library: LibraryItem[], jobs: Job[], copyJobDates
         date_added: copyJobDates[job.id] ?? '',
         transcript: null,
         output: null,
+        duration_seconds: null,
       },
       job,
       pendingJob: job,
     }))
   mergedRows.push(...copyRows)
   mergedRows.push(...jobs.filter((job) => job.source_type === 'youtube' && job.status !== 'completed').map((job): QueueRowModel => ({
-    item: { source: job.source, status: 'ready', date_added: '', transcript: null, output: null },
+    item: { source: job.source, status: 'ready', date_added: '', transcript: null, output: null, duration_seconds: null },
     job,
     pendingJob: TERMINAL_STATUSES.has(job.status) ? undefined : job,
   })))

@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 from backend.censor.engine import ProfanityCensor
 from backend.filesystem.paths import RootBinding
 from backend.filesystem.publication import Publication
-from backend.jobs.media import output_path, transcript_path
+from backend.jobs.media import legacy_output_path, output_path, transcript_path
 from backend.media_identity import (
     MediaIdentityError, hash_stream, publish_output, provenance_path,
     require_identity, verified_source, verify_finished,
@@ -94,7 +94,7 @@ class MediaIdentityTests(unittest.TestCase):
         self.assertEqual(transcript.read_bytes(), original_transcript)
         self.assertEqual(self.source.read_bytes(), b"change")
 
-    def test_rename_keeps_identity_and_same_stem_extensions_have_distinct_names(self):
+    def test_rename_keeps_identity_and_output_names_omit_the_source_container(self):
         with verified_source(self.source) as before:
             pass
         relocated = self.root / "renamed.mp4"
@@ -103,7 +103,9 @@ class MediaIdentityTests(unittest.TestCase):
             self.assertEqual(before, after)
         other = self.source.with_suffix(".mp4")
         self.assertNotEqual(transcript_path(self.source, self.transcripts), transcript_path(other, self.transcripts))
-        self.assertNotEqual(output_path(self.source, self.root), output_path(other, self.root))
+        self.assertEqual(output_path(self.source, self.root).name, "film-censored.mkv")
+        self.assertEqual(output_path(self.source, self.root), output_path(other, self.root))
+        self.assertEqual(legacy_output_path(other, self.root).name, "film.mp4-censored.mkv")
 
     def test_source_is_pinned_until_processing_finishes(self):
         with verified_source(self.source):

@@ -7,7 +7,7 @@ from threading import Event
 from unittest.mock import MagicMock, patch
 
 from backend.jobs import JobManager, JobSubmissionError
-from backend.jobs.media import output_path
+from backend.jobs.media import legacy_output_path, output_path
 from tests.media_fixtures import provenance, identity
 from backend.settings import AppSettings, DirectorySettings
 
@@ -85,6 +85,38 @@ class FakeCensor:
 
 
 class JobManagerTests(unittest.TestCase):
+    def test_same_stem_video_sources_are_rejected_before_they_can_share_an_output(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            settings = self.create_settings(Path(temporary_directory))
+            source = settings.directories.input / "movie.mkv"
+            conflict = settings.directories.input / "movie.mp4"
+            source.write_bytes(b"original")
+            conflict.write_bytes(b"other")
+            manager = JobManager(settings, censor_factory=FakeCensor)
+            try:
+                with self.assertRaises(JobSubmissionError) as error:
+                    manager.submit(source, "censor")
+            finally:
+                manager.close()
+
+        self.assertEqual(error.exception.code, "existing_output")
+        self.assertIn("would both create movie-censored.mkv", error.exception.detail)
+
+    def test_previous_full_filename_output_blocks_an_unapproved_duplicate(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            settings = self.create_settings(Path(temporary_directory))
+            source = settings.directories.input / "movie.mkv"
+            source.write_bytes(b"original")
+            legacy_output_path(source, settings.directories.output, settings.directories.input).write_bytes(b"existing")
+            manager = JobManager(settings, censor_factory=FakeCensor)
+            try:
+                with self.assertRaises(JobSubmissionError) as error:
+                    manager.submit(source, "censor")
+            finally:
+                manager.close()
+
+        self.assertEqual(error.exception.code, "existing_output")
+
     def test_close_cancels_running_and_queued_jobs_without_publishing_partial_media(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             settings = self.create_settings(Path(temporary_directory))
@@ -267,6 +299,28 @@ class JobManagerTests(unittest.TestCase):
         self.assertEqual(completed.status, "transcribed")
         self.assertEqual(promoted.mode, "censor")
         self.assertEqual(promoted_result.status, "completed")
+
+    def test_same_stem_conflict_keeps_automatic_workflow_at_transcribed(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            settings = self.create_settings(Path(temporary_directory))
+            settings = replace(
+                settings,
+                processing=replace(settings.processing, auto_censor_after_transcription=True),
+            )
+            source = settings.directories.input / "movie.mkv"
+            conflict = settings.directories.input / "movie.mp4"
+            source.write_bytes(b"source")
+            conflict.write_bytes(b"other")
+            manager = JobManager(settings, censor_factory=FakeCensor)
+            try:
+                transcript = manager.submit(source, "report_only")
+                completed = manager.wait(transcript.id, timeout=2)
+                jobs = manager.list()
+            finally:
+                manager.close()
+
+        self.assertEqual(completed.status, "transcribed")
+        self.assertEqual(jobs, (completed,))
 
     def test_queued_job_can_be_cancelled_without_running(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

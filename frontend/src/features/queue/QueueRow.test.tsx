@@ -17,7 +17,7 @@ function row(item: LibraryItem) {
 
 describe('source identity in the Queue', () => {
   it('keeps legacy items out of bulk processing and requires explicit retranscription', () => {
-    const submit = row({ source: 'C:\\Ready\\film.mkv', status: 'unverified', date_added: '', transcript: null, output: null })
+    const submit = row({ source: 'C:\\Ready\\film.mkv', status: 'unverified', date_added: '', transcript: null, output: null, duration_seconds: null })
     expect(screen.getByText('Needs review')).toBeInTheDocument()
     expect(screen.getByRole('checkbox')).toBeDisabled()
     expect(screen.queryByRole('button', { name: 'Censor' })).not.toBeInTheDocument()
@@ -28,14 +28,19 @@ describe('source identity in the Queue', () => {
   })
 
   it('describes stored transcript state without claiming a fresh source verification', () => {
-    row({ source: 'C:\\Ready\\film.mkv', status: 'transcribed', date_added: '', transcript: 'record.json', output: null })
+    row({ source: 'C:\\Ready\\film.mkv', status: 'transcribed', date_added: '', transcript: 'record.json', output: null, duration_seconds: null })
     expect(screen.getByText('Transcript recorded; source checked when used')).toBeInTheDocument()
   })
 
   it('offers explicit output replacement after incomplete provenance publication', () => {
-    const submit = row({ source: 'C:\\Ready\\film.mkv', status: 'transcribed', date_added: '', transcript: 'record.json', output: 'finished.mkv' })
+    const submit = row({ source: 'C:\\Ready\\film.mkv', status: 'transcribed', date_added: '', transcript: 'record.json', output: 'finished.mkv', duration_seconds: null })
     expect(screen.queryByRole('button', { name: 'Play' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Recensor' }))
     expect(submit).toHaveBeenCalledWith('C:\\Ready\\film.mkv', 'censor', { overwrite_output: true })
+  })
+
+  it('shows the media length as a compact clock value', () => {
+    row({ source: 'C:\\Ready\\film.mkv', status: 'ready', date_added: '', transcript: null, output: null, duration_seconds: 3723 })
+    expect(screen.getByText('1:02:03')).toBeInTheDocument()
   })
 })
