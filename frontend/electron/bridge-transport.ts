@@ -45,6 +45,7 @@ export class BridgeTransport {
   }
 
   receive(chunk: Buffer): void {
+    // Pipe chunks may split both JSON lines and multibyte UTF-8 characters.
     this.buffer += this.decoder.write(chunk)
     let newline: number
     while ((newline = this.buffer.indexOf('\n')) >= 0) {
@@ -62,6 +63,8 @@ export class BridgeTransport {
       }
       const request = this.pending.get(response.id!)
       if (!request) continue // Timed-out replies can never settle another request.
+      // Validate before removing correlation so malformed replies reject their
+      // waiting caller instead of leaving an unresolved promise behind.
       if (response.ok === true && Object.hasOwn(response, 'result') && !Object.hasOwn(response, 'error')) {
         this.remove(response.id!)
         request.resolve(response.result)
