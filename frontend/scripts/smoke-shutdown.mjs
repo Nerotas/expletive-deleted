@@ -1,6 +1,7 @@
 import { copyFile, mkdir, mkdtemp, readFile, writeFile, access } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { _electron as electron } from 'playwright'
@@ -43,8 +44,13 @@ for (const hung of [false, true]) {
     const window = await app.firstWindow()
     await window.getByRole('heading', { name: 'Welcome to Expletive Deleted', exact: true }).waitFor()
     const source = path.join(root, 'Ready', 'movie.mkv')
-    await writeFile(source, 'original synthetic media')
-    await writeFile(path.join(root, 'Transcripts', 'movie-transcript.json'), '{}')
+    const contents = Buffer.from('original synthetic media')
+    await writeFile(source, contents)
+    // Use the current artifact contract so the job reaches the controllable encoder.
+    await writeFile(path.join(root, 'Transcripts', 'movie.mkv-transcript.json'), JSON.stringify({
+      text: '', words: [], audio_source: 'full_mix', whisper_library: 'faster-whisper', whisper_model: 'large-v3',
+      source_identity: { algorithm: 'sha256', digest: createHash('sha256').update(contents).digest('hex'), size_bytes: contents.length },
+    }))
     await window.evaluate((source) => window.expletiveDeleted.invoke('jobs.submit', { source, mode: 'censor' }), source)
     await waitForFile(path.join(root, 'started'))
     const exiting = new Promise((resolve) => app.process().once('exit', resolve))
@@ -53,7 +59,7 @@ for (const hung of [false, true]) {
     try { await exiting } finally { clearTimeout(timeout) }
     if (!hung) await access(path.join(root, 'cancelled'))
     if (await readFile(source, 'utf8') !== 'original synthetic media') throw new Error('Shutdown modified the source')
-    const finalExists = await access(path.join(root, 'Finished', 'movie-censored.mkv')).then(() => true, () => false)
+    const finalExists = await access(path.join(root, 'Finished', 'movie.mkv-censored.mkv')).then(() => true, () => false)
     if (finalExists) throw new Error('Shutdown published incomplete output')
     const childPid = Number(await readFile(path.join(root, 'child.pid'), 'utf8'))
     let alive = true
