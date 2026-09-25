@@ -1,6 +1,6 @@
 # High-priority issues and product decisions
 
-Decision date: 2026-09-17  
+Decision date: 2026-09-17
 Scope: Windows desktop application, Electron bridge, Python backend, and React frontend.
 
 ## Purpose and status
@@ -160,7 +160,7 @@ Sources: [frontend review, setup polling finding](FRONTEND_REVIEW_2026-09-16.md#
 
 **Problem:** onboarding holds a settings snapshot across steps. A later wizard save can overwrite newly verified component paths or other settings changed after that snapshot was captured.
 
-**Agreed behavior:**
+**Agreed behavior:**Let's plan without changes for now. How can we create a system to inform users of updates? The easiest method that I see is pinging latest releases to see if it matches the curretn version.
 
 - Save only the wizard's intended changes and onboarding progress.
 - Preserve newer settings outside those changes, including verified component paths.

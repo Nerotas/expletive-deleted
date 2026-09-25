@@ -14,7 +14,7 @@
 
 Expletive Deleted is a Windows desktop application that transcribes spoken language locally, finds words you have chosen to censor, and creates a separate censored copy with FFmpeg. It is designed for parents and media owners who want control over what their family hears without sending private media or transcripts to a cloud service.
 
-Version **1.0.1** is the current Windows release.
+Version **1.4.1** is the current Windows release.
 
 Expletive Deleted is free to use. [Ko-fi support](https://ko-fi.com/nicholaserotas) is optional and does not unlock features or priority service.
 
@@ -58,7 +58,7 @@ YouTube import is local and user-initiated. The app verifies or retrieves the ap
 
 ## Install on Windows
 
-1. Download `Expletive-Deleted-Setup-1.0.1-x64.exe` from the [latest release](https://github.com/Nerotas/expletive-deleted/releases/latest).
+1. Download `Expletive-Deleted-Setup-1.4.1-x64.exe` from the [latest release](https://github.com/Nerotas/expletive-deleted/releases/latest).
 2. Run the installer, then open **Expletive Deleted** from the Start menu or desktop shortcut.
 3. Complete the setup checklist. The installer includes the private Python bridge; the app guides you through retrieving pinned Python packages, FFmpeg/FFprobe, yt-dlp, Deno, and the Whisper model when needed.
 4. Complete the first-run walkthrough: Welcome, Get ready, Your settings, Add a file, Process safely, and Finish. It checks required components, prepares your dictionary, confirms folders and censoring preferences, and lets you choose the automatic local and YouTube workflows. It saves progress only when you choose **Save & Continue**.
@@ -153,9 +153,9 @@ npm run version:sync
 npm run version:check
 ```
 
-When application changes reach `main`, the [Release workflow](.github/workflows/release.yml) chooses the next patch version from the latest published release, synchronizes version metadata in the build runner, and runs backend, renderer, native, packaging, and installed-app checks. It then creates a local metadata commit, pushes only its tag, and publishes the Windows installer. The tagged source therefore matches the packaged version without writing the commit to protected `main`. After GitHub publishes the release, the [product-site workflow](.github/workflows/deploy-pages.yml) deploys the tagged `docs/` directory to GitHub Pages, so the displayed version and direct installer link match the release. Set GitHub Pages to **GitHub Actions** as its build source before relying on this deployment. Documentation and workflow-only changes do not trigger a release.
+Commit the synchronized version metadata through the normal protected-branch review process before starting the [Release workflow](.github/workflows/release.yml). The workflow verifies that every version reference matches `frontend/package.json` and that the committed version is newer than the latest stable release. It then runs backend, renderer, native, packaging, and installed-app checks, tags that exact `main` commit, and publishes the Windows installer. Generated release notes explicitly start at the immediately preceding stable release, so **What's Changed** contains only release-to-release changes. This keeps ordinary checkouts, tagged source, the packaged application, documentation, and download links on one version.
 
-If an application pull request deliberately raises `frontend/package.json` above the latest published version, that version is used. Manual workflow runs may choose `patch`, `minor`, `major`, or `none`.
+After GitHub publishes the release, the [product-site workflow](.github/workflows/deploy-pages.yml) deploys the tagged `docs/` directory to GitHub Pages. Set GitHub Pages to **GitHub Actions** as its build source before relying on this deployment.
 
 Repository Actions must have **Read and write permissions** so the workflow can push the release tag and create the GitHub Release. It never pushes commits to protected `main` or creates a release pull request. A failed validation does not tag or publish the release.
 

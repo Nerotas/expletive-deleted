@@ -2,17 +2,6 @@ name: Release
 
 on:
   workflow_dispatch:
-    inputs:
-      bump:
-        description: Version increment for a manual release
-        required: true
-        default: patch
-        type: choice
-        options:
-          - patch
-          - minor
-          - major
-          - none
 
 permissions:
   contents: write
@@ -25,10 +14,11 @@ concurrency:
 
 jobs:
   release:
-    name: Version, validate, and publish
+    name: Validate and publish
     outputs:
       version: ${{ steps.version.outputs.version }}
       published: ${{ steps.version.outputs.published }}
+      previous_tag: ${{ steps.version.outputs.previous_tag }}
     runs-on: windows-latest
     timeout-minutes: 120
     env:
@@ -50,57 +40,54 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Choose release version
+      - name: Validate release version
         id: version
         shell: pwsh
-        env:
-          MANUAL_BUMP: ${{ inputs.bump }}
         run: |
-          $packageVersion = node -p "require('./frontend/package.json').version"
+          $version = node -p "require('./frontend/package.json').version"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          Push-Location frontend
+          npm run version:check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Pop-Location
+
+          try {
+            $parsedVersion = [version]$version
+          } catch {
+            throw "frontend/package.json must contain a major.minor.patch release version; received $version"
+          }
 
           $releaseTagsJson = gh release list --exclude-drafts --exclude-pre-releases --limit 100 --repo '${{ github.repository }}' --json tagName
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $releaseTags = @($releaseTagsJson | ConvertFrom-Json | ForEach-Object { $_.tagName })
-          $latestTag = $releaseTags | Select-Object -First 1
-          $hasPublishedRelease = -not [string]::IsNullOrWhiteSpace($latestTag)
 
-          if ($hasPublishedRelease) {
-            $latestVersion = $latestTag.TrimStart('v')
-            $bump = if ('${{ github.event_name }}' -eq 'push') { 'patch' } else { $env:MANUAL_BUMP }
-
-            if ('${{ github.event_name }}' -eq 'push' -and [version]$packageVersion -gt [version]$latestVersion) {
-              $version = $packageVersion
-            } elseif ($bump -eq 'none') {
-              $version = $packageVersion
-            } else {
-              $parts = $latestVersion.Split('.') | ForEach-Object { [int]$_ }
-              switch ($bump) {
-                'major' { $version = "$(1 + $parts[0]).0.0" }
-                'minor' { $version = "$($parts[0]).$(1 + $parts[1]).0" }
-                'patch' { $version = "$($parts[0]).$($parts[1]).$(1 + $parts[2])" }
-                default { throw "Unsupported version bump: $bump" }
+          $stableReleases = @(
+            $releaseTags |
+              Where-Object { $_ -match '^v\d+\.\d+\.\d+$' } |
+              ForEach-Object {
+                [PSCustomObject]@{
+                  Tag = $_
+                  Version = [version]$_.Substring(1)
+                }
               }
-            }
-          } else {
-            $version = $packageVersion
-          }
-
-          Push-Location frontend
-          npm version $version --no-git-tag-version --allow-same-version
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          npm run version:sync
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Pop-Location
+          )
+          $previousRelease = $stableReleases | Sort-Object Version -Descending | Select-Object -First 1
 
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "previous_tag=$($previousRelease.Tag)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
           if ($releaseTags -contains "v$version") {
             "published=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
             Write-Host "Version $version is already published; nothing to do."
           } else {
+            if ($null -ne $previousRelease) {
+              if ($parsedVersion -le $previousRelease.Version) {
+                throw "Committed version $version must be greater than latest published version $($previousRelease.Version)."
+              }
+            }
             "published=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-            Write-Host "Preparing version $version. Version metadata changes remain local to this build."
+            Write-Host "Preparing committed source version $version."
           }
           exit 0
 
@@ -260,9 +247,16 @@ jobs:
         shell: pwsh
         run: |
           $version = '${{ steps.version.outputs.version }}'
+          $previousTag = '${{ steps.version.outputs.previous_tag }}'
           $installer = "frontend/release/Expletive-Deleted-Setup-$version-x64.exe"
           if (-not (Test-Path $installer)) { throw "Installer was not created: $installer" }
-          gh release create "v$version" $installer --verify-tag --generate-notes --title "Expletive Deleted $version"
+          $notesArguments = @('--generate-notes')
+          if (-not [string]::IsNullOrWhiteSpace($previousTag)) {
+            # Older release tags may be sibling commits, so select the baseline explicitly.
+            $notesArguments += @('--notes-start-tag', $previousTag)
+          }
+          gh release create "v$version" $installer --verify-tag @notesArguments --title "Expletive Deleted $version"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
   deploy-product-site:
     name: Deploy released product site
