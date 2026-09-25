@@ -241,7 +241,7 @@ export type InstallStatus = {
   action_id: string | null
   action_index: number | null
   action_count: number | null
-  phase: 'starting' | 'running' | 'verifying' | 'completed' | 'cancelled' | null
+  phase: 'starting' | 'running' | 'verifying' | 'completed' | 'cancelled' | 'awaiting_resolution' | 'resolving' | null
   message: string
   completed_bytes: number | null
   total_bytes: number | null

@@ -70,8 +70,10 @@ main { max-width: 1480px; margin: 0 auto; padding: 28px 34px 56px; }
 .setup-progress-metrics { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 8px; font-size: 13px; }
 .setup-progress-meta { display: grid; gap: 4px; margin-top: 14px; color: var(--muted); font-size: 12px; line-height: 1.4; }
 .setup-progress-meta span { display: block; }
+.setup-progress { max-height: calc(100vh - 48px); overflow: auto; }
+.setup-progress-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .spin { animation: spin .9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes page-in { from { opacity: 0; transform: translateY(4px); } }
-@media (max-width: 1050px) { .setup-band { grid-template-columns: 1fr; } .app-header { grid-template-columns: 1fr auto; } .runtime-pill { display: none; } .top-nav { justify-self: end; } }
+@media (max-width: 1050px) { .setup-band { grid-template-columns: 1fr; } .app-header { grid-template-columns: minmax(200px, 1fr) auto minmax(200px, 1fr); padding: 0 16px; gap: 12px; } .runtime-pill { max-width: 240px; } .top-nav a { padding: 0 12px; } }
 @media (max-width: 760px) { main { padding: 20px 14px 40px; } .app-header { padding: 0 14px; } .brand-lockup small { display: none; } .top-nav a { padding: 0 11px; } .page-heading { align-items: flex-start; gap: 16px; } }

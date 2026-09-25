@@ -79,3 +79,11 @@ Electron uses the `com.expletive-deleted.desktop` Windows AppUserModelID, privat
 `settings.get` returns `{ settings, revision }`. Normal Settings submits a complete draft with its baseline; onboarding submits intended field changes. Both use the shared backend transaction and `SettingsConflictDialog`, retaining drafts while a choice is pending. Setup uses `awaiting_resolution` and `dependencies.resolve_conflict`; retries verify retained files and never approve another installation. All wire operations live in `src/services/desktop-client.ts`.
 
 `npm run smoke:state` runs real Electron/backend settings races, wizard preservation, repeated resolution without installation replay, and CLI ownership checks. Its offline fixture replaces component verification/downloads only; no test installs processing components. Screenshots cover both themes at 1060?720 and 1440?940.
+
+## Setup connection and recovery
+
+`installation-connection.ts` owns serial status reads, monotonic deadlines, 1/2/4/8-second backoff and stale-response rejection. `useInstallStatus` binds observer lifetime to the current operation. Connection state remains separate from `InstallStatus`, including `awaiting_resolution`.
+
+The main-process `BridgeTransport` removes timed-out requests and ignores late replies. Status reads are bounded to two seconds. The preload exposes a sanitized backend-state subscription with an unsubscribe function and generation ID. The typed client unwraps structured responses in the renderer because Electron strips custom properties from errors crossing `contextBridge`. No mutation is automatically replayed. Approved-token lookup recovers a lost start acknowledgement, and Python dispatch reserves the input/control path for quick setup state reads, cancellation flags and worker scheduling.
+
+After building, run `npm run smoke:recovery`. Its offline fixture drops acknowledgements and status replies, occupies normal workers, and exits the backend. It tests a real 30-second silence window, explicit restart, retained synthetic downloads, fresh approval, keyboard access and live-region feedback. Screenshots cover light/dark at 1060x720 and 1440x940. CI, release and both local validation scripts enforce this gate. The test harness records relaunch and lets Playwright launch the replacement process; production uses Electron relaunch with bounded shutdown.

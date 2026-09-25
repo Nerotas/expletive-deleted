@@ -29,6 +29,14 @@ from backend.runtime.dependency_models import InstallPlan, InstallProgress
 from backend.settings.transactions import SettingsSnapshot
 
 
+class SetupBusyError(ServiceBusyError):
+    code = "setup_busy"
+
+
+class UnknownInstallError(ValueError):
+    code = "install_unknown"
+
+
 @dataclass(frozen=True)
 class VerificationContext:
     baseline_json: str
@@ -204,7 +212,7 @@ class InstallationController:
                     if existing["status"] in {"running", "canceling", "awaiting_resolution", "resolving"}:
                         components = {action.component for action in plan.actions}
                         if components.intersection(existing.get("components", set())):
-                            raise ServiceBusyError("Another setup operation for this component needs attention")
+                            raise SetupBusyError("Another setup operation for this component needs attention")
                 install_id = uuid.uuid4().hex
                 started_at = datetime.now(timezone.utc).isoformat()
                 state = {
@@ -235,10 +243,17 @@ class InstallationController:
                     self._plan_contexts[plan_id].cache_dir,
                 )
                 return snapshot
+        if method == "dependencies.active":
+            # Look up the approved token, including terminal outcomes, after a
+            # lost start acknowledgement. This operation never starts work.
+            with self._install_lock:
+                plan_id = params.get("plan_id")
+                return next((self._serialize_install_state(key) for key, state in reversed(self._install_jobs.items())
+                             if state.get("plan_id") == plan_id), None)
         if method == "dependencies.status":
             install_id = params["install_id"]
             if install_id not in self._install_jobs:
-                raise ValueError("Dependency install is unknown or expired")
+                raise UnknownInstallError("Dependency install is unknown or expired")
             return self._serialize_install_state(install_id)
         if method == "dependencies.cancel":
             install_id = params["install_id"]

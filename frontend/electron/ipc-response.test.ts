@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { unwrapInvokeResponse } from './ipc-response.js'
+import { unwrapInvokeResponse, type InvokeResponse } from './ipc-response.js'
 
 describe('IPC response handling', () => {
+  it.each([null, {}, { result: true, error: { message: 'conflicting' } }, { error: {} }])('rejects malformed native envelopes: %j', (response) => {
+    expect(() => unwrapInvokeResponse(response as InvokeResponse<unknown>)).toThrow(expect.objectContaining({ code: 'protocol_error' }))
+  })
   it('preserves a structured backend error code', () => {
     try {
       unwrapInvokeResponse({

@@ -8,7 +8,7 @@ const rendererMethods = new Set([
   'jobs.events', 'jobs.cancel', 'downloads.list', 'downloads.submit', 'downloads.events', 'downloads.cancel',
   'dictionary.info', 'dictionary.exclusions', 'dictionary.censored', 'dictionary.discovered',
   'dictionary.add', 'dictionary.remove', 'dictionary.restore_defaults', 'reviews.list',
-  'dependencies.resolve_conflict', 'dependencies.plan', 'dependencies.install', 'dependencies.status', 'dependencies.cancel',
+  'dependencies.resolve_conflict', 'dependencies.plan', 'dependencies.install', 'dependencies.status', 'dependencies.active', 'dependencies.cancel',
   'dependencies.inspect_ffmpeg', 'dependencies.locate_ffmpeg', 'dependencies.locate_model', 'dependencies.locate_ytdlp',
 ])
 

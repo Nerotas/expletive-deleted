@@ -151,6 +151,6 @@ th,
   }
 
   .runtime-pill {
-    display: none;
+    display: flex;
   }
 }
