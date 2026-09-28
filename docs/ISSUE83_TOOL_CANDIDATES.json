@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "status": "candidate; not approved for release",
+  "platform": "win32-x64",
+  "assets": [
+    {
+      "repository": "actions/python-versions",
+      "tag": "3.13.15-31064747964",
+      "name": "python-3.13.15-win32-x64.zip",
+      "url": "https://github.com/actions/python-versions/releases/download/3.13.15-31064747964/python-3.13.15-win32-x64.zip",
+      "size": 29163819,
+      "publisher_digest": "sha256:73c2a2935597f8181e9bc60bc3a35cd2be28698d8f64b965055a29b43425a2b7",
+      "downloaded_sha256": "73c2a2935597f8181e9bc60bc3a35cd2be28698d8f64b965055a29b43425a2b7"
+    },
+    {
+      "repository": "BtbN/FFmpeg-Builds",
+      "tag": "autobuild-2026-09-27-13-04",
+      "name": "ffmpeg-n9.0.2-12-gc867e13549-win64-gpl-9.0.zip",
+      "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-27-13-04/ffmpeg-n9.0.2-12-gc867e13549-win64-gpl-9.0.zip",
+      "size": 194034059,
+      "publisher_digest": "sha256:c9b6fe2a66923907eea3cf60f069a4136b956154a287bf2acfe98e4e875d4ef0",
+      "downloaded_sha256": "c9b6fe2a66923907eea3cf60f069a4136b956154a287bf2acfe98e4e875d4ef0"
+    },
+    {
+      "repository": "yt-dlp/yt-dlp",
+      "tag": "2026.08.19",
+      "name": "yt-dlp.exe",
+      "url": "https://github.com/yt-dlp/yt-dlp/releases/download/2026.08.19/yt-dlp.exe",
+      "size": 17840399,
+      "publisher_digest": "sha256:66674953fe251b89f4d08c5f0e35e0728679bd67ab3d7d05c0562af101dd3e7a",
+      "downloaded_sha256": "66674953fe251b89f4d08c5f0e35e0728679bd67ab3d7d05c0562af101dd3e7a"
+    },
+    {
+      "repository": "yt-dlp/yt-dlp",
+      "tag": "2026.08.19",
+      "name": "yt-dlp.tar.gz",
+      "url": "https://github.com/yt-dlp/yt-dlp/releases/download/2026.08.19/yt-dlp.tar.gz",
+      "size": 6020567,
+      "publisher_digest": "sha256:072aad4f2a7604e92155f61a275a4752dc64046c8f6d90df3710525d94cd37c1",
+      "downloaded_sha256": "072aad4f2a7604e92155f61a275a4752dc64046c8f6d90df3710525d94cd37c1"
+    },
+    {
+      "repository": "yt-dlp/yt-dlp",
+      "tag": "2026.08.19",
+      "name": "SHA2-256SUMS",
+      "url": "https://github.com/yt-dlp/yt-dlp/releases/download/2026.08.19/SHA2-256SUMS",
+      "size": 1595,
+      "publisher_digest": "sha256:a63701f30755cb4d9317950d69703e9d751d490cb1b7059e1bb501a353fe7dcb",
+      "downloaded_sha256": "a63701f30755cb4d9317950d69703e9d751d490cb1b7059e1bb501a353fe7dcb"
+    },
+    {
+      "repository": "yt-dlp/yt-dlp",
+      "tag": "2026.08.19",
+      "name": "SHA2-256SUMS.sig",
+      "url": "https://github.com/yt-dlp/yt-dlp/releases/download/2026.08.19/SHA2-256SUMS.sig",
+      "size": 566,
+      "publisher_digest": "sha256:8d6f9a7c84c57222e3650c61699185878a3468308de702993ce4f20b5f9cf199",
+      "downloaded_sha256": "8d6f9a7c84c57222e3650c61699185878a3468308de702993ce4f20b5f9cf199"
+    },
+    {
+      "repository": "denoland/deno",
+      "tag": "v2.9.6",
+      "name": "deno-x86_64-pc-windows-msvc.zip",
+      "url": "https://github.com/denoland/deno/releases/download/v2.9.6/deno-x86_64-pc-windows-msvc.zip",
+      "size": 42601047,
+      "publisher_digest": "sha256:15e5300b0ba3c3695a7621d90160a746ec9e710228cee639afa9d580f6e3cd11",
+      "downloaded_sha256": "15e5300b0ba3c3695a7621d90160a746ec9e710228cee639afa9d580f6e3cd11"
+    },
+    {
+      "repository": "denoland/deno",
+      "tag": "v2.9.6",
+      "name": "deno-x86_64-pc-windows-msvc.zip.sha256sum",
+      "url": "https://github.com/denoland/deno/releases/download/v2.9.6/deno-x86_64-pc-windows-msvc.zip.sha256sum",
+      "size": 177,
+      "publisher_digest": "sha256:da4c827802a5a17f24fddce4e2a124ae86353c435687eb49ef448307b79e9ce3",
+      "downloaded_sha256": "da4c827802a5a17f24fddce4e2a124ae86353c435687eb49ef448307b79e9ce3"
+    }
+  ]
+}

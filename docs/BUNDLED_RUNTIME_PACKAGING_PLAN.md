@@ -1,5 +1,10 @@
 # Private Python Runtime Packaging Plan
 
+Status: this document describes the **current** Python-only installer. Issue 83
+Phase 0 approved a future bundled processing runtime, but the Phase 1 inputs
+are not yet approved; see [the Phase 1 review](ISSUE83_PHASE1_REVIEW.md). Do not
+treat candidate artifacts as a change to this installer or its audits.
+
 ## Purpose
 
 Ship a Windows desktop application that starts without a system Python
