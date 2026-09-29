@@ -1,0 +1,7 @@
+extends: electron-builder.yml
+win:
+  azureSignOptions:
+    publisherName: "Nicholas ERotas"
+    endpoint: "https://cus.codesigning.azure.net/"
+    codeSigningAccountName: "ExpletiveDeleted"
+    certificateProfileName: "ExpletiveDeletedPublic"

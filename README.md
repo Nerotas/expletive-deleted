@@ -140,7 +140,7 @@ Create the release-equivalent Windows installer from the repository root:
 .\scripts\build_local_release.ps1
 ```
 
-This one command mirrors the GitHub release validation and packaging stages. It accepts Node.js 22.12.0 or later and uses Python 3.13.15 to match the release runtime, downloading and checksum-verifying the official Python archive temporarily when that version is not installed. It creates an isolated private Python runtime and writes the verified installer under `frontend/release/`. The package audit fails if the installer contains Whisper model payloads or accidental development binaries. Electron's framework-owned root `ffmpeg.dll` is Chromium codec support and cannot satisfy processing readiness.
+This one command mirrors the GitHub release validation and packaging stages. It accepts Node.js 22.12.0 or later and uses Python 3.13.15 to match the release runtime, downloading and checksum-verifying the official Python archive temporarily when that version is not installed. It creates an isolated private Python runtime and writes the verified installer under `frontend/release/`. Local packages are unsigned by default and do not require Azure credentials. The package audit fails if the installer contains Whisper model payloads or accidental development binaries. Electron's framework-owned root `ffmpeg.dll` is Chromium codec support and cannot satisfy processing readiness.
 
 ## Releases and versioning
 
@@ -153,7 +153,7 @@ npm run version:sync
 npm run version:check
 ```
 
-The [Release workflow](.github/workflows/release.yml) lets the operator choose a `patch`, `minor`, or `major` increment from the latest stable release, or `none` to use the committed `frontend/package.json` version. It synchronizes version metadata in the build runner, runs backend, renderer, native, packaging, and installed-app checks, then creates a local metadata commit, pushes only its tag, and publishes the Windows installer. The desktop reads that packaged metadata through Electron, and release smoke testing verifies that the application reports the selected version. Generated release notes explicitly start at the immediately preceding stable release, so **What's Changed** contains only release-to-release changes.
+The [Release workflow](.github/workflows/release.yml) lets the operator choose a `patch`, `minor`, or `major` increment from the latest stable release, or `none` to use the committed `frontend/package.json` version. It synchronizes version metadata in the build runner, runs backend, renderer, native, packaging, and installed-app checks, then creates a local metadata commit, pushes only its tag, and publishes the Windows installer. Production builds use Microsoft Artifact Signing, and the workflow requires valid Authenticode signatures on both the packaged application and NSIS installer before tagging or publication. The desktop reads that packaged metadata through Electron, and release smoke testing verifies that the application reports the selected version. Generated release notes explicitly start at the immediately preceding stable release, so **What's Changed** contains only release-to-release changes.
 
 Packaged applications check the latest stable GitHub release at most once every 24 hours and show a dismissible notice when a newer version is available. The check sends no media, transcripts, dictionary entries, or settings. Downloading remains an explicit user action and opens the validated GitHub release asset in the default browser; the application never installs an update automatically.
 
