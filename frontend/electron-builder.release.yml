@@ -1,4 +1,5 @@
 extends: electron-builder.yml
+afterSign: ./scripts/refresh-bundled-runtime-manifest-after-sign.mjs
 win:
   azureSignOptions:
     publisherName: "Nicholas ERotas"
