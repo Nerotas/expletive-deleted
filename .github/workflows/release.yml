@@ -214,9 +214,52 @@ jobs:
         working-directory: frontend
         env:
           REQUIRE_BUNDLED_RUNTIME: "1"
+          REQUIRE_AZURE_SIGNING: "1"
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
         shell: pwsh
         run: |
           npm run package:win
+
+      - name: Verify Windows Authenticode signatures
+        if: steps.version.outputs.published != 'true'
+        working-directory: frontend
+        shell: pwsh
+        run: |
+          $version = '${{ steps.version.outputs.version }}'
+          $expectedPublisher = 'Nicholas ERotas'
+          $artifacts = @(
+            [PSCustomObject]@{
+              Label = 'Packaged application'
+              Path = 'release/win-unpacked/Expletive Deleted.exe'
+            },
+            [PSCustomObject]@{
+              Label = 'NSIS installer'
+              Path = "release/Expletive-Deleted-Setup-$version-x64.exe"
+            }
+          )
+
+          foreach ($artifact in $artifacts) {
+            if (-not (Test-Path -LiteralPath $artifact.Path -PathType Leaf)) {
+              throw "$($artifact.Label) was not created: $($artifact.Path)"
+            }
+
+            $signature = Get-AuthenticodeSignature -LiteralPath $artifact.Path
+            if ($signature.Status -ne [System.Management.Automation.SignatureStatus]::Valid) {
+              throw "$($artifact.Label) has an invalid Authenticode signature ($($signature.Status)): $($signature.StatusMessage)"
+            }
+
+            $publisher = $signature.SignerCertificate.GetNameInfo(
+              [System.Security.Cryptography.X509Certificates.X509NameType]::SimpleName,
+              $false
+            )
+            if ($publisher -cne $expectedPublisher) {
+              throw "$($artifact.Label) was signed by unexpected publisher '$publisher'."
+            }
+
+            Write-Host "$($artifact.Label) has a valid Authenticode signature from $publisher."
+          }
 
       - name: Smoke-test packaged application
         if: steps.version.outputs.published != 'true'

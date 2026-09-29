@@ -14,6 +14,20 @@ const generatedDirectories = [
 const electronBuilder = path.resolve('node_modules', 'electron-builder', 'out', 'cli', 'cli.js')
 const maximumAttempts = 3
 
+// Local packages stay unsigned; the release workflow opts into Azure-managed signing.
+const azureSigningRequired = process.env.REQUIRE_AZURE_SIGNING === '1'
+const builderConfig = azureSigningRequired
+  ? 'electron-builder.release.yml'
+  : 'electron-builder.yml'
+
+if (azureSigningRequired) {
+  const requiredCredentials = ['AZURE_TENANT_ID', 'AZURE_CLIENT_ID', 'AZURE_CLIENT_SECRET']
+  const missingCredentials = requiredCredentials.filter((name) => !process.env[name]?.trim())
+  if (missingCredentials.length > 0) {
+    throw new Error(`Azure signing requires non-empty environment variables: ${missingCredentials.join(', ')}`)
+  }
+}
+
 async function cleanGeneratedDirectories() {
   for (const directory of generatedDirectories) {
     try {
@@ -32,6 +46,8 @@ function runBuilder() {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [
       electronBuilder,
+      '--config',
+      builderConfig,
       '--win',
       target === 'dir' ? '--dir' : 'nsis',
       '--publish',
