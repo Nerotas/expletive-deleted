@@ -60,6 +60,14 @@ export async function assertRendererSecurity(app, page, { development = false } 
     assert.equal(results.length, 13)
     for (const result of results) assert.match(result, /trusted application window/)
   }
+  const loadMainDocument = async (url) => {
+    // Electron can settle loadURL before Playwright has adopted the new
+    // execution context. Wait on both sides before evaluating the document.
+    await Promise.all([
+      page.waitForURL((current) => current.href === url, { waitUntil: 'domcontentloaded' }),
+      app.evaluate(async (_, target) => { await globalThis.__securitySmoke.window.loadURL(target) }, url),
+    ])
+  }
 
   try {
     const preferences = await app.evaluate(() => {
@@ -140,7 +148,7 @@ export async function assertRendererSecurity(app, page, { development = false } 
 
     console.log('Checking foreign documents and redirected navigation')
     // Main-process loads deliberately bypass will-navigate, proving IPC has its own guard.
-    await app.evaluate(async (_, url) => { await globalThis.__securitySmoke.window.loadURL(url) }, foreignUrl)
+    await loadMainDocument(foreignUrl)
     assertDenied(await exerciseChannels(page, true))
     // Keep the inert fixture loaded: reloading React here lets HashRouter's
     // initial replaceState interrupt loadURL before the HTTP request even starts.
@@ -175,7 +183,7 @@ export async function assertRendererSecurity(app, page, { development = false } 
       url: foreignUrl.replace('/foreign', '/redirect-target'), mainFrame: true, prevented: true,
     }, diagnostic)
     assert.deepEqual(redirectRequests, { started: 1, followed: 0 }, diagnostic)
-    await app.evaluate(async (_, url) => { await globalThis.__securitySmoke.window.loadURL(url) }, entryUrl)
+    await loadMainDocument(entryUrl)
 
     // Even another window showing the exact trusted document must have no native authority.
     const extraPagePromise = app.waitForEvent('window')
