@@ -20,6 +20,7 @@ from .dependency_models import (
     DependencyState,
     DependencyStatus,
     _missing_js_runtime_status,
+    _missing_ytdlp_status,
 )
 from .dependency_specs import (
     DENO_MINIMUM_VERSION,
@@ -91,9 +92,12 @@ def inspect_executable(
 def inspect_ytdlp(executable: str | None) -> DependencyStatus:
     """Verify the pinned yt-dlp executable using its dedicated version protocol."""
     if not executable:
-        return DependencyStatus("ytdlp", "yt-dlp", "missing", YTDLP_VERSION, None, None, "yt-dlp was not found", True)
+        return _missing_ytdlp_status()
     try:
         result = subprocess.run([executable, "--version"], capture_output=True, text=True, timeout=5, check=False)
+    except FileNotFoundError:
+        # The managed path is selected even before the first approved download.
+        return _missing_ytdlp_status(Path(executable))
     except subprocess.TimeoutExpired:
         return DependencyStatus(
             "ytdlp",

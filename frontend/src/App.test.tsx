@@ -222,6 +222,38 @@ describe('desktop application renderer', () => {
     expect(desktopClient.updateSettings).not.toHaveBeenCalled()
   })
 
+  it('offers setup for missing YouTube tools without automatically downloading or blocking local processing', async () => {
+    const user = userEvent.setup()
+    persisted.onboarding = { completed: false, last_step: 'components' }
+    vi.mocked(desktopClient.getCapabilities).mockResolvedValue({
+      ...readyCapabilities,
+      processing_ready: true,
+      ytdlp: false,
+      ytdlp_path: 'C:\\AppData\\runtime\\dependencies\\yt-dlp\\yt-dlp.exe',
+      ytdlp_detail: 'yt-dlp was not found. Set up YouTube tools or locate an existing installation.',
+      js_runtime: false,
+      js_runtime_detail: 'A JavaScript runtime was not found',
+    })
+    renderApp('/onboarding')
+
+    expect(await screen.findByText('Processing ready')).toBeInTheDocument()
+    const toolsRow = screen.getByText('YouTube tools').closest('article')!
+    expect(within(toolsRow).getByText(/Set up YouTube tools or locate an existing installation/)).toBeInTheDocument()
+    expect(within(toolsRow).getByText('Needs attention')).toBeInTheDocument()
+    expect(screen.queryByText(/WinError/)).not.toBeInTheDocument()
+    expect(desktopClient.planDependencies).not.toHaveBeenCalled()
+    expect(desktopClient.installDependencies).not.toHaveBeenCalled()
+
+    await user.click(within(toolsRow).getByRole('button', { name: 'Locate existing' }))
+    expect(desktopClient.selectFile).toHaveBeenCalledWith('C:\\AppData\\runtime\\dependencies\\yt-dlp\\yt-dlp.exe')
+    await user.click(screen.getByRole('button', { name: 'Set up missing components' }))
+    expect(desktopClient.planDependencies).toHaveBeenCalledWith(['ytdlp', 'js_runtime'])
+    const consent = await screen.findByRole('dialog', { name: 'Retrieve required components?' })
+    expect(desktopClient.installDependencies).not.toHaveBeenCalled()
+    await user.click(within(consent).getByRole('button', { name: 'Cancel' }))
+    expect(desktopClient.installDependencies).not.toHaveBeenCalled()
+  })
+
   it('shows the application version reported by Electron', async () => {
     renderApp('/settings')
 

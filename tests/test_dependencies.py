@@ -36,6 +36,50 @@ from backend.runtime.environment import get_managed_ffmpeg_manifest_path, get_ma
 
 
 class DependencyInventoryTests(unittest.TestCase):
+    def test_missing_ytdlp_without_a_path_offers_setup_without_running_a_command(self):
+        with patch("backend.runtime.dependency_inspection.subprocess.run") as run:
+            status = inspect_ytdlp(None)
+
+        self.assertEqual(status.state, "missing")
+        self.assertIsNone(status.path)
+        self.assertIn("Set up YouTube tools", status.detail)
+        self.assertTrue(status.install_supported)
+        run.assert_not_called()
+
+    def test_missing_ytdlp_executable_keeps_the_selected_path_and_offers_setup(self):
+        selected = str(Path("custom") / "yt-dlp.exe")
+        with patch(
+            "backend.runtime.dependency_inspection.subprocess.run",
+            side_effect=FileNotFoundError("missing executable"),
+        ) as run:
+            status = inspect_ytdlp(selected)
+
+        self.assertEqual(status.state, "missing")
+        self.assertEqual(status.path, Path(selected))
+        self.assertEqual(status.required_version, YTDLP_VERSION)
+        self.assertIsNone(status.installed_version)
+        self.assertIn("locate an existing installation", status.detail)
+        self.assertTrue(status.install_supported)
+        run.assert_called_once_with([selected, "--version"], capture_output=True, text=True, timeout=5, check=False)
+
+    def test_ytdlp_permission_error_remains_invalid(self):
+        with patch(
+            "backend.runtime.dependency_inspection.subprocess.run",
+            side_effect=PermissionError("Access denied"),
+        ):
+            status = inspect_ytdlp("C:\\Tools\\yt-dlp.exe")
+
+        self.assertEqual(status.state, "invalid")
+        self.assertIn("Access denied", status.detail)
+
+    def test_ytdlp_incompatible_version_remains_invalid(self):
+        completed = MagicMock(returncode=0, stdout="2000.01.01\n", stderr="")
+        with patch("backend.runtime.dependency_inspection.subprocess.run", return_value=completed):
+            status = inspect_ytdlp("C:\\Tools\\yt-dlp.exe")
+
+        self.assertEqual(status.state, "invalid")
+        self.assertEqual(status.installed_version, "2000.01.01")
+
     def test_ytdlp_version_is_verified_without_affecting_core_readiness(self):
         completed = MagicMock(returncode=0, stdout=f"{YTDLP_VERSION}\n", stderr="")
         with patch("backend.runtime.dependency_inspection.subprocess.run", return_value=completed):
