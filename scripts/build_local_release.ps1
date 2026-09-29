@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
     [string]$PythonExecutable,
+    [string]$PythonArchivePath,
     [switch]$KeepWorkDirectory
 )
 
@@ -9,9 +10,7 @@ $ErrorActionPreference = 'Stop'
 
 $requiredNodeVersion = '22.12.0'
 $requiredPythonVersion = '3.13.15'
-$requiredPipVersion = '25.2'
-$pythonArchiveUrl = 'https://www.python.org/ftp/python/3.13.15/python-3.13.15-amd64.zip'
-$pythonArchiveSha256 = '6479223746cdfb79d25865110d6f524ac98de081324e119af1dc3ae36bddc7a5'
+$requiredPipVersion = '26.2.1'
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $frontendRoot = Join-Path $repositoryRoot 'frontend'
 $workRoot = Join-Path (Join-Path $frontendRoot 'release') ".local-build-$([guid]::NewGuid())"
@@ -60,21 +59,7 @@ function Find-ApprovedPython {
         }
     }
 
-    $archivePath = Join-Path $workRoot "python-$requiredPythonVersion-amd64.zip"
-    $downloadedPythonRoot = Join-Path $workRoot "python-$requiredPythonVersion-amd64"
-    Write-Host "Python $requiredPythonVersion was not found; downloading the official x64 runtime..." -ForegroundColor Cyan
-    Invoke-WebRequest -Uri $pythonArchiveUrl -OutFile $archivePath -UseBasicParsing
-    $actualHash = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
-    if ($actualHash -ne $pythonArchiveSha256) {
-        throw "Downloaded Python archive SHA-256 mismatch. Expected $pythonArchiveSha256, got $actualHash."
-    }
-    Expand-Archive -LiteralPath $archivePath -DestinationPath $downloadedPythonRoot
-
-    $downloadedPython = Join-Path $downloadedPythonRoot 'python.exe'
-    if ((Get-PythonVersion $downloadedPython) -ne $requiredPythonVersion) {
-        throw "The verified Python archive did not contain Python $requiredPythonVersion."
-    }
-    return $downloadedPython
+    return (Join-Path $privatePythonRoot 'python.exe')
 }
 
 function Save-EnvironmentVariable([string]$Name) {
@@ -118,6 +103,12 @@ try {
     Write-Host "Temporary build directory: $workRoot"
     New-Item -ItemType Directory -Path $workRoot, $nativeTemporaryRoot | Out-Null
 
+    $pythonArchiveArguments = @{ OutputDirectory = $privatePythonRoot }
+    if (-not [string]::IsNullOrWhiteSpace($PythonArchivePath)) {
+        $pythonArchiveArguments.ArchivePath = $PythonArchivePath
+    }
+    & (Join-Path $frontendRoot 'scripts\acquire-pinned-python-runtime.ps1') @pythonArchiveArguments
+
     $approvedPython = Find-ApprovedPython
     $pythonVersion = Get-PythonVersion $approvedPython
     if ($pythonVersion -ne $requiredPythonVersion) {
@@ -135,22 +126,16 @@ try {
     $env:TEMP = $nativeTemporaryRoot
     $env:TMP = $nativeTemporaryRoot
 
-    $pythonSourceRoot = (& $approvedPython -I -c 'import sys; print(sys.prefix)').Trim()
-    Assert-NativeSuccess 'Locating the Python installation'
-    Copy-Item -LiteralPath $pythonSourceRoot -Destination $privatePythonRoot -Recurse
-
     $privatePython = Join-Path $privatePythonRoot 'python.exe'
     if (-not (Test-Path -LiteralPath $privatePython -PathType Leaf)) {
         throw "The copied Python runtime is missing python.exe: $privatePythonRoot"
     }
 
-    # Pin pip inside the copy so the user's Python installation is not modified.
-    if (-not (Test-Path -LiteralPath (Join-Path $privatePythonRoot 'Lib\site-packages\pip'))) {
-        & $privatePython -I -m ensurepip --default-pip
-        Assert-NativeSuccess 'Bootstrapping pip in the private Python runtime'
+    $privatePipVersion = (& $privatePython -I -m pip --version)
+    Assert-NativeSuccess 'Verifying pip in the private Python runtime'
+    if ($privatePipVersion -notmatch [regex]::Escape("pip $requiredPipVersion ")) {
+        throw "The pinned private Python runtime has the wrong pip version: $privatePipVersion"
     }
-    & $privatePython -I -m pip install --disable-pip-version-check --upgrade "pip==$requiredPipVersion"
-    Assert-NativeSuccess 'Pinning pip in the private Python runtime'
 
     $copiedPrefix = (& $privatePython -I -c 'import sys; print(sys.prefix)').Trim()
     Assert-NativeSuccess 'Verifying the copied Python runtime'

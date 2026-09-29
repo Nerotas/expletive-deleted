@@ -4,6 +4,15 @@
   "platform": "win32-x64",
   "assets": [
     {
+      "repository": "python/cpython",
+      "tag": "v3.13.15",
+      "name": "python-3.13.15-amd64.zip",
+      "url": "https://www.python.org/ftp/python/3.13.15/python-3.13.15-amd64.zip",
+      "size": 34324622,
+      "publisher_digest": "sha256:6479223746cdfb79d25865110d6f524ac98de081324e119af1dc3ae36bddc7a5",
+      "downloaded_sha256": "6479223746cdfb79d25865110d6f524ac98de081324e119af1dc3ae36bddc7a5"
+    },
+    {
       "repository": "actions/python-versions",
       "tag": "3.13.15-31064747964",
       "name": "python-3.13.15-win32-x64.zip",

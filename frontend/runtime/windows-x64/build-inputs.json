@@ -5,10 +5,12 @@
     "version": "3.13.15",
     "license": "PSF-2.0",
     "distribution": "private application runtime",
-    "rule": "Copy the pinned Actions Python runtime before installing development dependencies, verify it remains relocatable, and retain its license."
+    "source_url": "https://www.python.org/ftp/python/3.13.15/python-3.13.15-amd64.zip",
+    "sha256": "6479223746cdfb79d25865110d6f524ac98de081324e119af1dc3ae36bddc7a5",
+    "rule": "Extract the hash-verified official Python runtime before installing development dependencies, verify it remains relocatable, and retain its license."
   },
   "pip": {
-    "version": "25.2",
+    "version": "26.2.1",
     "license": "MIT",
     "purpose": "Consent-driven installation of processing dependencies into the private runtime.",
     "rule": "Retain pip as the only installed third-party Python distribution in the release payload."

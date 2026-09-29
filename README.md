@@ -140,7 +140,7 @@ Create the release-equivalent Windows installer from the repository root:
 .\scripts\build_local_release.ps1
 ```
 
-This one command mirrors the GitHub release validation and packaging stages. It accepts Node.js 22.12.0 or later and uses Python 3.13.15 to match the release runtime, downloading and checksum-verifying the official Python archive temporarily when that version is not installed. It creates an isolated private Python runtime and writes the verified installer under `frontend/release/`. The package audit fails if the installer contains Whisper model payloads or accidental development binaries. Electron's framework-owned root `ffmpeg.dll` is Chromium codec support and cannot satisfy processing readiness.
+This one command mirrors the GitHub release validation and packaging stages. It accepts Node.js 22.12.0 or later and always uses the checksum-verified official Python 3.13.15 archive for the private installer runtime, downloading it unless `-PythonArchivePath` points to an existing verified copy. An existing compatible Python may run local tests. It writes the verified installer under `frontend/release/`. The package audit fails if the installer contains Whisper model payloads or accidental development binaries. Electron's framework-owned root `ffmpeg.dll` is Chromium codec support and cannot satisfy processing readiness.
 
 ## Releases and versioning
 

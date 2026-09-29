@@ -130,7 +130,21 @@ The reviewed Windows installer includes working x264-capable processing tools an
 
 Work one phase at a time. Record changed files, evidence, tests, and open decisions at each gate before advancing. The reviewed input lock specifies approved artifacts; the generated inventory records what was actually assembled. Every output inventory must reconcile with the input lock.
 
-Progress as of September 28, 2026: Phase 0 is approved. Phase 1A and 1B are **in progress, not gate-complete**. Exact tool and wheel candidate manifests plus the evidence, rejection decisions, and remaining checks are in [the Phase 1 review](../docs/ISSUE83_PHASE1_REVIEW.md). Candidate hashes are not a shipping lock. In particular, the inspected PyAV wheel contains GPL-linked FFmpeg/x264 libraries, the CTranslate2 wheel contains cuDNN contrary to the CPU-only scope, and the proposed FFmpeg binary lacks a complete matched source/build-material map. Do not advance to Phase 2 or change the installer distribution policy based on these candidates.
+Progress as of September 28, 2026: Phase 0 is approved. Phase 1A and 1B are **in progress, not gate-complete**. Exact tool and wheel candidate manifests plus the evidence and remaining checks are in [the Phase 1 review](../docs/ISSUE83_PHASE1_REVIEW.md). The maintainer chose provisional path A: investigate the published GPL-enabled PyAV wheel with the applicable combined-Python-program obligations, while keeping the project's own source MIT where compatible. An [isolated Python 3.13 local probe](../docs/ISSUE83_PHASE1_LOCAL_PROBE.md) passed imports, synthetic decoding, and offline CPU inference. Candidate hashes and functional tests are not a shipping lock. The selected FFmpeg tool still lacks a complete matched source/build-material map; the CTranslate2 wheel still bundles cuDNN as shipped. Independent Phase 2 contract scaffolding may proceed, but neither phase gate nor an installer distribution-policy change is approved by these candidates.
+
+Phase 1A follow-up: a [yt-dlp PyPI wheel plus EJS candidate](../docs/ISSUE83_YTDLP_WHEEL_PROBE.md) now has source-archive comparisons, exact hashes, third-party JS source anchors, and an offline Python 3.13 version/resource check. It may avoid the separate Python/native payload inside `yt-dlp.exe`, but the expanded wheel/source/notice audit, optional feature coverage, and later desktop adapter remain open. Deno's tagged source archive was also hashed; no Phase 1A gate is marked complete by these checks.
+
+The yt-dlp `pin` dependency expansion has since resolved to 11 PyPI-hash-matched wheels and passed an isolated Python 3.13 offline import/version check. Four wheels contain 46 native files; `mutagen` is GPL-2.0-or-later, and the pinned `idna==3.18` conflicts with the separate 26-wheel candidate's `idna==3.19`. Both generated EJS wheel scripts were reproduced byte-for-byte from the published TypeScript source archive and npm lockfile. The wheel route remains an alternative rather than an approved selection.
+
+The BtbN FFmpeg executable reports 52 enabled external libraries. Its release-tag build scripts and one pinned x264 revision have been identified, but a complete matching source/notice set for that broad payload is not assembled. A narrower pinned GPL FFmpeg/x264/LAME build is the preferred Phase 1A route unless the prebuilt dependency map can be closed. The official CPython 3.13.15 source archive now matches its published checksum; runtime-file and notice mapping remains.
+
+A [local narrow FFmpeg build probe](../docs/ISSUE83_FFMPEG_LOCAL_BUILD.md) now has a hash-checked FFmpeg 8.1.2/x264/LAME 3.100 cross-build with only `libx264` and `libmp3lame` as external libraries. LAME was necessary because audio-only censorship uses MP3. The rebuilt Windows binaries passed synthetic H.264/AAC, MP3 mute, conversion, and preserve-source checks; no processing binary has entered the installer. Exact toolchain snapshot, source/notice companion, static-linkage review, host prerequisites, and the other tools remain Phase 1A work, so the gate is still open.
+
+The existing Python-only release scripts and runtime build-input manifest were updated from pip 25.2 to verified pip 26.2.1 after the Phase 1A review found fixed security issues in the former pin. This does **not** add processing tools to the installer or approve the eventual full input set; pip's vendored notices remain in the Phase 1A/2 audit.
+
+The release's private Python input is now consistently the official, hash-verified full 3.13.15 Windows x64 ZIP in local and CI assembly; the prior Actions toolcache payload remains test-only evidence. A scratch extraction passed the Python-only assembly audit, and the archive includes pip 26.2.1. The narrow FFmpeg recipe also produced a second guarded build and passed H.264/AAC and muted-MP3 probes. These close functional and input-identity questions, not the remaining matching-source/notice and host-prerequisite checks. The maintainer has asked to include the narrow FFmpeg build in the eventual installer; adding it to the current Python-only installer remains gated by the Phase 1B and Phase 2 audits and Phase 3 assembly/audit work unless the approved order is explicitly revised.
+
+Further Phase 1A evidence: [CPython's native-source record](../docs/ISSUE83_CPYTHON_NATIVE_PROVENANCE.md) now maps official Windows external-dependency tags and pip vendored notices; [Deno's record](../docs/ISSUE83_DENO_PROVENANCE.md) identifies its signed binary, locked Rust release recipe, V8 static-library hash, and tagged submodule commits. Neither is a complete third-party notice/license audit. The narrow FFmpeg builder now uses a signed date-pinned Debian snapshot and a [149-package archive/source hash inventory](../docs/ISSUE83_FFMPEG_APT_INPUTS.txt), with a fixed build prefix. Its [fixed-prefix `attempt8` output](../docs/ISSUE83_FFMPEG_LOCAL_BUILD.md) exited cleanly and passed repeatable H.264/AAC, MP3, preserve-source, source-integrity, license/configuration, and import-table checks. Byte-identical rebuilds are not claimed. Phase 1A remains open, so the requested conditional commit has not been made.
 
 ### Phase 0 — Distribution policy and scope: approved September 27, 2026
 
@@ -147,16 +161,22 @@ Gate: each selected tool has a specific verifiable binary and matching source/li
 
 ### Phase 1B — Python wheel and native-library review
 
+Local functional evidence: all 26 candidate wheels installed offline into isolated CPython 3.13.15; PyAV and faster-whisper decoded synthetic media, and cached `large-v3` CPU inference completed. The same inference passed when the scratch CTranslate2 cuDNN DLL was temporarily absent and then restored. This supports, but does not approve, an audited no-cuDNN staging transformation. PyAV's oneVPL dispatcher proved required for import; it is distinct from a GPU implementation but must be inventoried. See [the local probe record](../docs/ISSUE83_PHASE1_LOCAL_PROBE.md).
+
+Phase 1B follow-up: the [native-wheel review](../docs/ISSUE83_PHASE1B_NATIVE_REVIEW.md) records a hash-checked, deterministic CTranslate2 wheel transformation that omits only `cudnn64_9.dll` and rewrites `RECORD`. The transformed wheel installed with the other 25 hash-verified wheels under private Python 3.13.15 and passed offline CPU `large-v3` inference. This closes the local cuDNN-omission proof, **not** the Phase 1B gate: PyAV's GPL-enabled native payload, Intel OpenMP/oneMKL notices and redistribution path, `MSVCP140.dll` clean-host handling, and other wheel-native source/notice mappings remain open. No processing package has entered the installer.
+
 - [ ] Resolve every direct and transitive Windows x64 wheel against the pinned release Python version; record filename, wheel tag, source URL, SHA-256, package/version, and dependency edges in a reviewed input lock.
 - [ ] Inspect each wheel's metadata, license and notice material, `.pyd`/DLL payload, and bundled native libraries. Include CTranslate2, PyAV's FFmpeg libraries, NumPy, tokenizer/runtime packages, Hugging Face Hub, better-profanity, pip's vendored packages, and other resolved dependencies.
 - [ ] Map GPL/LGPL components to corresponding source and any replacement/relinking obligations. Assess in-process Python/native linkage under the intended distribution terms and document compatible substitutions or unresolved decisions.
 - [ ] Demonstrate the selected wheels import and the supported CPU transcription path can run with no separately downloaded GPU libraries; record Windows OS/CPU and native runtime requirements.
 
-Gate: the complete selected Python payload is hash-locked, compatible, and accounted for. An unresolved wheel or native library remains unapproved.
+Gate: the complete selected Python input set is hash-locked, compatible, and accounted for, with a locally proven plan to exclude cuDNN. An unresolved wheel or native library remains unapproved. Auditing the assembled cuDNN-free payload belongs to Phase 3; testing the real installer on clean Windows belongs to Phase 7.
 
 ### Phase 2 — Source, notice, and inventory contracts
 
-- [ ] Define separate schemas for the approved input lock and the generated shipped-file inventory, with component ownership, source mappings, hashes, notices, and approved transformations.
+In progress after checkpoint commit `c5ac7d1`: [Phase 2 contract notes](../docs/ISSUE83_PHASE2_CONTRACT.md), separate v1 input-lock/inventory schemas, a standalone fail-closed validator, and synthetic fixture tests are present. The production generators, source companion, full notice/SBOM content checks, and approved Phase 1 inputs are still missing. This is preparation, not a passed Phase 2 gate or permission to ship candidate binaries.
+
+- [x] Define separate schemas for the approved input lock and the generated shipped-file inventory, with component ownership, source mappings, hashes, notices, and approved transformations. The initial v1 contract and synthetic validator tests are in place; revise only with explicit schema versioning as real approved inputs demand.
 - [ ] Build generation and validation tooling for full third-party notices, `LICENSES/`, CycloneDX SBOM, and the versioned source companion. Include source archives, patches, build/install scripts and a build README where required.
 - [ ] Define source retention, release links, and installer/EULA review. Test that a missing notice, source mapping, or extra binary fails validation.
 
@@ -165,7 +185,7 @@ Gate: compliance tooling and fixture artifacts validate against the approved Pha
 ### Phase 3 — Audited runtime assembly
 
 - [ ] Extend runtime assembly, staging, Electron resource inclusion, generated inventory, audits, and executable verification together. Replace Python-only exclusions with strict lock-based checks while continuing to reject unapproved payloads and models.
-- [ ] Assemble the selected tools and Python packages outside ASAR where required, retaining notices, DLLs, and immutable installed files. Generate and reconcile notices, SBOM, and source mappings from the assembled contents.
+- [ ] Assemble the selected tools and Python packages outside ASAR where required, retaining notices, approved DLLs, and immutable installed files. Apply and audit the approved cuDNN exclusion (or CPU-only replacement), including installed metadata and final file inventory. Generate and reconcile notices, SBOM, and source mappings from the assembled contents.
 - [ ] Verify native Python imports, tool versions, a CPU-only forced `libx264` encode, and FFprobe inspection of its output.
 
 Gate: a complete staged Windows runtime passes the new audit and executable checks without relying on system processing tools.
@@ -202,7 +222,7 @@ Gate: the installed app and complete artifact set pass qualification; documentat
 
 ### Phase 8 — Public-release decision
 
-- [ ] In parallel with engineering work, record distribution countries/model, assess AVC/H.264 and AAC patent coverage for the actual shipped codec set, and assess any agreement's compatibility with downstream GPL rights.
+- [ ] In parallel with engineering work, record distribution countries/model, assess codec patent coverage for the actual shipped H.264, AAC, and MP3 encoder set, and assess any agreement's compatibility with downstream GPL rights.
 - [ ] Record a project-specific release decision separately from engineering validation. Only after Phases 6–8 pass should the staged assets become publicly available.
 
 Gate: the maintainer has a documented release decision; engineering tests are not described as blanket legal clearance.

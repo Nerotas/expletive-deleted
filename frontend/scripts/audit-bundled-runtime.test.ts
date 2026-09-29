@@ -33,7 +33,7 @@ async function createRuntime() {
     bomFormat: 'CycloneDX',
     components: [
       { name: 'Python', version: '3.13.15', licenses: [{ license: { id: 'PSF-2.0' } }] },
-      { name: 'pip', version: '25.2', licenses: [{ license: { id: 'MIT' } }] },
+      { name: 'pip', version: '26.2.1', licenses: [{ license: { id: 'MIT' } }] },
     ],
   }))
 
@@ -41,7 +41,7 @@ async function createRuntime() {
     schema_version: 2,
     platform: 'win32-x64',
     python: { path: 'python/python.exe', version: '3.13.15', license: 'PSF-2.0' },
-    pip: { version: '25.2', license: 'MIT' },
+    pip: { version: '26.2.1', license: 'MIT' },
     files: [...files].map(([filePath, sha256]) => ({ path: filePath, sha256 })),
     licenses: [
       { path: 'LICENSES/python.txt', spdx: 'PSF-2.0' },
@@ -117,6 +117,6 @@ describe('private Python runtime audit', () => {
 
     const result = spawnSync(process.execPath, [auditScript, runtimeRoot], { encoding: 'utf8' })
     expect(result.status).not.toBe(0)
-    expect(result.stderr).toMatch(/SBOM must identify pip 25\.2 under MIT/)
+    expect(result.stderr).toMatch(/SBOM must identify pip 26\.2\.1 under MIT/)
   })
 })
