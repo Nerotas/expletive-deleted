@@ -30,8 +30,12 @@ class DependencyStatus:
         return self.state == "ready"
 
 
-def _missing_ytdlp_status() -> DependencyStatus:
-    return DependencyStatus("ytdlp", "yt-dlp", "missing", YTDLP_VERSION, None, None, "yt-dlp was not found", True)
+def _missing_ytdlp_status(path: Path | None = None) -> DependencyStatus:
+    return DependencyStatus(
+        "ytdlp", "yt-dlp", "missing", YTDLP_VERSION, None, path,
+        "yt-dlp was not found. Set up YouTube tools or locate an existing installation.",
+        True,
+    )
 
 
 def _missing_js_runtime_status() -> DependencyStatus:

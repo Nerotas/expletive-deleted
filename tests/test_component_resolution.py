@@ -22,10 +22,43 @@ from backend.runtime.environment import (
     resolve_deno_path, resolve_ytdlp_path,
 )
 from backend.runtime.python_imports import inspect_python_imports
+from backend.service.capabilities import get_capabilities
 from backend.settings import AppSettings
 
 
 class ComponentResolutionTests(unittest.TestCase):
+    def test_absent_managed_ytdlp_offers_setup_without_blocking_local_processing(self):
+        ready = lambda name: DependencyStatus(name, name, "ready", None, None, None, "fixture", False)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            runtime = root / "runtime"
+            with (
+                patch.dict("os.environ", {"CENSOR_RUNTIME_ASSETS_DIR": str(runtime), "CENSOR_YTDLP": ""}),
+                patch("backend.runtime.dependency_inspection.resolve_media_tools", return_value=(None, None)),
+                patch("backend.runtime.dependency_inspection.inspect_executable", side_effect=[ready("ffmpeg"), ready("ffprobe")]),
+                patch("backend.runtime.dependency_inspection.inspect_python_dependencies", return_value=(ready("python:faster-whisper"),)),
+                patch("backend.runtime.dependency_inspection.inspect_whisper_model", return_value=ready("whisper:large-v3")),
+                patch("backend.runtime.dependency_inspection._default_js_runtime_executable", return_value=None),
+            ):
+                inventory = inspect_dependencies()
+
+            self.assertEqual(inventory.ytdlp.state, "missing")
+            self.assertEqual(inventory.ytdlp.path, get_managed_ytdlp_path(runtime))
+            self.assertIn("Set up YouTube tools", inventory.ytdlp.detail)
+            self.assertNotIn("WinError", inventory.ytdlp.detail)
+            self.assertTrue(inventory.ytdlp.install_supported)
+            with (
+                patch("backend.service.capabilities.inspect_dependencies", return_value=inventory),
+                patch("backend.service.capabilities.get_whisper_device_status", return_value=MagicMock(selected="cpu", compute_type="int8")),
+            ):
+                capabilities = get_capabilities(AppSettings.defaults(root / "media"))
+
+            self.assertTrue(capabilities["processing_ready"])
+            self.assertFalse(capabilities["ytdlp"])
+            self.assertFalse(capabilities["js_runtime"])
+            self.assertEqual(capabilities["ytdlp_detail"], inventory.ytdlp.detail)
+            self.assertFalse(runtime.exists())
+
     def test_download_rejects_split_media_tool_folders_before_starting_ytdlp(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
