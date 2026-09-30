@@ -21,19 +21,27 @@ describe('refreshBundledRuntimeManifestAfterSign', () => {
 
     const runtimeRoot = path.join(appOutDir, 'resources', 'app-runtime')
     const executable = path.join(runtimeRoot, 'python', 'python.exe')
+    const license = path.join(runtimeRoot, 'LICENSES', 'python.txt')
     const manifestPath = path.join(runtimeRoot, 'runtime-manifest.json')
     await mkdir(path.dirname(executable), { recursive: true })
+    await mkdir(path.dirname(license), { recursive: true })
     await writeFile(executable, 'signed executable bytes')
+    await writeFile(license, 'license text')
+    const recordedPaths = ['python/python.exe', 'LICENSES/python.txt']
+      .sort((left, right) => right.localeCompare(left))
     await writeFile(manifestPath, JSON.stringify({
       schema_version: 2,
-      files: [{ path: 'python/python.exe', sha256: '0'.repeat(64) }],
+      files: recordedPaths.map((filePath) => ({ path: filePath, sha256: '0'.repeat(64) })),
     }))
 
     await refreshBundledRuntimeManifestAfterSign({ electronPlatformName: 'win32', appOutDir })
 
     const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
-    const expectedHash = createHash('sha256').update(await readFile(executable)).digest('hex')
-    expect(manifest.files).toEqual([{ path: 'python/python.exe', sha256: expectedHash }])
+    const expectedFiles = [
+      { path: 'python/python.exe', sha256: createHash('sha256').update(await readFile(executable)).digest('hex') },
+      { path: 'LICENSES/python.txt', sha256: createHash('sha256').update(await readFile(license)).digest('hex') },
+    ].sort((left, right) => left.path.localeCompare(right.path))
+    expect(manifest.files).toEqual(expectedFiles)
   })
 
   it('rejects file-set changes after the source runtime audit', async () => {

@@ -31,10 +31,24 @@ export async function generateBundledRuntimeManifest(suppliedDirectory, options 
   artifacts.sort((left, right) => left.path.localeCompare(right.path))
 
   if (options.preserveFileSet) {
-    const recordedPaths = (manifest.files ?? []).map((file) => file.path).sort()
+    const recordedPaths = (manifest.files ?? []).map((file) => file.path)
     const artifactPaths = artifacts.map((file) => file.path)
-    if (JSON.stringify(recordedPaths) !== JSON.stringify(artifactPaths)) {
-      throw new Error('Signing changed the audited private runtime file set; refusing to replace its manifest.')
+    const recordedPathSet = new Set(recordedPaths)
+    const artifactPathSet = new Set(artifactPaths)
+    const missingPaths = recordedPaths.filter((filePath) => !artifactPathSet.has(filePath))
+    const unexpectedPaths = artifactPaths.filter((filePath) => !recordedPathSet.has(filePath))
+    if (
+      recordedPathSet.size !== recordedPaths.length
+      || missingPaths.length > 0
+      || unexpectedPaths.length > 0
+    ) {
+      const changes = [
+        ...missingPaths.map((filePath) => `missing: ${filePath}`),
+        ...unexpectedPaths.map((filePath) => `unexpected: ${filePath}`),
+      ]
+      throw new Error(
+        `Signing changed the audited private runtime file set; refusing to replace its manifest. ${changes.join('; ')}`,
+      )
     }
   }
 
