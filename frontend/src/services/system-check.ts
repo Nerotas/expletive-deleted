@@ -49,7 +49,9 @@ async function readStatus(read: () => Promise<unknown>, signal: AbortSignal): Pr
 }
 
 export async function observeSystemCheck(start: () => Promise<unknown>, status: () => Promise<unknown>,
-  onProgress?: (state: SystemCheck) => void, signal = new AbortController().signal): Promise<Capabilities> {
+  onProgress?: (state: SystemCheck) => void, signal = new AbortController().signal, startupDelayMs = 0): Promise<Capabilities> {
+  // Startup grace is cancellable and precedes the acknowledgement deadline.
+  if (startupDelayMs > 0) await wait(startupDelayMs, signal)
   let current = await readStatus(start, signal)
   while (!signal.aborted) {
     onProgress?.(current)

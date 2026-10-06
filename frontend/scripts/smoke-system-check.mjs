@@ -37,11 +37,15 @@ try {
   const errors = []
   page.on('pageerror', (error) => errors.push(error.message))
   await page.getByRole('heading', { name: 'Queue', exact: true }).waitFor()
+  const checkingTrigger = page.getByRole('button', { name: 'Checking system', exact: true })
+  assert.equal(await checkingTrigger.getAttribute('aria-expanded'), 'false')
+  assert.equal(await page.getByRole('region', { name: 'System check', exact: true }).count(), 0)
   await page.getByRole('link', { name: 'Settings', exact: true }).click()
   const karaoke = page.getByRole('button', { name: 'Karaoke', exact: true })
   await karaoke.click()
   assert.equal(await karaoke.getAttribute('aria-pressed'), 'true')
   assert.equal(await page.getByRole('button', { name: 'Save changes', exact: true }).isEnabled(), true)
+  await checkingTrigger.click()
   const status = page.getByRole('region', { name: 'System check', exact: true })
   await status.getByText(/s elapsed/).waitFor()
   async function visuals(phase) {
@@ -51,6 +55,10 @@ try {
         await page.evaluate((value) => { document.documentElement.dataset.theme = value }, theme)
         await page.screenshot({ path: path.join(artifacts, `${phase}-${theme}-${width}.png`) })
         assert.equal(await status.evaluate((element) => element.scrollWidth <= element.clientWidth), true)
+        const panel = await page.getByRole('dialog', { name: 'System verification', exact: true }).boundingBox()
+        const trigger = await page.locator('.system-check-anchor > button').boundingBox()
+        assert.ok(panel && trigger && panel.y >= trigger.y + trigger.height && panel.x >= 0
+          && panel.x + panel.width <= width && panel.y + panel.height <= height, 'Verification popover must fit below the status control')
       }
     }
   }
@@ -79,11 +87,22 @@ try {
   assert.equal(Number(await readFile(path.join(root, 'check-count.txt'), 'utf8')), 1)
   await status.getByText('Component timings', { exact: true }).click()
   assert.match(await status.innerText(), /Verifying processing packages/)
+  await visuals('completed')
+  await page.getByRole('button', { name: 'Close system verification', exact: true }).focus()
+  await page.keyboard.press('Enter')
+  assert.equal(await status.count(), 0)
+  const readyTrigger = page.getByRole('button', { name: 'Processing ready', exact: true })
+  assert.equal(await readyTrigger.evaluate((element) => element === document.activeElement), true)
+  await page.keyboard.press('Enter')
+  await status.getByText(/System verification completed/).waitFor()
+  assert.equal(Number(await readFile(path.join(root, 'check-count.txt'), 'utf8')), 1)
+  await page.keyboard.press('Escape')
+  assert.equal(await status.count(), 0)
   assert.equal(await karaoke.getAttribute('aria-pressed'), 'true')
   const persisted = await page.evaluate(() => window.expletiveDeleted.invoke('settings.get'))
   assert.equal(persisted.settings.censoring.stereo_method, 'drop_audio')
   assert.deepEqual(errors, [])
-  console.log('System-check smoke passed: real slow threshold, continued waiting, original late success, single worker, retained draft, component timings, light/dark at 1060/1440px')
+  console.log('System-check smoke passed: real slow threshold, continued waiting, original late success, single worker, retained draft, collapsible status popover, keyboard dismissal, light/dark at 1060/1440px')
 } finally {
   if (!released) await writeFile(path.join(root, 'release-first-check'), 'cleanup')
   await app.close()

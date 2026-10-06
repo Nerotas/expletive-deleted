@@ -34,6 +34,7 @@ describe('background verification', () => {
     expect(f.hook.result.current.checkError).toBeNull()
     expect(f.hook.result.current.checkState?.stage).toBe('python_packages')
     expect(f.getCapabilities).toHaveBeenCalledOnce()
+    expect(f.getCapabilities.mock.calls[0][3]).toBe(2000)
     await act(async () => { finish(readyCapabilities) })
     await f.flush()
     expect(f.hook.result.current.capabilities?.ready).toBe(true)
@@ -47,6 +48,7 @@ describe('background verification', () => {
     await act(async () => { await f.hook.result.current.reconnectCheck() })
     await f.flush()
     expect(f.getCapabilities.mock.calls[1][2]).toBe(false)
+    expect(f.getCapabilities.mock.calls[1][3]).toBe(0)
     expect(f.hook.result.current.capabilities?.ready).toBe(true)
     f.close()
   })
@@ -66,6 +68,7 @@ describe('background verification', () => {
     expect(f.hook.result.current.checkState?.check_id).toBe('two')
     expect(f.hook.result.current.capabilities?.ready).toBe(false)
     expect(f.getCapabilities.mock.calls[1][2]).toBe(true)
+    expect(f.getCapabilities.mock.calls[1][3]).toBe(0)
     f.close()
   })
   it('gates processing while a previously successful result is being rechecked', async () => {

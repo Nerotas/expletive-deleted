@@ -2,7 +2,7 @@
 
 ## System Check Takes Too Long
 
-System verification runs in the background in a separate local Python process. The desktop shows the component being checked, its elapsed time, and compact **Component timings**. Navigation and settings remain usable. Processing stays unavailable until its required checks pass. This check does not download or install anything.
+System verification runs in the background in a separate local Python process. The first automatic check waits two seconds to let startup settle; manual checks and reconnection start immediately. Select the system status in the top-right corner to open details showing the component being checked, its elapsed time, and compact **Component timings**. Close the popover with its close button, Escape, or a click outside it; select the status again to reopen the latest result. Navigation and settings remain usable. Processing stays unavailable until its required checks pass. This check does not download or install anything.
 
 After 60 seconds, **Verification is taking longer than expected** means readiness is still unverified. **Continue waiting** keeps the same check running and accepts its eventual result; it does not launch another check. If contact with the check is interrupted, **Reconnect to system check** retrieves the same running or completed check. If verification itself fails, review the component timings and use **Check again** in Settings to request a fresh check. Save settings edits before closing and reopening the app if the service remains unavailable.
 

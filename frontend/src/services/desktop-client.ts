@@ -49,9 +49,9 @@ export const desktopClient = {
   getSettings: () => invoke<SettingsSnapshot>('settings.get'),
   updateSettings: (settings: Settings, base: SettingsSnapshot) => invoke<SettingsResult>('settings.update', { settings, base }),
   patchSettings: (revision: string, changes: FieldChange[], strict = false) => invoke<SettingsResult>('settings.patch', { revision, changes, strict }),
-  getCapabilities: (onProgress?: (state: SystemCheck) => void, signal?: AbortSignal, refresh = false): Promise<Capabilities> => observeSystemCheck(
+  getCapabilities: (onProgress?: (state: SystemCheck) => void, signal?: AbortSignal, refresh = false, startupDelayMs = 0): Promise<Capabilities> => observeSystemCheck(
     () => invoke('capabilities.start', { refresh }, { timeoutMs: 2000 }),
-    () => invoke('capabilities.status', undefined, { timeoutMs: 2000 }), onProgress, signal,
+    () => invoke('capabilities.status', undefined, { timeoutMs: 2000 }), onProgress, signal, startupDelayMs,
   ),
   getDictionaryInfo: () => invoke<DictionaryInfo>('dictionary.info'),
   getDictionaryExclusions: (
