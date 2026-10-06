@@ -25,6 +25,7 @@ export function useCapabilities({
   const [cancelPending, setCancelPending] = useState(false)
   const [checkState, setCheckState] = useState<SystemCheck | null>(null)
   const forceNextCheck = useRef(true)
+  const firstCheck = useRef(true)
   const receiveStatus = useCallback((status: InstallStatus) => {
     setInstallState(status)
     setCancelPending(false)
@@ -39,7 +40,10 @@ export function useCapabilities({
     queryFn: ({ signal }) => {
       const refresh = forceNextCheck.current
       forceNextCheck.current = true
-      return client.getCapabilities((state) => { if (!signal.aborted) setCheckState(state) }, signal, refresh)
+      // Let the local service settle before the first short-deadline request.
+      const startupDelayMs = firstCheck.current ? 2000 : 0
+      firstCheck.current = false
+      return client.getCapabilities((state) => { if (!signal.aborted) setCheckState(state) }, signal, refresh, startupDelayMs)
     },
     retry: false,
     refetchOnMount: 'always',

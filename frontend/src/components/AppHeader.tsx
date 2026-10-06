@@ -11,7 +11,8 @@ import {
 import { NavLink } from 'react-router-dom'
 import appIconUrl from '../assets/expletive-deleted-icon.svg'
 import { APPLICATION_DISPLAY_NAME } from '../constants/application'
-import type { Capabilities, InstallStatus, Theme } from '../types/domain'
+import type { Capabilities, InstallStatus, SystemCheck, Theme } from '../types/domain'
+import { SystemCheckPopover } from '../features/capabilities/SystemCheckPopover'
 
 import type { ConnectionState } from '../features/capabilities/installation-connection'
 
@@ -20,6 +21,9 @@ type AppHeaderProps = {
   capabilities: Capabilities | null
   checking: boolean
   checkFailed?: boolean
+  checkState?: SystemCheck | null
+  checkError?: string | null
+  onRetryCheck: () => void
   installState: InstallStatus | null
   theme: Theme
   toggleTheme: () => void
@@ -38,6 +42,9 @@ export function AppHeader({
   capabilities,
   checking,
   checkFailed = false,
+  checkState,
+  checkError = null,
+  onRetryCheck,
   installState,
   connection,
   theme,
@@ -75,14 +82,14 @@ export function AppHeader({
             {connection?.phase === 'reconnecting' ? `Reconnecting (${Math.floor(connection.elapsedMs / 1000)}s)` : connection?.phase === 'recovery' ? 'Setup needs attention' : installState.message || 'Installing…'}
           </button>
         ) : (
-          <div className={`runtime-pill ${checking ? 'checking' : processingReady ? 'ready' : 'attention'}`}>
+          <SystemCheckPopover className={`runtime-pill ${checking ? 'checking' : processingReady ? 'ready' : 'attention'}`} checking={checking} state={checkState} error={checkError} onRetry={onRetryCheck}>
             {checking
               ? <LoaderCircle className="spin" size={16} />
               : processingReady
                 ? <ShieldCheck size={16} />
                 : <AlertCircle size={16} />}
             {checking ? 'Checking system' : label}
-          </div>
+          </SystemCheckPopover>
         )}
       </div>
     </header>

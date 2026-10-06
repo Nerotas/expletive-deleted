@@ -11,6 +11,27 @@ const completed: SystemCheck = { ...running, status: 'completed', elapsed_ms: 70
 describe('system-check observer protocol', () => {
   beforeEach(() => vi.useFakeTimers())
   afterEach(() => vi.useRealTimers())
+  it('allows startup to settle before starting the acknowledgement deadline', async () => {
+    const start = vi.fn(() => new Promise(() => {})), status = vi.fn()
+    const pending = observeSystemCheck(start, status, undefined, undefined, 2000).catch((error) => error)
+    await vi.advanceTimersByTimeAsync(1999)
+    expect(start).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(start).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(await pending).toMatchObject({ code: 'request_timeout' })
+    expect(status).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+  it('cancels the startup delay without sending a check request', async () => {
+    const controller = new AbortController(), start = vi.fn(), status = vi.fn()
+    const pending = observeSystemCheck(start, status, undefined, controller.signal, 2000).catch((error) => error)
+    controller.abort()
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(await pending).toMatchObject({ name: 'AbortError' })
+    expect(start).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+  })
   it('polls status after 60 seconds without restarting the original probe', async () => {
     const start = vi.fn(async () => running)
     const status = vi.fn(async (): Promise<SystemCheck> => running)
