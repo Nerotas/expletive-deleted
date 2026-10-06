@@ -1,6 +1,6 @@
 # Expletive Deleted Project Summary
 
-System checks have a 60-second renderer/bridge deadline, elapsed-time feedback, and explicit retry after failure. Late responses cannot restore stale readiness. Audio validation verifies samples with a read-only, one-second decode when stream duration is inconclusive, with a 15-second subprocess limit.
+System verification runs in a separate local process with lightweight start/status acknowledgements, per-component timings, and continued waiting after a 60-second notice. One active check and at most one replacement prevent duplicate work. Reconnection recovers eventual results; settings/setup changes invalidate obsolete results. Current-check timing metadata stays bounded in memory without growing debug files. Audio validation verifies samples with a read-only, one-second decode when stream duration is inconclusive, with a 15-second subprocess limit.
 
 ## Current Status
 

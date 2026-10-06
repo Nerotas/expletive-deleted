@@ -72,7 +72,7 @@ describe('bridge transport', () => {
     reply({ id: 1, ok: true, result: [] })
     expect(await pending).toEqual([])
   })
-  it.each(['capabilities.get', 'settings.get'])('bounds %s reads and isolates late replies from retry', async (method) => {
+  it.each(['capabilities.get', 'settings.get'])('bounds legacy %s reads and isolates late replies from retry', async (method) => {
     const { bridge, reply } = setup()
     const initial = bridge.request(method, {}, { timeoutMs: 1e9 }).catch((error) => error)
     await vi.advanceTimersByTimeAsync(59_999)
@@ -86,5 +86,12 @@ describe('bridge transport', () => {
     reply({ id: 2, ok: true, result: 'verified' })
     expect(await retry).toBe('verified')
     expect(vi.getTimerCount()).toBe(0)
+  })
+  it.each(['capabilities.start', 'capabilities.status'])('bounds lightweight %s acknowledgements', async (method) => {
+    const { bridge } = setup()
+    const pending = bridge.request(method).catch((error) => error)
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(await pending).toMatchObject({ code: 'request_timeout' })
+    expect(bridge.pendingCount).toBe(0)
   })
 })

@@ -67,4 +67,6 @@ sys.stdin.reconfigure(encoding='utf-8')
 sys.stdout.reconfigure(encoding='utf-8')
 protocol_output = sys.stdout
 sys.stdout = sys.stderr
-raise SystemExit(serve(DesktopBridge(service), output_stream=protocol_output))
+bridge = DesktopBridge(service)
+bridge.system_check.probe = lambda settings, progress, cancellation: service.get_capabilities()
+raise SystemExit(serve(bridge, output_stream=protocol_output))

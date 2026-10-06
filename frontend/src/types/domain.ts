@@ -1,5 +1,16 @@
 export type Page = 'queue' | 'dictionary' | 'settings'
 export type Theme = 'light' | 'dark'
+export type SystemCheckStage = 'starting' | 'waiting_previous_check' | 'media_tools' | 'ffmpeg' | 'ffprobe' | 'python_packages' | 'speech_model' | 'ytdlp' | 'js_runtime' | 'device' | 'encoders'
+export type SystemCheck = {
+  check_id: string
+  status: 'running' | 'completed' | 'failed'
+  stage: SystemCheckStage
+  elapsed_ms: number
+  stage_elapsed_ms: number
+  timings: Partial<Record<SystemCheckStage, number>>
+  capabilities: Capabilities | null
+  error: string | null
+}
 export type LibraryStatus = 'ready' | 'transcribed' | 'finished' | 'unverified'
 export type JobStatus =
   | 'queued'

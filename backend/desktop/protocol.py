@@ -12,7 +12,7 @@ from .bridge import DesktopBridge
 
 # These handlers only read state, set cancellation flags or schedule an approved
 # worker. Dispatch inline: ordinary worker saturation cannot queue control reads.
-CONTROL_METHODS = frozenset({"dependencies.status", "dependencies.active", "dependencies.cancel", "dependencies.install"})
+CONTROL_METHODS = frozenset({"dependencies.status", "dependencies.active", "dependencies.cancel", "dependencies.install", "capabilities.start", "capabilities.status"})
 
 
 def serve(

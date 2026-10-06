@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { desktopClient, type DesktopClient } from '../../services/desktop-client'
-import type { InstallPlan, InstallStatus, SettingsField, SettingsConflict } from '../../types/domain'
+import type { InstallPlan, InstallStatus, SettingsField, SettingsConflict, SystemCheck } from '../../types/domain'
 import { settingValue } from '../settings/settings-transactions'
 import { useInstallStatus, type Observation } from './useInstallStatus'
 import { isCommunicationError } from './installation-connection'
 import { errorMessage } from '../../utils/format'
-import { checkSystem } from './system-check'
 
 type CapabilitiesOptions = {
   client?: DesktopClient
@@ -24,6 +23,8 @@ export function useCapabilities({
   const [installState, setInstallState] = useState<InstallStatus | null>(null)
   const [observation, setObservation] = useState<Observation | null>(null)
   const [cancelPending, setCancelPending] = useState(false)
+  const [checkState, setCheckState] = useState<SystemCheck | null>(null)
+  const forceNextCheck = useRef(true)
   const receiveStatus = useCallback((status: InstallStatus) => {
     setInstallState(status)
     setCancelPending(false)
@@ -35,15 +36,24 @@ export function useCapabilities({
   }
   const query = useQuery({
     queryKey: ['capabilities'],
-    queryFn: ({ signal }) => checkSystem(() => client.getCapabilities(), signal),
+    queryFn: ({ signal }) => {
+      const refresh = forceNextCheck.current
+      forceNextCheck.current = true
+      return client.getCapabilities((state) => { if (!signal.aborted) setCheckState(state) }, signal, refresh)
+    },
     retry: false,
     refetchOnMount: 'always',
     enabled: !observation || connection.phase === 'connected',
-    // Settings saves, completed setup, failed jobs and explicit retry refresh this
-    // expensive check. Polling can restart it at the deadline before UI recovery.
+    // Only the observer polls lightweight status. Reconnect reuses backend work.
     refetchInterval: false,
   })
   const settledInstallRef = useRef<string | null>(null)
+  const refetch = query.refetch
+  const refresh = useCallback(async (force = true) => {
+    forceNextCheck.current = force
+    await queryClient.cancelQueries({ queryKey: ['capabilities'] })
+    await refetch()
+  }, [queryClient, refetch])
 
   const planMutation = useMutation({
     mutationFn: (components: string[]) => client.planDependencies(components),
@@ -63,7 +73,7 @@ export function useCapabilities({
     void (async () => {
       // Earlier actions may have verified and saved paths even if a later action failed.
       await Promise.all([
-        query.refetch(),
+        refresh(),
         queryClient.invalidateQueries({ queryKey: ['settings'] }),
       ])
       if (installState.status === 'completed') {
@@ -74,7 +84,7 @@ export function useCapabilities({
       setInstallState((current) => current?.install_id === installState.install_id ? null : current)
       setObservation((current) => current === observation ? null : current)
     })()
-  }, [installState, observation, onError, onNotice, query, queryClient])
+  }, [installState, observation, onError, onNotice, refresh, queryClient])
 
   const installMutation = useMutation({
     mutationFn: (planId: string) => client.installDependencies(planId),
@@ -147,15 +157,17 @@ export function useCapabilities({
     resolving: resolveMutation.isPending,
     resolveConflict: (choices: Partial<Record<SettingsField, boolean>>) => resolveMutation.mutate(choices),
     // A failed recheck must not keep advertising previously verified readiness.
-    capabilities: query.isError ? null : query.data ?? null,
+    capabilities: query.isFetching || query.isError ? null : query.data ?? null,
+    checkState,
     checkError: query.error ? errorMessage(query.error) : null,
     loading: query.isLoading,
     checking: query.isFetching,
-    busy: Boolean(installState && ['awaiting_resolution', 'running', 'canceling', 'resolving'].includes(installState.status)) || planMutation.isPending || installMutation.isPending || locateMutation.isPending || query.isFetching,
+    busy: Boolean(installState && ['awaiting_resolution', 'running', 'canceling', 'resolving'].includes(installState.status)) || planMutation.isPending || installMutation.isPending || locateMutation.isPending,
     installing: installMutation.isPending || Boolean(installState && ['running', 'canceling', 'resolving'].includes(installState.status)),
     installState,
     pendingPlan,
-    refresh: async () => { await query.refetch() },
+    refresh,
+    reconnectCheck: () => refresh(false),
     reviewInstall: async (components: string[]) => {
       await planMutation.mutateAsync(components).catch(() => undefined)
     },

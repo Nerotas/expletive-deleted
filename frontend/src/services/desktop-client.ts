@@ -1,5 +1,7 @@
 import { unwrapInvokeResponse } from '../../shared/ipc-response'
 import { decodeInstallStatus } from './install-status'
+import { observeSystemCheck } from './system-check'
+import type { SystemCheck } from '../types/domain'
 import type {
   Capabilities,
   ArchiveItem,
@@ -47,7 +49,10 @@ export const desktopClient = {
   getSettings: () => invoke<SettingsSnapshot>('settings.get'),
   updateSettings: (settings: Settings, base: SettingsSnapshot) => invoke<SettingsResult>('settings.update', { settings, base }),
   patchSettings: (revision: string, changes: FieldChange[], strict = false) => invoke<SettingsResult>('settings.patch', { revision, changes, strict }),
-  getCapabilities: () => invoke<Capabilities>('capabilities.get'),
+  getCapabilities: (onProgress?: (state: SystemCheck) => void, signal?: AbortSignal, refresh = false): Promise<Capabilities> => observeSystemCheck(
+    () => invoke('capabilities.start', { refresh }, { timeoutMs: 2000 }),
+    () => invoke('capabilities.status', undefined, { timeoutMs: 2000 }), onProgress, signal,
+  ),
   getDictionaryInfo: () => invoke<DictionaryInfo>('dictionary.info'),
   getDictionaryExclusions: (
     page: number,

@@ -11,6 +11,7 @@ from backend.runtime import (
     inspect_dependencies,
 )
 from backend.settings import AppSettings
+from backend.runtime.check_progress import Progress, check_stage
 
 
 def _app_runtime_status(inventory) -> tuple[str, str, str]:
@@ -40,7 +41,7 @@ def _app_runtime_status(inventory) -> tuple[str, str, str]:
     )
 
 
-def get_capabilities(settings: AppSettings) -> dict[str, object]:
+def get_capabilities(settings: AppSettings, *, progress: Progress | None = None) -> dict[str, object]:
     settings.validate()
     cache_dir = resolve_whisper_cache_dir(settings.runtime.whisper_cache)
     inventory = inspect_dependencies(
@@ -50,14 +51,18 @@ def get_capabilities(settings: AppSettings) -> dict[str, object]:
         whisper_library=settings.whisper.library,
         whisper_model=settings.whisper.model,
         ytdlp_bin=settings.runtime.ytdlp_path,
+        **({"progress": progress} if progress else {}),
     )
     app_runtime, app_runtime_source, app_runtime_detail = _app_runtime_status(inventory)
     python_ready = all(status.ready for status in inventory.python)
-    requested_cuda = get_whisper_device_status(settings.whisper.model, "cuda")
-    selected = get_whisper_device_status(settings.whisper.model, settings.processing.device)
+    def inspect_device():
+        requested_cuda = get_whisper_device_status(settings.whisper.model, "cuda")
+        selected = requested_cuda if settings.processing.device == "cuda" else get_whisper_device_status(settings.whisper.model, settings.processing.device)
+        return requested_cuda, selected
+    requested_cuda, selected = check_stage(progress, "device", inspect_device)
     encoders: list[str] = []
     if inventory.ffmpeg.ready and inventory.ffmpeg.path:
-        encoders = sorted(available_encoders(str(inventory.ffmpeg.path)))
+        encoders = check_stage(progress, "encoders", lambda: sorted(available_encoders(str(inventory.ffmpeg.path))))
     h264_conversion = (
         "not_requested"
         if settings.video.mode != "h264"

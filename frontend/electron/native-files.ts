@@ -3,7 +3,7 @@ import type { TrustedRequest } from './ipc-security.js'
 
 // Only these public operations may travel through generic renderer invoke.
 const rendererMethods = new Set([
-  'settings.get', 'settings.update', 'settings.patch', 'capabilities.get', 'library.list', 'library.archive', 'library.import',
+  'settings.get', 'settings.update', 'settings.patch', 'capabilities.get', 'capabilities.start', 'capabilities.status', 'library.list', 'library.archive', 'library.import',
   'archive.list', 'archive.restore', 'archive.purge', 'jobs.list', 'jobs.get', 'jobs.submit', 'jobs.submit_many',
   'jobs.events', 'jobs.cancel', 'downloads.list', 'downloads.submit', 'downloads.events', 'downloads.cancel',
   'dictionary.info', 'dictionary.exclusions', 'dictionary.censored', 'dictionary.discovered',

@@ -12,6 +12,7 @@ from backend.settings.transactions import validate_base
 from .dictionary import DictionaryController
 from .installation import InstallationController
 from .native_files import NativeFiles
+from .system_check import SystemCheckController
 
 
 class DesktopBridge:
@@ -30,12 +31,20 @@ class DesktopBridge:
             self.installations = InstallationController(self.service)
             self.dictionary = DictionaryController(self.service, self.policy_store)
             self.native_files = NativeFiles(self.service, self.policy_store)
+            self.system_check = SystemCheckController(self.service)
         except Exception:
             self._settings_owner.__exit__(None, None, None)
             raise
 
     def handle(self, method: str, params: Mapping[str, Any] | None = None) -> object:
         params = params or {}
+        if method == "capabilities.start":
+            refresh = params.get("refresh", False)
+            if not isinstance(refresh, bool):
+                raise ValueError("System-check refresh must be a boolean")
+            return self.system_check.start(refresh=refresh)
+        if method == "capabilities.status":
+            return self.system_check.status()
         if method.startswith('native.'):
             return self.native_files.handle(method, params)
         if method.startswith("dependencies."):
@@ -142,6 +151,7 @@ class DesktopBridge:
         if self._closed:
             return
         self._closed = True
+        self.system_check.close()
         self.native_files.close()
         self.installations.cancel_pending()
         # Do not wait for setup before giving media jobs their cancellation signal.

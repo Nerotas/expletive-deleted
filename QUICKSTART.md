@@ -1,6 +1,6 @@
 # Quick Start
 
-If **Checking system** lasts 60 seconds, use **Retry system check** after other processing finishes. Save settings edits before closing and reopening the app if it keeps timing out. Valid MKV audio does not need replacing just because duration metadata is missing; the app verifies samples with a short decode. See [troubleshooting](TROUBLESHOOTING.md).
+If verification lasts 60 seconds, choose **Continue waiting** to keep the same background check running. You can navigate and edit settings while it verifies components. Use **Reconnect to system check** if contact is interrupted, and review **Component timings** to identify the slow step. Valid MKV audio does not need replacing just because duration metadata is missing; the app verifies samples with a short decode. See [troubleshooting](TROUBLESHOOTING.md).
 
 Expletive Deleted has two ways to work:
 

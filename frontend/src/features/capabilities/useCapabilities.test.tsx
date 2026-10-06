@@ -4,76 +4,82 @@ import type { PropsWithChildren } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { desktopClient } from '../../services/desktop-client'
 import { readyCapabilities } from '../../test/fixtures'
+import type { SystemCheck } from '../../types/domain'
 import { useCapabilities } from './useCapabilities'
-import { SYSTEM_CHECK_TIMEOUT_MS } from './system-check'
 
-describe('system check recovery', () => {
+const running: SystemCheck = { check_id: 'one', status: 'running', stage: 'python_packages', elapsed_ms: 61000,
+  stage_elapsed_ms: 61000, timings: {}, capabilities: null, error: null }
+
+describe('background verification', () => {
   beforeEach(() => vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'performance'] }))
   afterEach(() => vi.useRealTimers())
-  function setup(read: () => Promise<typeof readyCapabilities> = () => new Promise(() => {})) {
+  function setup(read: typeof desktopClient.getCapabilities = () => new Promise(() => {})) {
     const getCapabilities = vi.fn(read)
     const client = { ...desktopClient, getCapabilities }
     const cache = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } })
     const wrapper = ({ children }: PropsWithChildren) => <QueryClientProvider client={cache}>{children}</QueryClientProvider>
     const hook = renderHook(() => useCapabilities({ client, onError: vi.fn(), onNotice: vi.fn() }), { wrapper })
-    // Query notifications run on the next timer tick after a promise settles.
     const flush = () => act(() => vi.advanceTimersByTimeAsync(1))
     const close = () => { hook.unmount(); cache.clear() }
     return { getCapabilities, cache, hook, flush, close }
   }
-  it('unblocks setup at the deadline and waits for explicit retry', async () => {
-    const f = setup()
+  it('keeps a slow check alive without blocking setup and accepts its eventual success', async () => {
+    let finish!: (value: typeof readyCapabilities) => void
+    const f = setup((progress) => { progress?.(running); return new Promise((resolve) => { finish = resolve }) })
     await f.flush()
+    await act(() => vi.advanceTimersByTimeAsync(75000))
     expect(f.hook.result.current.checking).toBe(true)
-    await act(() => vi.advanceTimersByTimeAsync(SYSTEM_CHECK_TIMEOUT_MS))
-    await f.flush()
-    expect(f.hook.result.current.checking).toBe(false)
     expect(f.hook.result.current.busy).toBe(false)
     expect(f.hook.result.current.capabilities).toBeNull()
-    expect(f.hook.result.current.checkError).toContain('60 seconds')
-    await act(() => vi.advanceTimersByTimeAsync(15_000))
-    expect(f.getCapabilities).toHaveBeenCalledOnce()
-    f.getCapabilities.mockResolvedValueOnce(readyCapabilities)
-    await act(async () => { await f.hook.result.current.refresh() })
-    await f.flush()
     expect(f.hook.result.current.checkError).toBeNull()
+    expect(f.hook.result.current.checkState?.stage).toBe('python_packages')
+    expect(f.getCapabilities).toHaveBeenCalledOnce()
+    await act(async () => { finish(readyCapabilities) })
+    await f.flush()
     expect(f.hook.result.current.capabilities?.ready).toBe(true)
-    expect(f.getCapabilities).toHaveBeenCalledTimes(2)
     f.close()
-    await f.flush()
-    expect(vi.getTimerCount()).toBe(0)
   })
-  it('ignores a timed-out response after a retry has returned different results', async () => {
-    let late!: (value: typeof readyCapabilities) => void
-    const f = setup(() => new Promise((resolve) => { late = resolve }))
+  it('reconnects without requesting another probe after contact is lost', async () => {
+    const f = setup(() => Promise.reject(new Error('Contact interrupted')))
     await f.flush()
-    await act(() => vi.advanceTimersByTimeAsync(SYSTEM_CHECK_TIMEOUT_MS))
+    expect(f.hook.result.current.checkError).toBe('Contact interrupted')
+    f.getCapabilities.mockResolvedValueOnce(readyCapabilities)
+    await act(async () => { await f.hook.result.current.reconnectCheck() })
     await f.flush()
-    f.getCapabilities.mockResolvedValueOnce({ ...readyCapabilities, ready: false, processing_ready: false })
+    expect(f.getCapabilities.mock.calls[1][2]).toBe(false)
+    expect(f.hook.result.current.capabilities?.ready).toBe(true)
+    f.close()
+  })
+  it('rejects an obsolete response and progress after a fresh settings check', async () => {
+    let finish!: (value: typeof readyCapabilities) => void
+    let obsoleteProgress: Parameters<typeof desktopClient.getCapabilities>[0]
+    const f = setup((progress) => { obsoleteProgress = progress; return new Promise((resolve) => { finish = resolve }) })
+    await f.flush()
+    f.getCapabilities.mockImplementationOnce(async (progress) => {
+      progress?.({ ...running, check_id: 'two', elapsed_ms: 0 })
+      return { ...readyCapabilities, ready: false, processing_ready: false }
+    })
     await act(async () => { await f.hook.result.current.refresh() })
     await f.flush()
-    await act(async () => { late(readyCapabilities) })
+    await act(async () => { obsoleteProgress?.(running); finish(readyCapabilities) })
     await f.flush()
+    expect(f.hook.result.current.checkState?.check_id).toBe('two')
     expect(f.hook.result.current.capabilities?.ready).toBe(false)
+    expect(f.getCapabilities.mock.calls[1][2]).toBe(true)
     f.close()
   })
-  it('removes previously verified readiness when a recheck fails', async () => {
+  it('gates processing while a previously successful result is being rechecked', async () => {
     const f = setup(() => Promise.resolve(readyCapabilities))
     await f.flush()
     expect(f.hook.result.current.capabilities?.ready).toBe(true)
-    f.getCapabilities.mockRejectedValueOnce(new Error('Service unavailable'))
-    await act(async () => { await f.hook.result.current.refresh() })
+    let finish!: (value: typeof readyCapabilities) => void
+    f.getCapabilities.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+    let refreshing!: Promise<void>
+    await act(async () => { refreshing = f.hook.result.current.refresh() })
     await f.flush()
     expect(f.hook.result.current.capabilities).toBeNull()
-    expect(f.hook.result.current.checkError).toBe('Service unavailable')
+    expect(f.hook.result.current.busy).toBe(false)
+    await act(async () => { finish(readyCapabilities); await refreshing })
     f.close()
-  })
-  it('cleans up an unfinished check when the query is cancelled', async () => {
-    const f = setup()
-    await f.flush()
-    await act(async () => { await f.cache.cancelQueries({ queryKey: ['capabilities'] }) })
-    f.close()
-    await f.flush()
-    expect(vi.getTimerCount()).toBe(0)
   })
 })
