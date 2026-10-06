@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import path from 'node:path'
+import { loadSecurityDocument } from './security-navigation.mjs'
 
 // Exercise the real preload and ipcMain registrations; stub only OS side effects.
-export async function assertRendererSecurity(app, page, { development = false } = {}) {
+export async function assertRendererSecurity(app, page, { development = false, injectNavigationBufferError = false } = {}) {
   const entryUrl = page.url()
   const redirectRequests = { started: 0, followed: 0 }
   const server = createServer((request, response) => {
@@ -24,7 +25,7 @@ export async function assertRendererSecurity(app, page, { development = false } 
     globalThis.__securitySmoke = {
       calls: [], window,
       originals: { openPath: shell.openPath, openExternal: shell.openExternal,
-        showOpenDialog: dialog.showOpenDialog, showSaveDialog: dialog.showSaveDialog },
+        showOpenDialog: dialog.showOpenDialog, showSaveDialog: dialog.showSaveDialog, loadURL: window.loadURL },
     }
     shell.openPath = async (value) => { globalThis.__securitySmoke.calls.push(['path', value]); return '' }
     shell.openExternal = async (value) => { globalThis.__securitySmoke.calls.push(['external', value]) }
@@ -37,6 +38,21 @@ export async function assertRendererSecurity(app, page, { development = false } 
       return { canceled: true }
     }
   }, mainId)
+  if (injectNavigationBufferError) {
+    // Fault injection stays in the native smoke harness. The real preload,
+    // document loading and authorization guards still run after recovery.
+    await app.evaluate(() => {
+      const state = globalThis.__securitySmoke
+      let injected = false
+      state.window.loadURL = function (url, ...args) {
+        if (!injected && new URL(url).pathname === '/foreign') {
+          injected = true
+          return Promise.reject(new Error('net::ERR_NO_BUFFER_SPACE (injected security fixture failure)'))
+        }
+        return state.originals.loadURL.call(this, url, ...args)
+      }
+    })
+  }
 
   // Restart is tested only from hostile documents here; recovery smoke exercises
   // the explicit authorized restart without interrupting these boundary checks.
@@ -61,12 +77,11 @@ export async function assertRendererSecurity(app, page, { development = false } 
     for (const result of results) assert.match(result, /trusted application window/)
   }
   const loadMainDocument = async (url) => {
-    // Electron can settle loadURL before Playwright has adopted the new
-    // execution context. Wait on both sides before evaluating the document.
-    await Promise.all([
-      page.waitForURL((current) => current.href === url, { waitUntil: 'domcontentloaded' }),
-      app.evaluate(async (_, target) => { await globalThis.__securitySmoke.window.loadURL(target) }, url),
-    ])
+    await loadSecurityDocument(
+      () => app.evaluate(async (_, target) => { await globalThis.__securitySmoke.window.loadURL(target) }, url),
+      () => page.waitForFunction((target) => window.location.href === target
+        && ['interactive', 'complete'].includes(document.readyState), url, { timeout: 15_000 }),
+    )
   }
 
   try {
@@ -149,6 +164,7 @@ export async function assertRendererSecurity(app, page, { development = false } 
     console.log('Checking foreign documents and redirected navigation')
     // Main-process loads deliberately bypass will-navigate, proving IPC has its own guard.
     await loadMainDocument(foreignUrl)
+    assert.equal(await page.title(), 'Untrusted security fixture', 'IPC denial must be exercised on the actual foreign document')
     assertDenied(await exerciseChannels(page, true))
     // Keep the inert fixture loaded: reloading React here lets HashRouter's
     // initial replaceState interrupt loadURL before the HTTP request even starts.
@@ -202,6 +218,7 @@ export async function assertRendererSecurity(app, page, { development = false } 
     await app.evaluate(({ shell, dialog }) => {
       const state = globalThis.__securitySmoke
       state.extra?.destroy()
+      state.window.loadURL = state.originals.loadURL
       Object.assign(shell, { openPath: state.originals.openPath, openExternal: state.originals.openExternal })
       Object.assign(dialog, { showOpenDialog: state.originals.showOpenDialog, showSaveDialog: state.originals.showSaveDialog })
       delete globalThis.__securitySmoke

@@ -63,7 +63,9 @@ for (const development of [false, true]) {
       await reloaded
       await page.getByRole('heading', { name: 'Welcome to Expletive Deleted', exact: true }).waitFor()
     }
-    await assertRendererSecurity(app, page, { development })
+    await assertRendererSecurity(app, page, { development,
+      injectNavigationBufferError: process.argv.includes('--inject-navigation-buffer-error'),
+    })
     assert.deepEqual(errors, [])
   } finally {
     await app?.close()

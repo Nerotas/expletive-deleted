@@ -8,6 +8,8 @@ Native IPC handlers must use `trustedIpcHandlers` from `electron/ipc-security.ts
 
 The shared `scripts/security-checks.mjs` redirect check starts from its inert HTTP fixture. Reloading React immediately before that check can let HashRouter initialization interrupt the pending navigation before the server receives it. The check requires an actual redirect request, prevention of the exact target by Electron, and zero requests to that target; a generic `ERR_FAILED` is not accepted as security evidence.
 
+Fixture loading waits for Electron to finish before checking the exact document URL and DOM readiness, so failures from earlier intentionally blocked navigations cannot settle its Playwright waiter. Only `ERR_NO_BUFFER_SPACE` during fixture preparation receives up to two bounded retries. Security assertions and the blocked redirect are never retried or skipped. Run `node scripts/smoke-security.mjs --inject-navigation-buffer-error` after building to exercise transient recovery before the complete production and Vite security checks.
+
 `electron/native-files.ts` owns the generic backend allowlist and native playback/dictionary actions. After building, `npm run smoke:native-files` tests those actions through actual main/preload handlers and guarded Python operations. See [HP-02 implementation](../docs/HP-02_IMPLEMENTATION_2026-09-17.md).
 
 From `frontend/`:
