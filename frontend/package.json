@@ -26,6 +26,7 @@
     "smoke:security": "node scripts/smoke-security.mjs",
     "smoke:recovery": "node scripts/smoke-recovery.mjs",
     "smoke:state": "node scripts/smoke-state.mjs",
+    "smoke:system-check": "node scripts/smoke-system-check.mjs",
     "smoke:native-files": "node scripts/smoke-native-files.mjs",
     "audit:package": "node scripts/audit-package.mjs",
     "audit:bundled-runtime": "node scripts/audit-bundled-runtime.mjs",

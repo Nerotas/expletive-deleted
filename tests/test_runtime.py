@@ -95,7 +95,7 @@ class RuntimeTests(unittest.TestCase):
 
         with (
             patch("backend.censor.engine.subprocess.run", return_value=completed),
-            self.assertRaisesRegex(TranscriptValidationError, "empty or invalid"),
+            self.assertRaisesRegex(TranscriptValidationError, "invalid channel or sample-rate"),
         ):
             censor.validate_transcription_audio()
 

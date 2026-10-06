@@ -1,5 +1,7 @@
 # Quick Start
 
+If **Checking system** lasts 60 seconds, use **Retry system check** after other processing finishes. Save settings edits before closing and reopening the app if it keeps timing out. Valid MKV audio does not need replacing just because duration metadata is missing; the app verifies samples with a short decode. See [troubleshooting](TROUBLESHOOTING.md).
+
 Expletive Deleted has two ways to work:
 
 - **Desktop application (recommended):** start Electron only. It starts the private Python processing bridge automatically and stops it when the app closes; use its setup screen to review, approve, install, and verify required components.
