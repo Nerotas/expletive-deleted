@@ -93,4 +93,6 @@ class FilterOutput:
         output.flush()
 
 
-raise SystemExit(serve(DesktopBridge(service), output_stream=FilterOutput()))
+bridge = DesktopBridge(service)
+bridge.system_check.probe = lambda settings, progress, cancellation: service.get_capabilities()
+raise SystemExit(serve(bridge, output_stream=FilterOutput()))

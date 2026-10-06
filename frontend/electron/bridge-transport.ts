@@ -29,7 +29,7 @@ export class BridgeTransport {
       return Promise.reject(transportError('backend_changed', 'The local service has changed. Check setup again.'))
     }
     if (this.state.status !== 'running') return Promise.reject(transportError(`backend_${this.state.status}`, 'The local processing service is unavailable.'))
-    const control = ['dependencies.status', 'dependencies.active', 'dependencies.install', 'dependencies.cancel'].includes(method)
+    const control = ['dependencies.status', 'dependencies.active', 'dependencies.install', 'dependencies.cancel', 'capabilities.start', 'capabilities.status'].includes(method)
     // Do not put a setup deadline on unrelated, potentially long media imports.
     const systemRead = ['capabilities.get', 'settings.get'].includes(method)
     const maximum = control ? 2000 : systemRead ? SYSTEM_CHECK_TIMEOUT_MS : method === 'dependencies.resolve_conflict' ? 60_000 : undefined

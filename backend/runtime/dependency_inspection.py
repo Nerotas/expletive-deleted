@@ -7,6 +7,7 @@ import importlib.metadata
 import subprocess
 from dataclasses import replace
 from pathlib import Path
+from .check_progress import Progress, check_stage
 from backend.runtime.locations import (
     resolve_media_tools,
     resolve_ytdlp_path,
@@ -259,30 +260,31 @@ def inspect_dependencies(
     whisper_model: str = "large-v3",
     ytdlp_bin: str | Path | None = None,
     js_runtime_bin: str | Path | None = None,
+    progress: Progress | None = None,
 ) -> DependencyInventory:
     """Return dependency state without installing or downloading anything."""
-    ffmpeg_bin, ffprobe_bin = resolve_media_tools(ffmpeg_bin, ffprobe_bin)
+    ffmpeg_bin, ffprobe_bin = check_stage(progress, "media_tools", resolve_media_tools, ffmpeg_bin, ffprobe_bin)
     return DependencyInventory(
-        ffmpeg=inspect_executable(
+        ffmpeg=check_stage(progress, "ffmpeg", inspect_executable,
             "ffmpeg",
             "FFmpeg",
             ffmpeg_bin,
             FFMPEG_VERSION,
         ),
-        ffprobe=inspect_executable(
+        ffprobe=check_stage(progress, "ffprobe", inspect_executable,
             "ffprobe",
             "FFprobe",
             ffprobe_bin,
             FFMPEG_VERSION,
         ),
-        python=inspect_python_dependencies(whisper_library),
-        whisper_model=inspect_whisper_model(
+        python=check_stage(progress, "python_packages", inspect_python_dependencies, whisper_library),
+        whisper_model=check_stage(progress, "speech_model", inspect_whisper_model,
             cache_dir,
             library=whisper_library,
             model=whisper_model,
         ),
-        ytdlp=inspect_ytdlp(str(resolve_ytdlp_path(Path(ytdlp_bin) if ytdlp_bin else None))),
-        js_runtime=inspect_js_runtime(str(js_runtime_bin) if js_runtime_bin else _default_js_runtime_executable()),
+        ytdlp=check_stage(progress, "ytdlp", lambda: inspect_ytdlp(str(resolve_ytdlp_path(Path(ytdlp_bin) if ytdlp_bin else None)))),
+        js_runtime=check_stage(progress, "js_runtime", lambda: inspect_js_runtime(str(js_runtime_bin) if js_runtime_bin else _default_js_runtime_executable())),
     )
 
 

@@ -90,7 +90,7 @@ function App() {
         onOpenInstall={() => setDismissedInstallId(null)}
       />
       <main>
-        <SystemCheckStatus checking={capabilities.checking} error={capabilities.checkError} onRetry={() => void capabilities.refresh()} />
+        <SystemCheckStatus checking={capabilities.checking} state={capabilities.checkState} error={capabilities.checkError} onRetry={() => void (capabilities.checkState?.status === 'failed' ? capabilities.refresh() : capabilities.reconnectCheck())} />
         {error && <AlertBanner tone="error" message={error} onDismiss={() => setError(null)} />}
         {notice && <AlertBanner tone="success" message={notice} onDismiss={() => setNotice(null)} />}
         {availableUpdate && (

@@ -45,7 +45,7 @@ export function AppHeader({
   onOpenInstall,
 }: AppHeaderProps) {
   const processingReady = capabilities?.processing_ready ?? capabilities?.ready
-  const label = checkFailed ? 'System check failed' : readinessLabel(capabilities)
+  const label = checkFailed ? 'Verification unavailable' : readinessLabel(capabilities)
   return (
     <header className="app-header">
       <div className="brand-lockup">

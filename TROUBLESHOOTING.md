@@ -2,9 +2,11 @@
 
 ## System Check Takes Too Long
 
-The desktop shows elapsed time while verifying local processing packages, media tools, and the speech model. This check does not download or install anything. After 60 seconds, it shows a failure and **Retry system check** instead of continuing to block setup controls. A failed recheck clears the displayed readiness result; a late response cannot restore it.
+System verification runs in the background in a separate local Python process. The desktop shows the component being checked, its elapsed time, and compact **Component timings**. Navigation and settings remain usable. Processing stays unavailable until its required checks pass. This check does not download or install anything.
 
-Retry after other processing finishes. If checks keep timing out, save any settings edits before closing and reopening the app. A timeout does not cancel media jobs or approve dependency installation. Settings reads also have a 60-second response limit.
+After 60 seconds, **Verification is taking longer than expected** means readiness is still unverified. **Continue waiting** keeps the same check running and accepts its eventual result; it does not launch another check. If contact with the check is interrupted, **Reconnect to system check** retrieves the same running or completed check. If verification itself fails, review the component timings and use **Check again** in Settings to request a fresh check. Save settings edits before closing and reopening the app if the service remains unavailable.
+
+Only the latest check's component names and durations are retained in memory. Timings are replaced by the next check and cleared when the app closes; there are no growing debug-log files. Settings changes and approved setup request a fresh check, and obsolete results cannot restore readiness. Individual status requests have a two-second response limit; settings reads retain their 60-second response limit. Neither limit cancels media jobs or approves dependency installation.
 
 ## Audio Validation Fails
 
