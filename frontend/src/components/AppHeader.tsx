@@ -19,6 +19,7 @@ type AppHeaderProps = {
   connection?: ConnectionState
   capabilities: Capabilities | null
   checking: boolean
+  checkFailed?: boolean
   installState: InstallStatus | null
   theme: Theme
   toggleTheme: () => void
@@ -36,6 +37,7 @@ function readinessLabel(capabilities: Capabilities | null) {
 export function AppHeader({
   capabilities,
   checking,
+  checkFailed = false,
   installState,
   connection,
   theme,
@@ -43,7 +45,7 @@ export function AppHeader({
   onOpenInstall,
 }: AppHeaderProps) {
   const processingReady = capabilities?.processing_ready ?? capabilities?.ready
-  const label = readinessLabel(capabilities)
+  const label = checkFailed ? 'System check failed' : readinessLabel(capabilities)
   return (
     <header className="app-header">
       <div className="brand-lockup">

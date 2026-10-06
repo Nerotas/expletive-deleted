@@ -30,6 +30,8 @@ Expletive Deleted is free to use. [Ko-fi support](https://ko-fi.com/nicholaserot
 
 Automated transcription and censorship are not perfect. Always review the transcript and finished media before sharing it.
 
+System checks show elapsed time and offer an explicit retry after a 60-second timeout. Audio with missing duration metadata is verified through a short, bounded decode instead of being rejected as empty. These checks do not download components or modify source media. See [troubleshooting](TROUBLESHOOTING.md).
+
 Launching the app again restores and focuses the existing window. Dictionary edits from the desktop, command line, and background discovery share transaction protection; interrupted updates recover locally before the dictionary is shown.
 
 Closing the desktop app cancels active work and allows up to 15 seconds for cleanup. New censored copies appear in Finished only after output verification succeeds. Settings cannot be saved while a local job or YouTube download is active; your draft remains available to save afterward.

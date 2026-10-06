@@ -1,5 +1,17 @@
 # Troubleshooting
 
+## System Check Takes Too Long
+
+The desktop shows elapsed time while verifying local processing packages, media tools, and the speech model. This check does not download or install anything. After 60 seconds, it shows a failure and **Retry system check** instead of continuing to block setup controls. A failed recheck clears the displayed readiness result; a late response cannot restore it.
+
+Retry after other processing finishes. If checks keep timing out, save any settings edits before closing and reopening the app. A timeout does not cancel media jobs or approve dependency installation. Settings reads also have a 60-second response limit.
+
+## Audio Validation Fails
+
+Missing audio duration metadata, which is common in MKV files, does not mean the audio is empty. When the selected audio stream has inconclusive duration, the app decodes up to one second into an in-memory pipe, with a 15-second wait limit. Silence is valid audio. This check creates no media output and leaves the original unchanged.
+
+If the check times out, wait for other processing to finish and retry. If it cannot produce usable samples, confirm the selected audio track plays correctly. If a tool cannot start, verify FFmpeg and FFprobe in Settings. Replacing or redownloading a file is not required merely because its duration metadata is absent.
+
 ## Closing During Processing or Downloading
 
 Closing the desktop app requests cancellation and waits up to 15 seconds for cleanup. If a processing component does not respond, Windows terminates the backend and its child processes. A forced shutdown can leave a temporary `.partial` output file, but it is not listed as a finished copy. Original media is retained; reopen the app to retry. Existing completed output is replaced only after its replacement passes verification.

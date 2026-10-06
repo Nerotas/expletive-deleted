@@ -10,6 +10,7 @@ import { DictionaryPage } from './features/dictionary/DictionaryPage'
 import { ReviewDialog } from './features/dictionary/ReviewDialog'
 import { useDictionary } from './features/dictionary/useDictionary'
 import { useCapabilities } from './features/capabilities/useCapabilities'
+import { SystemCheckStatus } from './features/capabilities/SystemCheckStatus'
 import { QueuePage } from './features/queue/QueuePage'
 import { useQueue } from './features/queue/useQueue'
 import { OnboardingPage } from './features/onboarding/OnboardingPage'
@@ -81,6 +82,7 @@ function App() {
       <AppHeader
         capabilities={capabilities.capabilities}
         checking={capabilities.checking}
+        checkFailed={Boolean(capabilities.checkError)}
         installState={capabilities.installState}
         connection={capabilities.connection}
         theme={theme}
@@ -88,6 +90,7 @@ function App() {
         onOpenInstall={() => setDismissedInstallId(null)}
       />
       <main>
+        <SystemCheckStatus checking={capabilities.checking} error={capabilities.checkError} onRetry={() => void capabilities.refresh()} />
         {error && <AlertBanner tone="error" message={error} onDismiss={() => setError(null)} />}
         {notice && <AlertBanner tone="success" message={notice} onDismiss={() => setNotice(null)} />}
         {availableUpdate && (

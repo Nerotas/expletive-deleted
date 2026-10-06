@@ -1,6 +1,7 @@
 import { StringDecoder } from 'node:string_decoder'
 
 import type { BackendState, RequestOptions } from '../shared/bridge.js'
+import { SYSTEM_CHECK_TIMEOUT_MS } from '../shared/bridge.js'
 export type { BackendState, RequestOptions } from '../shared/bridge.js'
 export const transportError = (code: string, message: string) => Object.assign(new Error(message), { code })
 type Pending = { resolve: (value: unknown) => void; reject: (error: Error) => void; timer?: ReturnType<typeof setTimeout> }
@@ -30,11 +31,15 @@ export class BridgeTransport {
     if (this.state.status !== 'running') return Promise.reject(transportError(`backend_${this.state.status}`, 'The local processing service is unavailable.'))
     const control = ['dependencies.status', 'dependencies.active', 'dependencies.install', 'dependencies.cancel'].includes(method)
     // Do not put a setup deadline on unrelated, potentially long media imports.
-    const maximum = control ? 2000 : method === 'dependencies.resolve_conflict' ? 60_000 : undefined
+    const systemRead = ['capabilities.get', 'settings.get'].includes(method)
+    const maximum = control ? 2000 : systemRead ? SYSTEM_CHECK_TIMEOUT_MS : method === 'dependencies.resolve_conflict' ? 60_000 : undefined
     const timeout = Number.isFinite(options.timeoutMs) ? Math.max(1, Math.min(maximum ?? 60_000, options.timeoutMs!)) : maximum
     const id = ++this.nextId
     return new Promise((resolve, reject) => {
-      const timer = timeout === undefined ? undefined : setTimeout(() => this.reject(id, transportError('request_timeout', 'The local processing service did not respond in time.')), timeout)
+      const message = method === 'capabilities.get'
+        ? 'The system check did not finish within 60 seconds. Retry the check. If it keeps timing out, save your edits and reopen the app.'
+        : 'The local processing service did not respond in time.'
+      const timer = timeout === undefined ? undefined : setTimeout(() => this.reject(id, transportError('request_timeout', message)), timeout)
       this.pending.set(id, { resolve, reject, timer })
       try {
         this.write(`${JSON.stringify({ id, method, ...(params ? { params } : {}) })}\n`, (error) => {

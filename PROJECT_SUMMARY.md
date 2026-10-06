@@ -1,5 +1,7 @@
 # Expletive Deleted Project Summary
 
+System checks have a 60-second renderer/bridge deadline, elapsed-time feedback, and explicit retry after failure. Late responses cannot restore stale readiness. Audio validation verifies samples with a read-only, one-second decode when stream duration is inconclusive, with a 15-second subprocess limit.
+
 ## Current Status
 
 This repository contains the Python profanity-censor pipeline, local application service, and Electron/React desktop application.

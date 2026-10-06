@@ -6,6 +6,7 @@ import { settingValue } from '../settings/settings-transactions'
 import { useInstallStatus, type Observation } from './useInstallStatus'
 import { isCommunicationError } from './installation-connection'
 import { errorMessage } from '../../utils/format'
+import { checkSystem } from './system-check'
 
 type CapabilitiesOptions = {
   client?: DesktopClient
@@ -34,16 +35,15 @@ export function useCapabilities({
   }
   const query = useQuery({
     queryKey: ['capabilities'],
-    queryFn: () => client.getCapabilities(),
+    queryFn: ({ signal }) => checkSystem(() => client.getCapabilities(), signal),
+    retry: false,
     refetchOnMount: 'always',
     enabled: !observation || connection.phase === 'connected',
-    refetchInterval: (currentQuery) => currentQuery.state.data?.app_runtime === 'ready' ? false : 3000,
+    // Settings saves, completed setup, failed jobs and explicit retry refresh this
+    // expensive check. Polling can restart it at the deadline before UI recovery.
+    refetchInterval: false,
   })
   const settledInstallRef = useRef<string | null>(null)
-
-  useEffect(() => {
-    if (query.error) onError(errorMessage(query.error))
-  }, [onError, query.error])
 
   const planMutation = useMutation({
     mutationFn: (components: string[]) => client.planDependencies(components),
@@ -146,7 +146,9 @@ export function useCapabilities({
     conflicts,
     resolving: resolveMutation.isPending,
     resolveConflict: (choices: Partial<Record<SettingsField, boolean>>) => resolveMutation.mutate(choices),
-    capabilities: query.data ?? null,
+    // A failed recheck must not keep advertising previously verified readiness.
+    capabilities: query.isError ? null : query.data ?? null,
+    checkError: query.error ? errorMessage(query.error) : null,
     loading: query.isLoading,
     checking: query.isFetching,
     busy: Boolean(installState && ['awaiting_resolution', 'running', 'canceling', 'resolving'].includes(installState.status)) || planMutation.isPending || installMutation.isPending || locateMutation.isPending || query.isFetching,

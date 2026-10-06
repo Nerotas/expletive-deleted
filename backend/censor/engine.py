@@ -4,6 +4,7 @@
 import os
 import sys
 import json
+import math
 import shutil
 import subprocess
 import tempfile
@@ -304,37 +305,81 @@ class ProfanityCensor:
     def validate_transcription_audio(self, input_file: str | None = None) -> None:
         """Reject media whose selected audio stream cannot produce samples for Whisper."""
         source = input_file or self.input_file
-        result = subprocess.run(
-            [
-                self.ffprobe_bin,
-                "-v", "error",
-                "-select_streams", "a:0",
-                "-show_entries", "stream=codec_name,channels,sample_rate,duration",
-                "-of", "json",
-                source,
-            ],
-            capture_output=True,
-            text=True,
-            timeout=15,
-            check=False,
-        )
+        try:
+            result = subprocess.run(
+                [
+                    self.ffprobe_bin,
+                    "-v", "error", "-protocol_whitelist", "file,pipe",
+                    "-select_streams", "a:0",
+                    "-show_entries", "stream=codec_name,channels,sample_rate,duration",
+                    "-of", "json",
+                    source,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=15,
+                check=False,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise TranscriptValidationError(
+                "Checking the audio took too long. Wait for other processing to finish, then retry."
+            ) from exc
+        except OSError as exc:
+            raise TranscriptValidationError(
+                "The audio inspection tool could not start. Check FFmpeg and FFprobe in Settings, then retry."
+            ) from exc
         if result.returncode != 0:
             raise TranscriptValidationError(
-                "The media audio stream could not be inspected. Redownload the source or choose another file."
+                "The audio stream could not be inspected. Check that the file is accessible and plays correctly, then retry."
             )
         try:
             streams = json.loads(result.stdout).get("streams", [])
             stream = streams[0]
             channels = int(stream.get("channels") or 0)
             sample_rate = int(stream.get("sample_rate") or 0)
-            duration = float(stream.get("duration") or 0)
-        except (IndexError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        except (AttributeError, IndexError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
             raise TranscriptValidationError(
-                "The media has no usable audio stream for transcription. Redownload the source or choose another file."
+                "The media has no usable audio stream for transcription. Choose a file with an audio track."
             ) from exc
-        if channels <= 0 or sample_rate <= 0 or duration <= 0:
+        if channels <= 0 or sample_rate <= 0:
             raise TranscriptValidationError(
-                "The media audio stream is empty or invalid for transcription. Redownload the source or choose another file."
+                "The audio track has invalid channel or sample-rate metadata. Choose another audio track or file."
+            )
+
+        # MKV commonly omits stream duration. Missing metadata cannot prove the
+        # stream is empty; container/video duration alone cannot prove it has audio.
+        try:
+            duration = float(stream.get("duration"))
+        except (TypeError, ValueError):
+            duration = None
+        if duration is not None and math.isfinite(duration) and duration > 0:
+            return
+
+        try:
+            decoded = subprocess.run(
+                [self.ffmpeg_bin, "-hide_banner", "-nostdin", "-v", "error",
+                 "-protocol_whitelist", "file,pipe", "-i", source,
+                 "-map", "0:a:0", "-vn", "-sn", "-dn", "-t", "1",
+                 "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", "-f", "s16le", "pipe:1"],
+                capture_output=True,
+                timeout=15,
+                check=False,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise TranscriptValidationError(
+                "Checking the audio took too long. Wait for other processing to finish, then retry."
+            ) from exc
+        except OSError as exc:
+            raise TranscriptValidationError(
+                "The audio decoding tool could not start. Check FFmpeg in Settings, then retry."
+            ) from exc
+        # Silence contains valid samples too. This check writes only to the pipe,
+        # bounds output to one second, and never creates or replaces a media file.
+        if decoded.returncode != 0 or len(decoded.stdout) < 2:
+            raise TranscriptValidationError(
+                "The selected audio track could not produce usable samples. Check that it plays correctly or choose another file."
             )
 
     def get_audio_channels(self) -> int:

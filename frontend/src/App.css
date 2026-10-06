@@ -12,6 +12,9 @@
 .runtime-pill.checking { color: var(--muted); }
 .runtime-pill.ready { color: var(--success); }
 .runtime-pill.attention { color: var(--warning); }
+.system-check-status { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 12px 16px; margin-bottom: 18px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); }
+.system-check-status p { flex: 1 1 300px; margin: 0; font-size: 13px; }
+.system-check-status small { color: var(--muted); font-size: 12px; }
 main { max-width: 1480px; margin: 0 auto; padding: 28px 34px 56px; }
 .page { animation: page-in .24s ease-out; }
 .page-heading { display: flex; justify-content: space-between; align-items: flex-end; margin: 10px 0 24px; }

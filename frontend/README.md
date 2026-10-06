@@ -1,5 +1,7 @@
 # Expletive Deleted Desktop
 
+System checks are bounded to 60 seconds in both the renderer and Electron transport. The renderer shows elapsed time, uses explicit or event-driven refresh instead of polling, clears stale readiness after errors, and offers explicit retry without reloading settings drafts. Settings reads share the transport deadline; media mutations retain their existing duration behavior. After building, run `npm run smoke:system-check` to verify the real deadline, keyboard retry, late-response isolation, retained drafts, and both themes at supported window sizes using an offline fixture.
+
 Electron hosts the React renderer in this directory. This is an installed desktop application, not a browser-hosted application.
 
 Native IPC handlers must use `trustedIpcHandlers` from `electron/ipc-security.ts`. The sandboxed preload is bundled; `renderer-policy.ts` owns trusted document matching and the separate production/development CSPs. After building, run `npm run smoke:security` for real Electron and Vite/HMR boundary tests. Packaged smoke runs the same production checks. See [HP-01 implementation](../docs/HP-01_IMPLEMENTATION_2026-09-17.md).
