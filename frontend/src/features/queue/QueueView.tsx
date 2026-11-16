@@ -167,6 +167,8 @@ export function QueueView({
       <Metric label="Finished" value={counts.finished} tone="success" />
     </div>
 
+    <p className="muted">Transcription may miss words or get their timing wrong. Review the transcript and listen to the finished copy before sharing. Progress and cancellation can pause while audio is being processed.</p>
+
     {activeRows.map(activeJobRow)}
 
     <div className="table-controls">

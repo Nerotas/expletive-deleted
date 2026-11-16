@@ -598,6 +598,8 @@ describe('desktop application renderer', () => {
     const user = userEvent.setup()
     renderApp('/')
     expect(await screen.findByText('Drop media here to add it')).toBeInTheDocument()
+    expect(screen.getByText(/Transcription may miss words or get their timing wrong/)).toBeInTheDocument()
+    expect(screen.getByText(/Progress and cancellation can pause/)).toBeInTheDocument()
     await user.click(screen.getByRole('link', { name: 'Dictionary' }))
     await user.type(await screen.findByRole('textbox', { name: 'Word or phrase' }), 'example')
     await user.click(screen.getByRole('button', { name: 'Add' }))

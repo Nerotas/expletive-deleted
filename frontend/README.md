@@ -54,6 +54,7 @@ See the [renderer developer guide](src/README.md) for module ownership, state ru
 
 ## Queue behavior
 
+- Fresh desktop transcriptions use batch size four. The Queue reminds users to review words and listen to output, and that progress and cancellation can pause during processing. Existing verified transcripts are reused; the backend owns mode selection.
 - Closing Electron sends EOF to the bridge, waits for cancellation cleanup, and uses a 15-second forced-exit fallback. Windows descendants belong to the bridge's kill-on-close Job Object. `npm run smoke:shutdown` exercises actual window closure with cooperative and unresponsive synthetic encoders; CI and local release validation run this check too.
 - Settings updates and job submissions share a backend lifecycle lock. Active YouTube downloads block saving settings until their local-job handoff completes.
 

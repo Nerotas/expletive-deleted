@@ -30,6 +30,8 @@ Expletive Deleted is free to use. [Ko-fi support](https://ko-fi.com/nicholaserot
 
 Automated transcription and censorship are not perfect. Always review the transcript and finished media before sharing it.
 
+New desktop transcriptions use faster batched processing (up to four audio chunks at a time). This may miss words or give inaccurate timing, including around silence and chunk boundaries; review the transcript and listen to the finished copy. Existing verified transcripts remain reusable. Progress and cancellation may pause during a processing step, and limited memory can cause a job to fail.
+
 System verification runs in the background with component progress and compact timings. After 60 seconds, you can continue waiting for the same check; navigation and settings remain usable while processing waits for verified readiness. Audio with missing duration metadata is verified through a short, bounded decode instead of being rejected as empty. These checks do not download components or modify source media. See [troubleshooting](TROUBLESHOOTING.md).
 
 Launching the app again restores and focuses the existing window. Dictionary edits from the desktop, command line, and background discovery share transaction protection; interrupted updates recover locally before the dictionary is shown.
@@ -164,6 +166,11 @@ After GitHub publishes the release, the [product-site workflow](.github/workflow
 Repository Actions must have **Read and write permissions** so the workflow can push the release tag and create the GitHub Release. It never pushes commits to protected `main` or creates a release pull request. A failed validation does not tag or publish the release.
 
 ## Validation
+
+The [Whisper batching experiment](docs/WHISPER_BATCHING_EXPERIMENT.md) records
+the evidence and known limitations behind the desktop's batch-four default.
+The local benchmark remains separate from the desktop and does not change the
+`large-v3` baseline.
 
 Run the complete Windows validation flow from the repository root:
 

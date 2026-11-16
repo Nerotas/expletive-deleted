@@ -148,6 +148,64 @@ class MediaIdentityTests(unittest.TestCase):
         self.assertEqual(len(history), 1)
         self.assertEqual(history[0].read_bytes(), previous)
 
+    def test_batch_four_retranscription_uses_normalized_words_and_keeps_history(self):
+        transcript = self.transcript()
+        previous = transcript.read_bytes()
+        censor = self.censor()
+        censor.transcription_batch_size = 4
+        segments = [{
+            "text": " Example", "start": 1.0, "end": 1.5,
+            "words": [{"word": " Example", "start": 1.1, "end": 1.4}],
+        }]
+        with patch("backend.censor.engine.transcribe_segments", return_value=iter(segments)) as transcribe, \
+             patch("backend.censor.engine.record_transcription_timing"):
+            self.assertTrue(censor.process(report_only=True, force_transcribe=True))
+        self.assertEqual(transcribe.call_args.kwargs["experimental_batch_size"], 4)
+        self.assertTrue(callable(transcribe.call_args.kwargs["check_cancelled"]))
+        result = json.loads(transcript.read_text(encoding="utf-8"))
+        self.assertEqual(result["words"][0]["start"], 1.1)
+        self.assertEqual(result["source_identity"], identity())
+        self.assertEqual(next((self.transcripts / ".history").iterdir()).read_bytes(), previous)
+        self.assertEqual(self.source.read_bytes(), b"source")
+
+    def test_batch_four_reuses_existing_verified_transcript_without_inference(self):
+        transcript = self.transcript()
+        previous = transcript.read_bytes()
+        censor = self.censor()
+        censor.transcription_batch_size = 4
+        with patch("backend.censor.engine.transcribe_segments") as transcribe:
+            self.assertTrue(censor.process(report_only=True))
+        transcribe.assert_not_called()
+        self.assertEqual(transcript.read_bytes(), previous)
+
+    def test_batch_failure_does_not_replace_previous_transcript_or_retry(self):
+        transcript = self.transcript()
+        previous = transcript.read_bytes()
+        censor = self.censor()
+        censor.transcription_batch_size = 4
+        with patch("backend.censor.engine.transcribe_segments", side_effect=RuntimeError("out of memory")) as transcribe:
+            self.assertFalse(censor.process(report_only=True, force_transcribe=True))
+        self.assertIn("out of memory", censor.last_error)
+        transcribe.assert_called_once()
+        self.assertEqual(transcript.read_bytes(), previous)
+        self.assertEqual(self.source.read_bytes(), b"source")
+
+    def test_cancellation_after_last_segment_prevents_publication(self):
+        transcript = self.transcript()
+        previous = transcript.read_bytes()
+        censor = self.censor()
+        censor.transcription_batch_size = 4
+
+        def segments(*_args, **_kwargs):
+            censor.cancellation.set()
+            return iter(())
+
+        with patch("backend.censor.engine.transcribe_segments", side_effect=segments):
+            self.assertFalse(censor.process(report_only=True, force_transcribe=True))
+        self.assertIn("cancelled", censor.last_error)
+        self.assertEqual(transcript.read_bytes(), previous)
+        self.assertEqual(self.source.read_bytes(), b"source")
+
     def test_renamed_source_reuses_recorded_transcript_without_transcription(self):
         old = self.transcript()
         before = old.read_bytes()

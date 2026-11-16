@@ -143,6 +143,8 @@ Downloads, copies, transcription, and censoring have distinct queue states. Tran
 
 To censor a file, first create its transcript. Censor jobs use the persisted, verified transcript and fail without one; they do not transcribe the media again.
 
+Desktop transcription processes up to four chunks at a time. Progress may remain unchanged until a batch completes, and cancellation must wait for the current processing step. If a batch fails because memory is limited, close other applications and retry; the app does not silently switch modes. The original and any previously verified transcript remain intact.
+
 ## Profanity Was Not Detected
 
 Run report-only mode first:
@@ -152,6 +154,8 @@ Run report-only mode first:
 ```
 
 Review the transcript under the configured Transcripts directory, then classify the term from the desktop **Dictionary** page. The shipped files under `resources/` are factory defaults; live state is stored atomically in `%LOCALAPPDATA%\ExpletiveDeleted\dictionary\censored.json`, `exclusions.json`, and `discovered.json`. Use the Dictionary page to import, export, or deliberately restore it.
+
+Transcription can miss speech or misplace word boundaries, especially near silence or chunk boundaries. Listen to the finished copy as well as reviewing the transcript; a verified transcript confirms its file integrity, not recognition accuracy.
 
 If **Play** reports that output cannot be verified, check FFprobe in Settings and that the completed copy remains in the configured output folder. Files moved elsewhere can be opened through Explorer. Dictionary exports accept ordinary `.json` files; if a selection expires or the destination changes during confirmation, select it again. The app retains a competing file instead of replacing it with the backup.
 

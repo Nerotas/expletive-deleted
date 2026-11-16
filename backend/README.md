@@ -48,6 +48,20 @@ The architecture tests cover standard-library-only imports, transcript-module is
 
 See [the backend review](../docs/PYTHON_BACKEND_REVIEW_2026-09-16.md) for the inspection results and remaining behavioral risks. Module separation alone does not resolve concurrency, media-safety, or security defects.
 
+## Experimental transcription performance
+
+`runtime/transcription.py` preserves standard inference unless a caller
+explicitly supplies `experimental_batch_size=1`, `2`, or `4`. Desktop job
+runtime requests size four for fresh transcription; direct CLI calls retain
+standard inference. Both retain compatible verified transcript reuse. The
+pinned faster-whisper 1.2.1 batched pipeline cannot preserve standard
+previous-text conditioning or silence-hallucination suppression; users must
+review the transcript and finished copy.
+
+Use the isolated [Windows/CPU experiment runner and review protocol](../docs/WHISPER_BATCHING_EXPERIMENT.md)
+for local measurements. Cancellation callbacks provide checkpoints only, not
+interruption of native inference; do not treat them as a cancellation deadline.
+
 ## Dictionary transactions
 
 Every managed policy read and mutation uses the permanent `.policy.lock` in the resolved dictionary directory. Lock order is service lifecycle, settings, policy, then destination ownership; never acquire settings while holding policy ownership. Release policy ownership before processing or network work. Snapshots used by jobs remain immutable for that job.

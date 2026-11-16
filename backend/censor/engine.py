@@ -59,12 +59,20 @@ class ProfanityCensor:
                  progress_callback: Callable[[dict[str, object]], None] | None = None,
                  cancellation: Event | None = None, ffmpeg_bin: str | None = None,
                  ffprobe_bin: str | None = None, whisper_cache_dir: Path | None = None,
-                 policy_store: PolicyStore | None = None, transcripts_root: Path | None = None):
+                 policy_store: PolicyStore | None = None, transcripts_root: Path | None = None,
+                 transcription_batch_size: int | None = None):
         self.input_file = input_file
         self.output_file = output_file
         self.model_name = require_whisper_model(model_name)
         self.whisper_library = require_whisper_library(whisper_library)
         self.whisper_device = whisper_device
+        if transcription_batch_size is not None and (
+            isinstance(transcription_batch_size, bool)
+            or not isinstance(transcription_batch_size, int)
+            or transcription_batch_size not in (1, 2, 4)
+        ):
+            raise ValueError("Transcription batch size must be 1, 2, or 4, or None for standard inference.")
+        self.transcription_batch_size = transcription_batch_size
         self.transcripts_dir = transcripts_dir
         self.transcripts_root = transcripts_root
         self.whisper_cache_dir = (whisper_cache_dir or get_whisper_cache_dir()).resolve()
@@ -470,19 +478,25 @@ class ProfanityCensor:
 
         temporary_audio = None
         try:
+            self._check_cancelled()
             if self._shared_model is not None:
                 model = self._shared_model[0]
             else:
                 model = self._load_whisper_model()[0]
 
+            self._check_cancelled()
             duration = self.get_media_duration_seconds() or 0.0
             transcription_input = self.input_file
             if require_front_center:
                 temporary_audio = self.extract_center_channel()
                 transcription_input = temporary_audio
+            self._check_cancelled()
             self.validate_transcription_audio(transcription_input)
-            # hallucination_silence_threshold prevents drift from hallucinated content in silent sections
-            segments_gen = transcribe_segments(model, self.whisper_library, transcription_input)
+            segments_gen = transcribe_segments(
+                model, self.whisper_library, transcription_input,
+                experimental_batch_size=getattr(self, "transcription_batch_size", None),
+                check_cancelled=self._check_cancelled,
+            )
 
             words_with_timestamps = []
             full_text_parts = []
@@ -539,6 +553,7 @@ class ProfanityCensor:
                         )
                         last_percent = progress
 
+            self._check_cancelled()
             elapsed = time.perf_counter() - tx_started
             completed_status = (
                 f"[Whisper] [########################] 100% | "
