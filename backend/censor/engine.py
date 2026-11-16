@@ -35,6 +35,7 @@ from backend.runtime.transcription import (
     require_whisper_library,
     transcribe_segments,
 )
+from backend.runtime.transcription_process import transcribe_in_process
 
 from .detection import _profanity_dictionary, find_review_candidates
 from .media import probe_audio_stream, is_5_1_stream, is_7_1_stream, has_discrete_center_channel
@@ -60,7 +61,8 @@ class ProfanityCensor:
                  cancellation: Event | None = None, ffmpeg_bin: str | None = None,
                  ffprobe_bin: str | None = None, whisper_cache_dir: Path | None = None,
                  policy_store: PolicyStore | None = None, transcripts_root: Path | None = None,
-                 transcription_batch_size: int | None = None):
+                 transcription_batch_size: int | None = None,
+                 isolate_transcription: bool = False):
         self.input_file = input_file
         self.output_file = output_file
         self.model_name = require_whisper_model(model_name)
@@ -73,6 +75,11 @@ class ProfanityCensor:
         ):
             raise ValueError("Transcription batch size must be 1, 2, or 4, or None for standard inference.")
         self.transcription_batch_size = transcription_batch_size
+        if isolate_transcription and transcription_batch_size is None:
+            raise ValueError("Isolated desktop transcription requires a batch size.")
+        if isolate_transcription and whisper_model is not None:
+            raise ValueError("A preloaded model cannot be used with isolated transcription.")
+        self.isolate_transcription = isolate_transcription
         self.transcripts_dir = transcripts_dir
         self.transcripts_root = transcripts_root
         self.whisper_cache_dir = (whisper_cache_dir or get_whisper_cache_dir()).resolve()
@@ -477,9 +484,13 @@ class ProfanityCensor:
         print(f"[*] Transcribing with {self.whisper_library} ({self.model_name})...")
 
         temporary_audio = None
+        segments_gen = None
         try:
             self._check_cancelled()
-            if self._shared_model is not None:
+            isolated = getattr(self, "isolate_transcription", False)
+            if isolated:
+                model = None
+            elif self._shared_model is not None:
                 model = self._shared_model[0]
             else:
                 model = self._load_whisper_model()[0]
@@ -492,11 +503,19 @@ class ProfanityCensor:
                 transcription_input = temporary_audio
             self._check_cancelled()
             self.validate_transcription_audio(transcription_input)
-            segments_gen = transcribe_segments(
-                model, self.whisper_library, transcription_input,
-                experimental_batch_size=getattr(self, "transcription_batch_size", None),
-                check_cancelled=self._check_cancelled,
-            )
+            if isolated:
+                segments_gen = transcribe_in_process(
+                    self.whisper_library, self.model_name, self.whisper_device,
+                    self.whisper_cache_dir, transcription_input, self.transcription_batch_size,
+                    self.cancellation, self._check_cancelled,
+                    on_ready=lambda: self._emit_progress("transcribing", 0.0, message="Model ready; processing audio"),
+                )
+            else:
+                segments_gen = transcribe_segments(
+                    model, self.whisper_library, transcription_input,
+                    experimental_batch_size=getattr(self, "transcription_batch_size", None),
+                    check_cancelled=self._check_cancelled,
+                )
 
             words_with_timestamps = []
             full_text_parts = []
@@ -589,6 +608,10 @@ class ProfanityCensor:
             print(f"[-] Transcription failed: {e}")
             raise
         finally:
+            if segments_gen is not None:
+                close = getattr(segments_gen, "close", None)
+                if close is not None:
+                    close()
             if temporary_audio and os.path.exists(temporary_audio):
                 os.unlink(temporary_audio)
 

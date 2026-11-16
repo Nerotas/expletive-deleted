@@ -278,6 +278,7 @@ class JobManagerTests(unittest.TestCase):
         self.assertEqual(completed.status, "transcribed")
         self.assertFalse(output_path(source, settings.directories.output).exists())
         self.assertEqual(FakeCensor.instances[-1].options["transcription_batch_size"], 4)
+        self.assertTrue(FakeCensor.instances[-1].options["isolate_transcription"])
 
     def test_verified_transcript_can_promote_to_the_censor_lane(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

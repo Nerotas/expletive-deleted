@@ -14,7 +14,7 @@ HP-03 serializes complete policy reads and mutations across threads and processe
 
 ## Working Pipeline
 
-Fresh desktop transcription uses faster-whisper batched inference with batch size four. The CLI continues to use standard inference. Recognition and timing can differ, particularly around silence and chunk boundaries, and progress/cancellation can wait for an in-flight batch. Existing verified transcripts remain reusable; no implicit retry or mode fallback occurs. See [the batching results and limitations](docs/WHISPER_BATCHING_EXPERIMENT.md).
+Fresh desktop transcription uses faster-whisper batched inference with batch size four. The CLI continues to use standard inference. Recognition and timing can differ, particularly around silence and chunk boundaries. Desktop cancellation can stop the separate inference process, although preparation and other stages may still delay it; progress can pause while a batch runs. Existing verified transcripts remain reusable; no implicit retry or mode fallback occurs. See [the batching results and limitations](docs/WHISPER_BATCHING_EXPERIMENT.md).
 
 Desktop shutdown requests cancellation before ending Python and waits up to 15 seconds. A Windows Job Object contains the bridge's process tree for forced-exit cleanup. Shared publication verifies and flushes staged output before a collision-refusing rename. Authorized replacement retains the previous file for recovery until publication succeeds. Settings changes and archive operations share a lock with submissions and reject conflicting active work.
 

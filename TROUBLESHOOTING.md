@@ -143,7 +143,7 @@ Downloads, copies, transcription, and censoring have distinct queue states. Tran
 
 To censor a file, first create its transcript. Censor jobs use the persisted, verified transcript and fail without one; they do not transcribe the media again.
 
-Desktop transcription processes up to four chunks at a time. Progress may remain unchanged until a batch completes, and cancellation must wait for the current processing step. If a batch fails because memory is limited, close other applications and retry; the app does not silently switch modes. The original and any previously verified transcript remain intact.
+Desktop transcription processes up to four chunks at a time. Progress may remain unchanged until a batch completes. Cancelling can stop the separate transcription process during a batch, although audio preparation, validation, and other processing steps may still delay cancellation. If a batch fails because memory is limited, close other applications and retry; the app does not silently switch modes. The original and any previously verified transcript remain intact.
 
 ## Profanity Was Not Detected
 

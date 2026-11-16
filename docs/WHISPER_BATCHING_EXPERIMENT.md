@@ -318,6 +318,56 @@ verification, source archival rules, downstream censoring, and the shared
 transcription/censoring slot remain unchanged. The product decision does not
 change the measured results or establish that the previously unmet gates passed.
 
+## November 16, 2026 follow-up: desktop cancellation and longer media
+
+Fresh desktop transcription now runs in a separate Python process, so a
+cancellation can stop model loading or inference without waiting for a native
+batch to finish. The parent still owns source verification, transcript
+publication, and the shared processing slot. Preparation, audio validation,
+and other stages can still delay cancellation; this is not a two-second
+guarantee for the entire desktop job.
+
+On the existing 90-second excerpt, a model-ready batch-4 worker was cancelled
+and reaped in **0.215 seconds**; its source hash remained unchanged and no
+transcript was published. A separate real worker completed successfully on the
+same excerpt. A Windows virtual-environment launcher initially obscured the real
+interpreter process; the worker now starts the base interpreter directly
+while restoring the parent's module paths and interpreter prefixes. A
+regression test checks that the process being terminated is the interpreter
+actually running the worker. This is a targeted inference probe, not a
+measurement of every cancellation or native Electron shutdown path.
+
+One offline batch-4 pass was also run on the approved 1,472.124-second episode
+on the same Ryzen 5 7520U laptop, using faster-whisper 1.2.1, CTranslate2
+4.8.1, and Python 3.14. CPU was requested; the worker did not report its actual
+device or compute type for this run. No cached transcript was used or
+published, and the source hash was unchanged.
+
+| Measurement | Result |
+| --- | ---: |
+| Cold worker startup and model ready | 19.65 s |
+| Processing after model ready | 1,037.52 s |
+| Total worker transcription time | 1,057.17 s (17 min 37 s) |
+| Audio duration / total worker time | 1.39x real time |
+| Segment events / timestamped words | 29 / 2,041 |
+| Longest interval between segment progress events, including start/end | 163.03 s |
+| Actual inference process lifetime peak working set | 4.08 GiB |
+| Actual inference process sampled peak private memory | at least 4.55 GiB |
+| Peak system physical memory reported in use | approximately 15.24 GiB of 15.24 GiB |
+
+The private-memory monitor started after worker startup, so its peak is a
+lower bound; the working-set peak covers the process lifetime. System memory
+was sampled throughout, with other applications and background load present.
+The first long-run worker used the virtual-environment launcher; its actual
+interpreter was monitored separately, and normal completion was observed.
+The subsequent short completion and cancellation probes exercised the revised
+direct-interpreter launch. This single cold-process pass has no matched
+standard-mode comparison or manual accuracy scoring and does not establish a
+repeatable speedup, censor-word recall, boundary accuracy, or scaling on
+stronger hardware. The near-exhausted reported system memory and long progress
+gaps warrant caution on this machine. Stronger-hardware testing remains
+deferred. The earlier recommendation and accuracy limitations remain unchanged.
+
 ## Validation and local artifacts
 
 - Focused adapter/profile/lifecycle regression suite passed (28 tests).
