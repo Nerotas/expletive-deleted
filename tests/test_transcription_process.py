@@ -24,6 +24,7 @@ class TranscriptionProcessTests(unittest.TestCase):
         bootstrap = (
             "import json,sys; json.load(sys.stdin); "
             "print(json.dumps({'type':'ready'}),flush=True); "
+            "print(json.dumps({'type':'transcribing'}),flush=True); "
             "print(json.dumps({'type':'segment','segment':{'text':' Hi',"
             "'start':1.0,'end':2.0,'words':[{'word':' Hi','start':1.1,'end':1.9}]}}),flush=True); "
             "print(json.dumps({'type':'completed'}),flush=True)"
@@ -36,6 +37,7 @@ class TranscriptionProcessTests(unittest.TestCase):
         bootstrap = (
             "import json,os,sys; json.load(sys.stdin); "
             "print(json.dumps({'type':'ready'}),flush=True); "
+            "print(json.dumps({'type':'transcribing'}),flush=True); "
             "print(json.dumps({'type':'segment','segment':{'text':str(os.getpid()),"
             "'start':0,'end':1,'words':[]}}),flush=True); "
             "print(json.dumps({'type':'completed'}),flush=True)"
@@ -129,11 +131,49 @@ class TranscriptionProcessTests(unittest.TestCase):
     def test_bad_segment_is_rejected(self):
         bootstrap = (
             "import json,sys; json.load(sys.stdin); print(json.dumps({'type':'ready'}),flush=True); "
+            "print(json.dumps({'type':'transcribing'}),flush=True); "
             "print(json.dumps({'type':'segment','segment':{'text':'x','start':0,'end':1,"
             "'words':[{'word':'x','start':True,'end':1}]}}),flush=True)"
         )
         with patch("backend.runtime.transcription_process._BOOTSTRAP", bootstrap):
             with self.assertRaisesRegex(RuntimeError, "invalid word"):
+                list(self.invoke(Event()))
+
+    def test_preparation_and_transcription_callbacks_are_ordered(self):
+        bootstrap = (
+            "import json,sys; json.load(sys.stdin); "
+            "print(json.dumps({'type':'ready'}),flush=True); "
+            "print(json.dumps({'type':'transcribing'}),flush=True); "
+            "print(json.dumps({'type':'completed'}),flush=True)"
+        )
+        events = []
+        with patch("backend.runtime.transcription_process._BOOTSTRAP", bootstrap):
+            output = list(transcribe_in_process(
+                "faster-whisper", "large-v3", "cpu", Path("."), "clip.wav",
+                4, Event(), lambda: None,
+                on_ready=lambda: events.append("preparing"),
+                on_transcribing=lambda: events.append("transcribing"),
+            ))
+        self.assertEqual(output, [])
+        self.assertEqual(events, ["preparing", "transcribing"])
+
+    def test_memory_error_with_empty_detail_is_actionable(self):
+        bootstrap = (
+            "import json,sys; json.load(sys.stdin); "
+            "print(json.dumps({'type':'error','detail':'','error_type':'MemoryError'}),flush=True)"
+        )
+        with patch("backend.runtime.transcription_process._BOOTSTRAP", bootstrap):
+            with self.assertRaisesRegex(RuntimeError, "close other apps.*MemoryError"):
+                list(self.invoke(Event()))
+
+    def test_worker_must_finish_preparation_before_emitting_segments(self):
+        bootstrap = (
+            "import json,sys; json.load(sys.stdin); "
+            "print(json.dumps({'type':'ready'}),flush=True); "
+            "print(json.dumps({'type':'segment','segment':{'text':'x','start':0,'end':1,'words':[]}}),flush=True)"
+        )
+        with patch("backend.runtime.transcription_process._BOOTSTRAP", bootstrap):
+            with self.assertRaisesRegex(RuntimeError, "unexpected response"):
                 list(self.invoke(Event()))
 
     def test_callback_failure_terminates_worker(self):

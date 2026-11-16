@@ -59,6 +59,7 @@ def transcribe_segments(
     *,
     experimental_batch_size: int | None = None,
     check_cancelled: Callable[[], None] | None = None,
+    on_prepared: Callable[[], None] | None = None,
 ) -> Iterable[dict[str, Any]]:
     """Normalize standard output, or explicitly opt into the experimental pipeline.
 
@@ -100,6 +101,8 @@ def transcribe_segments(
             f"No standard-mode retry was attempted. Details: {exc}"
         ) from exc
     try:
+        if on_prepared:
+            on_prepared()
         while True:
             if check_cancelled:
                 check_cancelled()

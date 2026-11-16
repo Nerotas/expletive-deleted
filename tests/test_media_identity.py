@@ -224,8 +224,8 @@ class MediaIdentityTests(unittest.TestCase):
             finally:
                 observed.append(temporary_audio.exists())
 
-        def progress(stage, *_args, **_kwargs):
-            if stage == "transcribing":
+        def progress(stage, *_args, **kwargs):
+            if stage == "transcribing" and kwargs.get("message") == "Loading the speech model":
                 censor.cancellation.set()
 
         censor._emit_progress = progress
@@ -271,6 +271,29 @@ class MediaIdentityTests(unittest.TestCase):
         self.assertEqual(result["source_identity"], identity())
         self.assertEqual(next((self.transcripts / ".history").iterdir()).read_bytes(), previous)
         self.assertEqual(self.source.read_bytes(), b"source")
+
+    def test_isolated_transcription_emits_preparation_and_inference_statuses(self):
+        censor = self.censor()
+        censor.transcription_batch_size = 4
+        censor.isolate_transcription = True
+        censor.whisper_cache_dir = self.root
+        censor.whisper_device = "cpu"
+        def worker(*_args, **kwargs):
+            kwargs["on_ready"]()
+            kwargs["on_transcribing"]()
+            yield {"text": " Example", "start": 1.0, "end": 1.5, "words": []}
+
+        with patch("backend.censor.engine.transcribe_in_process", side_effect=worker), \
+             patch("backend.censor.engine.record_transcription_timing"):
+            self.assertTrue(censor.process(report_only=True, force_transcribe=True))
+        events = [call.args[0] for call in censor.progress_callback.call_args_list]
+        statuses = [(event["message"], event["percent"]) for event in events if event["stage"] == "transcribing"]
+        self.assertEqual(statuses[:4], [
+            ("Checking and preparing audio", None),
+            ("Loading the speech model", None),
+            ("Preparing audio for transcription", None),
+            ("Transcribing audio", 0.0),
+        ])
 
     def test_renamed_source_reuses_recorded_transcript_without_transcription(self):
         old = self.transcript()

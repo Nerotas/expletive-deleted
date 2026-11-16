@@ -30,7 +30,7 @@ Expletive Deleted is free to use. [Ko-fi support](https://ko-fi.com/nicholaserot
 
 Automated transcription and censorship are not perfect. Always review the transcript and finished media before sharing it.
 
-New desktop transcriptions use faster batched processing (up to four audio chunks at a time). This may miss words or give inaccurate timing, including around silence and chunk boundaries; review the transcript and listen to the finished copy. Existing verified transcripts remain reusable. Progress and cancellation may pause during a processing step, and limited memory can cause a job to fail.
+New desktop transcriptions use faster batched processing (up to four audio chunks at a time). This may miss words or give inaccurate timing, including around silence and chunk boundaries; review the transcript and listen to the finished copy. Existing verified transcripts remain reusable. The Queue shows model loading and audio preparation separately; long files can take several minutes to prepare, and progress updates may be far apart. Limited memory can cause a job to fail. Cancellation can stop inference, but other processing steps may delay it.
 
 System verification runs in the background with component progress and compact timings. After 60 seconds, you can continue waiting for the same check; navigation and settings remain usable while processing waits for verified readiness. Audio with missing duration metadata is verified through a short, bounded decode instead of being rejected as empty. These checks do not download components or modify source media. See [troubleshooting](TROUBLESHOOTING.md).
 

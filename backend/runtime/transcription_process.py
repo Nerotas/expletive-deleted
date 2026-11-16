@@ -52,6 +52,7 @@ def transcribe_in_process(
     cancellation: Event,
     check_cancelled: Callable[[], None],
     on_ready: Callable[[], None] | None = None,
+    on_transcribing: Callable[[], None] | None = None,
 ) -> Iterator[dict[str, Any]]:
     """Terminate the child when cancelled, even inside model loading or native inference."""
     check_cancelled()
@@ -98,6 +99,7 @@ def transcribe_in_process(
     reader = Thread(target=read_output, name="transcription-worker-output", daemon=True)
     completed = False
     ready = False
+    transcribing = False
     try:
         process.stdin.write(json.dumps(request, ensure_ascii=True))
         process.stdin.close()
@@ -110,7 +112,11 @@ def transcribe_in_process(
                 continue
             check_cancelled()
             if kind == "eof":
-                raise RuntimeError(f"Transcription worker stopped unexpectedly (exit code {process.poll()}). Retry the job.")
+                raise RuntimeError(
+                    "Transcription stopped unexpectedly. The original and any existing transcript are preserved. "
+                    "Close other apps and retry; limited memory may be a cause. "
+                    f"Worker exit code: {process.poll()}."
+                )
             if kind == "invalid":
                 raise RuntimeError(str(value))
             try:
@@ -124,15 +130,21 @@ def transcribe_in_process(
                 ready = True
                 if on_ready:
                     on_ready()
-            elif event == "segment" and ready:
+            elif event == "transcribing" and ready and not transcribing:
+                transcribing = True
+                if on_transcribing:
+                    on_transcribing()
+            elif event == "segment" and transcribing:
                 yield _validate_segment(message.get("segment"))
-            elif event == "completed" and ready:
+            elif event == "completed" and transcribing:
                 completed = True
                 break
             elif event == "error" and isinstance(message.get("detail"), str):
+                detail = message["detail"] or message.get("error_type") or "No further details were provided"
                 raise RuntimeError(
-                    "Transcription failed. If memory is limited, close other apps and retry. "
-                    f"No automatic mode change was attempted. Details: {message['detail']}"
+                    "Transcription failed. The original and any existing transcript are preserved. "
+                    "If memory is limited, close other apps and retry. "
+                    f"No automatic mode change was attempted. Details: {detail}"
                 )
             else:
                 raise RuntimeError("The transcription worker sent an unexpected response.")

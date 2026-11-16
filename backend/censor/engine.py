@@ -498,6 +498,7 @@ class ProfanityCensor:
             self._check_cancelled()
             duration = self.get_media_duration_seconds() or 0.0
             transcription_input = self.input_file
+            self._emit_progress("transcribing", message="Checking and preparing audio")
             if require_front_center:
                 temporary_audio = self.extract_center_channel()
                 transcription_input = temporary_audio
@@ -508,7 +509,8 @@ class ProfanityCensor:
                     self.whisper_library, self.model_name, self.whisper_device,
                     self.whisper_cache_dir, transcription_input, self.transcription_batch_size,
                     self.cancellation, self._check_cancelled,
-                    on_ready=lambda: self._emit_progress("transcribing", 0.0, message="Model ready; processing audio"),
+                    on_ready=lambda: self._emit_progress("transcribing", message="Preparing audio for transcription"),
+                    on_transcribing=lambda: self._emit_progress("transcribing", 0.0, message="Transcribing audio"),
                 )
             else:
                 segments_gen = transcribe_segments(
@@ -524,7 +526,10 @@ class ProfanityCensor:
             initial_status = "[Whisper] [------------------------]   0% | speed N/A | elapsed 00:00 | eta --:--"
             sys.stdout.write(f"\r{initial_status:<110}")
             sys.stdout.flush()
-            self._emit_progress("transcribing", 0.0, message="Transcription started")
+            self._emit_progress(
+                "transcribing", None if isolated else 0.0,
+                message="Loading the speech model" if isolated else "Transcription started",
+            )
 
             for segment in segments_gen:
                 self._check_cancelled()

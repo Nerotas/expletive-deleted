@@ -24,7 +24,7 @@
 .active-job-row { display: grid; grid-template-columns: minmax(260px, 1.5fr) minmax(150px, .8fr) minmax(140px, .7fr) minmax(160px, .8fr) auto; align-items: center; gap: 16px; min-height: 76px; margin-bottom: 12px; padding: 9px 16px; border: 1px solid color-mix(in srgb, var(--signal) 55%, var(--line)); background: var(--surface); font-size: 12px; }
 .active-job-row time { color: var(--muted); font-size: 11px; }
 .active-job-status { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
-.active-job-status small { overflow: hidden; color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.active-job-status small { color: var(--muted); font-size: 10px; overflow-wrap: anywhere; }
 .active-cancel-action { display: inline-flex; align-items: center; gap: 4px; justify-self: end; padding: 3px 6px; border: 1px solid currentColor; border-radius: 4px; background: transparent; color: var(--danger); font-size: 11px; font-weight: 800; }
 .active-cancel-action:disabled { color: var(--muted); cursor: not-allowed; opacity: .72; }
 table { width: 100%; border-collapse: collapse; table-layout: fixed; }
@@ -78,6 +78,7 @@ tr:last-child td { border-bottom: 0; }
 
 .actions-cell { min-width: 0; }
 .row-detail { display: block; margin-bottom: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.row-detail-error { overflow: visible; white-space: normal; overflow-wrap: anywhere; }
 .job-diagnostic { margin: 0 0 6px; color: var(--muted); font-size: 11px; }
 .job-diagnostic summary { width: fit-content; cursor: pointer; color: var(--signal); font-weight: 800; }
 .job-diagnostic pre { max-width: 100%; max-height: 180px; margin: 6px 0 0; overflow: auto; padding: 8px; border: 1px solid var(--line); background: var(--surface-raised); color: var(--ink); font: 10px/1.45 var(--mono); white-space: pre-wrap; word-break: break-word; }

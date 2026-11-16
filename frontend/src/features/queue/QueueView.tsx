@@ -169,6 +169,9 @@ export function QueueView({
 
     <p className="muted">Transcription may miss words or get their timing wrong. Review the transcript and listen to the finished copy before sharing. Progress and cancellation can pause while audio is being processed.</p>
 
+    {activeRows.some(({ pendingJob, job }) => (pendingJob ?? job)?.status === 'transcribing') &&
+      <p className="muted">Preparing long files can take several minutes. During transcription, progress updates may be far apart; an unchanged percentage does not necessarily mean the job has stopped.</p>}
+
     {activeRows.map(activeJobRow)}
 
     <div className="table-controls">

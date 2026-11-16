@@ -23,6 +23,7 @@ def run(request: dict) -> None:
         for segment in transcribe_segments(
             model, request["library"], request["media_path"],
             experimental_batch_size=request["batch_size"],
+            on_prepared=lambda: send({"type": "transcribing"}),
         ):
             send({"type": "segment", "segment": segment})
         send({"type": "completed"})

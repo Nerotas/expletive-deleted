@@ -55,6 +55,22 @@ class BatchedTranscriptionTests(unittest.TestCase):
         result = list(transcribe_segments(self.model, "faster-whisper", "clip.wav"))
         self.assertEqual(result[0]["words"], [])
 
+    def test_prepared_callback_runs_after_audio_preparation_before_first_segment(self):
+        events = []
+        def prepare(*_args, **_kwargs):
+            events.append("preparing")
+            def segments():
+                events.append("inference")
+                yield self.segment
+            return segments(), None
+        self.model.transcribe.side_effect = prepare
+        result = list(transcribe_segments(
+            self.model, "faster-whisper", "clip.wav",
+            on_prepared=lambda: events.append("prepared"),
+        ))
+        self.assertEqual(events, ["preparing", "prepared", "inference"])
+        self.assertEqual(result[0]["text"], " Example")
+
     def test_pre_cancelled_does_not_start(self):
         check = Mock(side_effect=InterruptedError("Cancelled"))
         with self.assertRaises(InterruptedError):
