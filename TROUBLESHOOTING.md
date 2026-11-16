@@ -143,6 +143,8 @@ Downloads, copies, transcription, and censoring have distinct queue states. Tran
 
 To censor a file, first create its transcript. Censor jobs use the persisted, verified transcript and fail without one; they do not transcribe the media again.
 
+Desktop transcription processes up to four chunks at a time. Loading the model and preparing the audio show no percentage; preparation for a long file can take several minutes. During transcription, progress updates may be far apart, so an unchanged percentage alone does not mean the job has stopped. Cancelling can stop the separate transcription process during a batch, although audio preparation, validation, and other processing steps may still delay cancellation. If transcription fails or stops unexpectedly, limited memory is one possible cause: close other applications and retry. The app does not silently switch modes. The original and any previously verified transcript remain intact.
+
 ## Profanity Was Not Detected
 
 Run report-only mode first:
@@ -152,6 +154,8 @@ Run report-only mode first:
 ```
 
 Review the transcript under the configured Transcripts directory, then classify the term from the desktop **Dictionary** page. The shipped files under `resources/` are factory defaults; live state is stored atomically in `%LOCALAPPDATA%\ExpletiveDeleted\dictionary\censored.json`, `exclusions.json`, and `discovered.json`. Use the Dictionary page to import, export, or deliberately restore it.
+
+Transcription can miss speech or misplace word boundaries, especially near silence or chunk boundaries. Listen to the finished copy as well as reviewing the transcript; a verified transcript confirms its file integrity, not recognition accuracy.
 
 If **Play** reports that output cannot be verified, check FFprobe in Settings and that the completed copy remains in the configured output folder. Files moved elsewhere can be opened through Explorer. Dictionary exports accept ordinary `.json` files; if a selection expires or the destination changes during confirmation, select it again. The app retains a competing file instead of replacing it with the backup.
 

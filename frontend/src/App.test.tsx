@@ -598,6 +598,8 @@ describe('desktop application renderer', () => {
     const user = userEvent.setup()
     renderApp('/')
     expect(await screen.findByText('Drop media here to add it')).toBeInTheDocument()
+    expect(screen.getByText(/Transcription may miss words or get their timing wrong/)).toBeInTheDocument()
+    expect(screen.getByText(/Progress and cancellation can pause/)).toBeInTheDocument()
     await user.click(screen.getByRole('link', { name: 'Dictionary' }))
     await user.type(await screen.findByRole('textbox', { name: 'Word or phrase' }), 'example')
     await user.click(screen.getByRole('button', { name: 'Add' }))
@@ -1022,6 +1024,41 @@ describe('desktop application renderer', () => {
     expect(screen.getByRole('button', { name: 'Cancel job' })).toBeInTheDocument()
     expect(screen.queryByRole('checkbox', { name: 'Select movie.mkv' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Transcribe only' })).not.toBeInTheDocument()
+  })
+
+  it('shows transcription preparation without a fabricated percentage and explains progress gaps', async () => {
+    const source = 'C:\\Media\\Ready\\long.mkv'
+    vi.mocked(desktopClient.listLibrary).mockResolvedValue([{
+      source, status: 'ready', date_added: '2026-09-01T12:00:00Z', transcript: null, output: null, duration_seconds: null,
+    }])
+    vi.mocked(desktopClient.listJobs).mockResolvedValue([{
+      id: 'long-job', source, mode: 'report_only', status: 'transcribing', progress_percent: null, error: null,
+    }])
+    vi.mocked(desktopClient.listJobEvents).mockResolvedValue([{
+      event: 'progress', job_id: 'long-job', sequence: 1, stage: 'transcribing', percent: null,
+      eta_seconds: null, fps: null, message: 'Preparing audio for transcription',
+    }])
+    renderApp('/')
+
+    expect(await screen.findByText('Preparing audio for transcription')).toBeInTheDocument()
+    expect(screen.getByText(/an unchanged percentage does not necessarily mean/)).toBeInTheDocument()
+    expect(screen.queryByText('0%')).not.toBeInTheDocument()
+  })
+
+  it('shows actionable transcription failure guidance and retry', async () => {
+    const source = 'C:\\Media\\Ready\\long.mkv'
+    const detail = 'Transcription stopped unexpectedly. The original and any existing transcript are preserved. Close other apps and retry; limited memory may be a cause.'
+    vi.mocked(desktopClient.listLibrary).mockResolvedValue([{
+      source, status: 'ready', date_added: '2026-09-01T12:00:00Z', transcript: null, output: null, duration_seconds: null,
+    }])
+    vi.mocked(desktopClient.listJobs).mockResolvedValue([{
+      id: 'failed-job', source, mode: 'report_only', status: 'failed', progress_percent: null,
+      error: { code: 'processing_failed', message: 'Media processing failed', detail, retryable: true, diagnostic: null },
+    }])
+    renderApp('/')
+
+    expect(await screen.findByText(detail)).toHaveClass('row-detail-error')
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
   })
 
   it('offers a managed JavaScript runtime download when yt-dlp cannot solve the YouTube challenge', async () => {

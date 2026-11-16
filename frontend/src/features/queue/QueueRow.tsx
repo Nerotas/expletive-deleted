@@ -106,7 +106,7 @@ export function QueueRow({
     <td className="position-cell">{active ? <strong>Active</strong> : queuePosition != null ? <span>#{queuePosition}</span> : <span className="muted">—</span>}</td>
     <td>{percent != null ? <div className="progress-wrap"><div className={`progress-track progress-${status}`}><span style={{ width: `${percent}%` }} /></div><span>{Math.round(percent)}%</span></div> : <span className="muted">—</span>}</td>
     <td className="actions-cell">
-      <span className="row-detail" title={detail}>{detail}</span>
+      <span className={`row-detail${displayJob?.error ? ' row-detail-error' : ''}`} title={detail}>{detail}</span>
       {displayJob?.error?.diagnostic && <details className="job-diagnostic">
         <summary>Technical details</summary>
         <pre>{displayJob.error.diagnostic}</pre>

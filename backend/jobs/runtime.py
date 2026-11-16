@@ -92,6 +92,8 @@ class JobRuntime:
                     ffprobe_bin=self._configured_runtime_path("FFprobe", self.settings.runtime.ffprobe_path),
                     whisper_cache_dir=resolve_whisper_cache_dir(self.settings.runtime.whisper_cache),
                     transcripts_root=directories.transcripts,
+                    transcription_batch_size=4,
+                    isolate_transcription=True,
                 )
                 if job.mode == "report_only":
                     self._on_status(job_id, "transcribing", 0.0, None, None)

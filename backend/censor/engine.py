@@ -35,6 +35,7 @@ from backend.runtime.transcription import (
     require_whisper_library,
     transcribe_segments,
 )
+from backend.runtime.transcription_process import transcribe_in_process
 
 from .detection import _profanity_dictionary, find_review_candidates
 from .media import probe_audio_stream, is_5_1_stream, is_7_1_stream, has_discrete_center_channel
@@ -59,12 +60,26 @@ class ProfanityCensor:
                  progress_callback: Callable[[dict[str, object]], None] | None = None,
                  cancellation: Event | None = None, ffmpeg_bin: str | None = None,
                  ffprobe_bin: str | None = None, whisper_cache_dir: Path | None = None,
-                 policy_store: PolicyStore | None = None, transcripts_root: Path | None = None):
+                 policy_store: PolicyStore | None = None, transcripts_root: Path | None = None,
+                 transcription_batch_size: int | None = None,
+                 isolate_transcription: bool = False):
         self.input_file = input_file
         self.output_file = output_file
         self.model_name = require_whisper_model(model_name)
         self.whisper_library = require_whisper_library(whisper_library)
         self.whisper_device = whisper_device
+        if transcription_batch_size is not None and (
+            isinstance(transcription_batch_size, bool)
+            or not isinstance(transcription_batch_size, int)
+            or transcription_batch_size not in (1, 2, 4)
+        ):
+            raise ValueError("Transcription batch size must be 1, 2, or 4, or None for standard inference.")
+        self.transcription_batch_size = transcription_batch_size
+        if isolate_transcription and transcription_batch_size is None:
+            raise ValueError("Isolated desktop transcription requires a batch size.")
+        if isolate_transcription and whisper_model is not None:
+            raise ValueError("A preloaded model cannot be used with isolated transcription.")
+        self.isolate_transcription = isolate_transcription
         self.transcripts_dir = transcripts_dir
         self.transcripts_root = transcripts_root
         self.whisper_cache_dir = (whisper_cache_dir or get_whisper_cache_dir()).resolve()
@@ -469,20 +484,40 @@ class ProfanityCensor:
         print(f"[*] Transcribing with {self.whisper_library} ({self.model_name})...")
 
         temporary_audio = None
+        segments_gen = None
         try:
-            if self._shared_model is not None:
+            self._check_cancelled()
+            isolated = getattr(self, "isolate_transcription", False)
+            if isolated:
+                model = None
+            elif self._shared_model is not None:
                 model = self._shared_model[0]
             else:
                 model = self._load_whisper_model()[0]
 
+            self._check_cancelled()
             duration = self.get_media_duration_seconds() or 0.0
             transcription_input = self.input_file
+            self._emit_progress("transcribing", message="Checking and preparing audio")
             if require_front_center:
                 temporary_audio = self.extract_center_channel()
                 transcription_input = temporary_audio
+            self._check_cancelled()
             self.validate_transcription_audio(transcription_input)
-            # hallucination_silence_threshold prevents drift from hallucinated content in silent sections
-            segments_gen = transcribe_segments(model, self.whisper_library, transcription_input)
+            if isolated:
+                segments_gen = transcribe_in_process(
+                    self.whisper_library, self.model_name, self.whisper_device,
+                    self.whisper_cache_dir, transcription_input, self.transcription_batch_size,
+                    self.cancellation, self._check_cancelled,
+                    on_ready=lambda: self._emit_progress("transcribing", message="Preparing audio for transcription"),
+                    on_transcribing=lambda: self._emit_progress("transcribing", 0.0, message="Transcribing audio"),
+                )
+            else:
+                segments_gen = transcribe_segments(
+                    model, self.whisper_library, transcription_input,
+                    experimental_batch_size=getattr(self, "transcription_batch_size", None),
+                    check_cancelled=self._check_cancelled,
+                )
 
             words_with_timestamps = []
             full_text_parts = []
@@ -491,7 +526,10 @@ class ProfanityCensor:
             initial_status = "[Whisper] [------------------------]   0% | speed N/A | elapsed 00:00 | eta --:--"
             sys.stdout.write(f"\r{initial_status:<110}")
             sys.stdout.flush()
-            self._emit_progress("transcribing", 0.0, message="Transcription started")
+            self._emit_progress(
+                "transcribing", None if isolated else 0.0,
+                message="Loading the speech model" if isolated else "Transcription started",
+            )
 
             for segment in segments_gen:
                 self._check_cancelled()
@@ -539,6 +577,7 @@ class ProfanityCensor:
                         )
                         last_percent = progress
 
+            self._check_cancelled()
             elapsed = time.perf_counter() - tx_started
             completed_status = (
                 f"[Whisper] [########################] 100% | "
@@ -574,6 +613,10 @@ class ProfanityCensor:
             print(f"[-] Transcription failed: {e}")
             raise
         finally:
+            if segments_gen is not None:
+                close = getattr(segments_gen, "close", None)
+                if close is not None:
+                    close()
             if temporary_audio and os.path.exists(temporary_audio):
                 os.unlink(temporary_audio)
 

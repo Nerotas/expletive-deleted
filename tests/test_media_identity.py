@@ -148,6 +148,153 @@ class MediaIdentityTests(unittest.TestCase):
         self.assertEqual(len(history), 1)
         self.assertEqual(history[0].read_bytes(), previous)
 
+    def test_batch_four_retranscription_uses_normalized_words_and_keeps_history(self):
+        transcript = self.transcript()
+        previous = transcript.read_bytes()
+        censor = self.censor()
+        censor.transcription_batch_size = 4
+        segments = [{
+            "text": " Example", "start": 1.0, "end": 1.5,
+            "words": [{"word": " Example", "start": 1.1, "end": 1.4}],
+        }]
+        with patch("backend.censor.engine.transcribe_segments", return_value=iter(segments)) as transcribe, \
+             patch("backend.censor.engine.record_transcription_timing"):
+            self.assertTrue(censor.process(report_only=True, force_transcribe=True))
+        self.assertEqual(transcribe.call_args.kwargs["experimental_batch_size"], 4)
+        self.assertTrue(callable(transcribe.call_args.kwargs["check_cancelled"]))
+        result = json.loads(transcript.read_text(encoding="utf-8"))
+        self.assertEqual(result["words"][0]["start"], 1.1)
+        self.assertEqual(result["source_identity"], identity())
+        self.assertEqual(next((self.transcripts / ".history").iterdir()).read_bytes(), previous)
+        self.assertEqual(self.source.read_bytes(), b"source")
+
+    def test_batch_four_reuses_existing_verified_transcript_without_inference(self):
+        transcript = self.transcript()
+        previous = transcript.read_bytes()
+        censor = self.censor()
+        censor.transcription_batch_size = 4
+        with patch("backend.censor.engine.transcribe_segments") as transcribe:
+            self.assertTrue(censor.process(report_only=True))
+        transcribe.assert_not_called()
+        self.assertEqual(transcript.read_bytes(), previous)
+
+    def test_batch_failure_does_not_replace_previous_transcript_or_retry(self):
+        transcript = self.transcript()
+        previous = transcript.read_bytes()
+        censor = self.censor()
+        censor.transcription_batch_size = 4
+        with patch("backend.censor.engine.transcribe_segments", side_effect=RuntimeError("out of memory")) as transcribe:
+            self.assertFalse(censor.process(report_only=True, force_transcribe=True))
+        self.assertIn("out of memory", censor.last_error)
+        transcribe.assert_called_once()
+        self.assertEqual(transcript.read_bytes(), previous)
+        self.assertEqual(self.source.read_bytes(), b"source")
+
+    def test_cancellation_after_last_segment_prevents_publication(self):
+        transcript = self.transcript()
+        previous = transcript.read_bytes()
+        censor = self.censor()
+        censor.transcription_batch_size = 4
+
+        def segments(*_args, **_kwargs):
+            censor.cancellation.set()
+            return iter(())
+
+        with patch("backend.censor.engine.transcribe_segments", side_effect=segments):
+            self.assertFalse(censor.process(report_only=True, force_transcribe=True))
+        self.assertIn("cancelled", censor.last_error)
+        self.assertEqual(transcript.read_bytes(), previous)
+        self.assertEqual(self.source.read_bytes(), b"source")
+
+    def test_isolated_worker_cancel_closes_before_surround_temporary_is_removed(self):
+        censor = self.censor()
+        censor.transcription_batch_size = 4
+        censor.isolate_transcription = True
+        censor.whisper_cache_dir = self.root
+        censor.whisper_device = "cpu"
+        censor.has_discrete_center_audio.return_value = True
+        temporary_audio = self.root / "center.wav"
+        temporary_audio.write_bytes(b"audio")
+        censor.extract_center_channel = MagicMock(return_value=str(temporary_audio))
+        observed = []
+
+        def worker(*_args, **_kwargs):
+            try:
+                yield {"text": " Example", "start": 1.0, "end": 1.5, "words": []}
+            finally:
+                observed.append(temporary_audio.exists())
+
+        def progress(stage, *_args, **kwargs):
+            if stage == "transcribing" and kwargs.get("message") == "Loading the speech model":
+                censor.cancellation.set()
+
+        censor._emit_progress = progress
+        with patch("backend.censor.engine.transcribe_in_process", side_effect=worker):
+            self.assertFalse(censor.process(report_only=True, force_transcribe=True))
+        self.assertEqual(observed, [True])
+        self.assertFalse(temporary_audio.exists())
+        self.assertEqual(self.source.read_bytes(), b"source")
+
+    def test_isolated_worker_failure_preserves_existing_transcript_and_source(self):
+        transcript = self.transcript()
+        previous = transcript.read_bytes()
+        censor = self.censor()
+        censor.transcription_batch_size = 4
+        censor.isolate_transcription = True
+        censor.whisper_cache_dir = self.root
+        censor.whisper_device = "cpu"
+        with patch("backend.censor.engine.transcribe_in_process", side_effect=RuntimeError("worker failed")) as worker:
+            self.assertFalse(censor.process(report_only=True, force_transcribe=True))
+        worker.assert_called_once()
+        self.assertIn("worker failed", censor.last_error)
+        self.assertEqual(transcript.read_bytes(), previous)
+        self.assertEqual(self.source.read_bytes(), b"source")
+
+    def test_isolated_worker_output_is_published_with_verified_identity(self):
+        transcript = self.transcript()
+        previous = transcript.read_bytes()
+        censor = self.censor()
+        censor.transcription_batch_size = 4
+        censor.isolate_transcription = True
+        censor.whisper_cache_dir = self.root
+        censor.whisper_device = "cpu"
+        segments = [{
+            "text": " Example", "start": 1.0, "end": 1.5,
+            "words": [{"word": " Example", "start": 1.1, "end": 1.4}],
+        }]
+        with patch("backend.censor.engine.transcribe_in_process", return_value=iter(segments)) as worker, \
+             patch("backend.censor.engine.record_transcription_timing"):
+            self.assertTrue(censor.process(report_only=True, force_transcribe=True))
+        worker.assert_called_once()
+        result = json.loads(transcript.read_text(encoding="utf-8"))
+        self.assertEqual(result["words"][0]["start"], 1.1)
+        self.assertEqual(result["source_identity"], identity())
+        self.assertEqual(next((self.transcripts / ".history").iterdir()).read_bytes(), previous)
+        self.assertEqual(self.source.read_bytes(), b"source")
+
+    def test_isolated_transcription_emits_preparation_and_inference_statuses(self):
+        censor = self.censor()
+        censor.transcription_batch_size = 4
+        censor.isolate_transcription = True
+        censor.whisper_cache_dir = self.root
+        censor.whisper_device = "cpu"
+        def worker(*_args, **kwargs):
+            kwargs["on_ready"]()
+            kwargs["on_transcribing"]()
+            yield {"text": " Example", "start": 1.0, "end": 1.5, "words": []}
+
+        with patch("backend.censor.engine.transcribe_in_process", side_effect=worker), \
+             patch("backend.censor.engine.record_transcription_timing"):
+            self.assertTrue(censor.process(report_only=True, force_transcribe=True))
+        events = [call.args[0] for call in censor.progress_callback.call_args_list]
+        statuses = [(event["message"], event["percent"]) for event in events if event["stage"] == "transcribing"]
+        self.assertEqual(statuses[:4], [
+            ("Checking and preparing audio", None),
+            ("Loading the speech model", None),
+            ("Preparing audio for transcription", None),
+            ("Transcribing audio", 0.0),
+        ])
+
     def test_renamed_source_reuses_recorded_transcript_without_transcription(self):
         old = self.transcript()
         before = old.read_bytes()
