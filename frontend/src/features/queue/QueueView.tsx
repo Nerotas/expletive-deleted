@@ -4,9 +4,10 @@ import { LoadingRow } from '../../components/ui/LoadingRow'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import { useColumnResize } from '../../hooks/use-column-resize'
 import type { Capabilities, Job, Settings } from '../../types/domain'
-import { fileName, formatEta } from '../../utils/format'
+import { fileName, formatJobProgress } from '../../utils/format'
 import { selectQueueRows, type QueueRowModel, type QueueFilter, type QueueSort, type SortDirection } from './queue-model'
 import { QueueRow } from './QueueRow'
+import { JobProgress } from './JobProgress'
 import type { QueueController } from './useQueue'
 
 type QueueColumn = 'file' | 'length' | 'dateAdded' | 'status' | 'queue' | 'progress' | 'actions'
@@ -142,11 +143,7 @@ export function QueueView({
     if (!activeJob) return null
     const remote = activeJob.source_type === 'youtube'
     const event = queue.jobEvents[activeJob.id]
-    const detail = event?.fps
-      ? `${Math.round(event.fps)} FPS${event.eta_seconds != null ? ` · ${formatEta(event.eta_seconds)} left` : ''}`
-      : event?.eta_seconds != null
-        ? `${formatEta(event.eta_seconds)} left`
-        : event?.message ?? 'Processing'
+    const detail = formatJobProgress(event) ?? 'Processing'
     return <div className="active-job-row" key={item.source}>
       <div className="file-cell">
         <span className="file-icon">{remote ? 'YT' : fileName(item.source).split('.').pop()?.toUpperCase()}</span>
@@ -154,7 +151,7 @@ export function QueueView({
       </div>
       {item.date_added ? <time dateTime={item.date_added}>{new Date(item.date_added).toLocaleString()}</time> : <span className="muted">—</span>}
       <div className="active-job-status"><StatusBadge status={activeJob.status} /><small>{detail}</small></div>
-      {activeJob.progress_percent != null ? <div className="progress-wrap"><div className={`progress-track progress-${activeJob.status}`}><span style={{ width: `${activeJob.progress_percent}%` }} /></div><span>{Math.round(activeJob.progress_percent)}%</span></div> : <span className="muted">—</span>}
+      <JobProgress status={activeJob.status} percent={activeJob.progress_percent} />
       <button className="active-cancel-action" disabled={queue.busy} title="Cancel this running job and keep the source file" onClick={() => void queue.cancelJob(activeJob)}><CircleStop size={13} />Cancel job</button>
     </div>
   }
@@ -170,7 +167,7 @@ export function QueueView({
     <p className="muted">Transcription may miss words or get their timing wrong. Review the transcript and listen to the finished copy before sharing. Progress and cancellation can pause while audio is being processed.</p>
 
     {activeRows.some(({ pendingJob, job }) => (pendingJob ?? job)?.status === 'transcribing') &&
-      <p className="muted">Preparing long files can take several minutes. During transcription, progress updates may be far apart; an unchanged percentage does not necessarily mean the job has stopped.</p>}
+      <p className="muted">Preparing long files can take several minutes. Transcription progress measures completed speech audio across all batches. Speed is seconds of speech processed per second; the remaining time is an estimate. Progress updates arrive after each batch; an unchanged percentage does not necessarily mean the job has stopped.</p>}
 
     {activeRows.map(activeJobRow)}
 

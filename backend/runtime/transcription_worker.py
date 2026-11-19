@@ -2,6 +2,7 @@
 
 import json
 import sys
+from dataclasses import asdict
 from pathlib import Path
 
 from .transcription import load_transcription_model, transcribe_segments
@@ -24,6 +25,7 @@ def run(request: dict) -> None:
             model, request["library"], request["media_path"],
             experimental_batch_size=request["batch_size"],
             on_prepared=lambda: send({"type": "transcribing"}),
+            on_progress=lambda progress: send({"type": "progress", "progress": asdict(progress)}),
         ):
             send({"type": "segment", "segment": segment})
         send({"type": "completed"})

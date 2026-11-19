@@ -1,8 +1,9 @@
 import { ArchiveIcon, CircleStop, FileText, Play, X } from 'lucide-react'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import type { Job, JobEvent, JobSubmissionOptions, LibraryItem } from '../../types/domain'
-import { fileName, formatDuration, formatEta } from '../../utils/format'
+import { fileName, formatDuration, formatJobProgress } from '../../utils/format'
 import { isBulkSelectable } from './queue-model'
+import { JobProgress } from './JobProgress'
 
 export function QueueRow({
   item,
@@ -68,22 +69,19 @@ export function QueueRow({
       : busy
         ? 'Wait for the current queue action to finish'
         : undefined
-  const detail = pendingJob && event?.message ? event.message : event?.fps
-    ? `${Math.round(event.fps)} FPS${event.eta_seconds != null ? ` · ${formatEta(event.eta_seconds)} left` : ''}`
-    : event?.eta_seconds != null
-      ? `${formatEta(event.eta_seconds)} left`
-      : displayJob?.error?.detail
-        ?? (status === 'transcribed'
-          ? 'Transcript recorded; source checked when used'
-          : ['completed', 'finished'].includes(status)
-            ? 'Output recorded; source checked when used'
-            : status === 'unverified'
-              ? 'Identity unverified. Existing files preserved.'
-            : status === 'queued'
-              ? 'Waiting for earlier jobs'
-              : pendingJob
-                ? 'Processing'
-                : 'Ready for an action')
+  const detail = displayJob?.error?.detail
+    ?? formatJobProgress(event)
+    ?? (status === 'transcribed'
+      ? 'Transcript recorded; source checked when used'
+      : ['completed', 'finished'].includes(status)
+        ? 'Output recorded; source checked when used'
+        : status === 'unverified'
+          ? 'Identity unverified. Existing files preserved.'
+          : status === 'queued'
+            ? 'Waiting for earlier jobs'
+            : pendingJob
+              ? 'Processing'
+              : 'Ready for an action')
 
   return <tr>
     <td className="select-column">
@@ -104,7 +102,7 @@ export function QueueRow({
     <td>{item.date_added ? new Date(item.date_added).toLocaleString() : <span className="muted">—</span>}</td>
     <td><StatusBadge status={status} label={statusLabel} /></td>
     <td className="position-cell">{active ? <strong>Active</strong> : queuePosition != null ? <span>#{queuePosition}</span> : <span className="muted">—</span>}</td>
-    <td>{percent != null ? <div className="progress-wrap"><div className={`progress-track progress-${status}`}><span style={{ width: `${percent}%` }} /></div><span>{Math.round(percent)}%</span></div> : <span className="muted">—</span>}</td>
+    <td>{displayJob ? <JobProgress status={displayJob.status} percent={percent} /> : <span className="muted">—</span>}</td>
     <td className="actions-cell">
       <span className={`row-detail${displayJob?.error ? ' row-detail-error' : ''}`} title={detail}>{detail}</span>
       {displayJob?.error?.diagnostic && <details className="job-diagnostic">

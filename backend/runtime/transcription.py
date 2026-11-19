@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
+from dataclasses import dataclass
 from pathlib import Path
+import time
 from typing import Any
 
 from backend.runtime.dependency_inspection import (
@@ -18,6 +20,27 @@ from backend.runtime.locations import (
 
 
 SUPPORTED_WHISPER_LIBRARIES = ("faster-whisper",)
+
+
+@dataclass(frozen=True)
+class TranscriptionProgress:
+    processed_seconds: float
+    total_seconds: float
+    elapsed_seconds: float
+
+    @property
+    def percent(self) -> float | None:
+        # Leave completion to the caller, after the transcript has been verified.
+        return min(99.0, self.processed_seconds / self.total_seconds * 100) if self.total_seconds > 0 else None
+
+    @property
+    def speed(self) -> float | None:
+        return self.processed_seconds / self.elapsed_seconds if self.elapsed_seconds > 0 and self.processed_seconds > 0 else None
+
+    @property
+    def eta_seconds(self) -> float | None:
+        speed = self.speed
+        return max(0.0, self.total_seconds - self.processed_seconds) / speed if speed else None
 
 
 def require_whisper_library(library: str) -> str:
@@ -60,6 +83,7 @@ def transcribe_segments(
     experimental_batch_size: int | None = None,
     check_cancelled: Callable[[], None] | None = None,
     on_prepared: Callable[[], None] | None = None,
+    on_progress: Callable[[TranscriptionProgress], None] | None = None,
 ) -> Iterable[dict[str, Any]]:
     """Normalize standard output, or explicitly opt into the experimental pipeline.
 
@@ -80,6 +104,9 @@ def transcribe_segments(
         "language": "en", "word_timestamps": True, "vad_filter": True,
     }
     transcriber = model
+    processed_seconds = 0.0
+    total_seconds = 0.0
+    inference_started = 0.0
     if experimental_batch_size is None:
         options.update(condition_on_previous_text=True, hallucination_silence_threshold=2.0)
     else:
@@ -88,11 +115,32 @@ def transcribe_segments(
             raise RuntimeError("The batching experiment requires faster-whisper 1.2.1; no automatic upgrade is allowed.")
         from faster_whisper import BatchedInferencePipeline
 
+        if on_progress is not None:
+            class ProgressPipeline(BatchedInferencePipeline):
+                # The supported 1.2.1 forward call completes decoding and word alignment
+                # for one batch, including chunks that produce no transcript segments.
+                def forward(self, features, tokenizer, chunks_metadata, options):
+                    nonlocal processed_seconds
+                    if check_cancelled:
+                        check_cancelled()
+                    result = super().forward(features, tokenizer, chunks_metadata, options)
+                    if check_cancelled:
+                        check_cancelled()
+                    processed_seconds += sum(chunk["duration"] for chunk in chunks_metadata)
+                    on_progress(TranscriptionProgress(
+                        min(processed_seconds, total_seconds), total_seconds,
+                        time.perf_counter() - inference_started,
+                    ))
+                    return result
+
+            transcriber = ProgressPipeline(model=model)
+        else:
+            transcriber = BatchedInferencePipeline(model=model)
         # A fresh wrapper avoids sharing its mutable timestamp state across runs.
-        transcriber = BatchedInferencePipeline(model=model)
         options["batch_size"] = experimental_batch_size
     try:
-        segments = iter(transcriber.transcribe(media_path, **options)[0])
+        output, info = transcriber.transcribe(media_path, **options)
+        segments = iter(output)
     except RuntimeError as exc:
         if experimental_batch_size is None:
             raise
@@ -103,6 +151,10 @@ def transcribe_segments(
     try:
         if on_prepared:
             on_prepared()
+        if experimental_batch_size is not None and on_progress is not None:
+            total_seconds = info.duration_after_vad
+            inference_started = time.perf_counter()
+            on_progress(TranscriptionProgress(0.0, total_seconds, 0.0))
         while True:
             if check_cancelled:
                 check_cancelled()

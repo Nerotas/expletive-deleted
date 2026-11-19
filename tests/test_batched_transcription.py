@@ -38,6 +38,60 @@ class BatchedTranscriptionTests(unittest.TestCase):
                 self.assertEqual(result[0]["words"][0]["start"], 1.1)
                 self.model.transcribe.assert_not_called()
 
+    def test_batch_progress_combines_completed_speech_and_elapsed_time(self):
+        progress = []
+        events = []
+        segment = self.segment
+
+        def prepare(pipeline, _path, **_options):
+            events.append("preparing")
+            def segments():
+                pipeline.forward(None, None, [{"duration": 30.0}] * 4, None)
+                yield segment
+                # Even a batch without recognized words contributes to completion.
+                pipeline.forward(None, None, [{"duration": 30.0}], None)
+            return segments(), SimpleNamespace(duration_after_vad=150.0)
+
+        def report(value):
+            events.append("progress")
+            progress.append(value)
+
+        with (
+            patch("faster_whisper.BatchedInferencePipeline.transcribe", prepare),
+            patch("faster_whisper.BatchedInferencePipeline.forward", return_value=[]),
+            patch("backend.runtime.transcription.time.perf_counter", side_effect=[100.0, 140.0, 160.0]),
+        ):
+            result = list(transcribe_segments(
+                self.model, "faster-whisper", "clip.wav", experimental_batch_size=4,
+                on_prepared=lambda: events.append("prepared"), on_progress=report,
+            ))
+
+        self.assertEqual(events, ["preparing", "prepared", "progress", "progress", "progress"])
+        self.assertEqual(len(result), 1)
+        self.assertIsNone(progress[0].speed)
+        self.assertIsNone(progress[0].eta_seconds)
+        self.assertEqual(progress[1].percent, 80.0)
+        self.assertEqual(progress[1].speed, 3.0)
+        self.assertEqual(progress[1].eta_seconds, 10.0)
+        self.assertEqual(progress[2].percent, 99.0)
+        self.assertEqual(progress[2].speed, 2.5)
+        self.assertEqual(progress[2].eta_seconds, 0.0)
+
+    def test_no_speech_has_no_invented_estimate(self):
+        progress = []
+        with patch(
+            "faster_whisper.BatchedInferencePipeline.transcribe",
+            return_value=(iter([]), SimpleNamespace(duration_after_vad=0.0)),
+        ):
+            self.assertEqual(list(transcribe_segments(
+                self.model, "faster-whisper", "clip.wav", experimental_batch_size=4,
+                on_progress=progress.append,
+            )), [])
+        self.assertEqual(len(progress), 1)
+        self.assertIsNone(progress[0].percent)
+        self.assertIsNone(progress[0].speed)
+        self.assertIsNone(progress[0].eta_seconds)
+
     def test_invalid_batch_sizes_never_start_inference(self):
         for size in (0, -1, 8, True, 1.5, "2"):
             with self.subTest(size=size), self.assertRaisesRegex(ValueError, "batch size"):

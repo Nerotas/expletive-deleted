@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from typing import Literal
 
 from .models import JobError, JobStatus
@@ -25,6 +26,7 @@ class JobEvent:
     word: str | None = None
     start: float | None = None
     end: float | None = None
+    speed: float | None = None
 
     def __post_init__(self) -> None:
         if not self.job_id.strip():
@@ -35,6 +37,8 @@ class JobEvent:
             raise ValueError("Event ETA must not be negative")
         if self.fps is not None and self.fps < 0:
             raise ValueError("Event FPS must not be negative")
+        if self.speed is not None and (not math.isfinite(self.speed) or self.speed <= 0):
+            raise ValueError("Event speed must be finite and positive")
         if self.event == "error" and self.error is None:
             raise ValueError("Error events require an error")
         if self.event != "error" and self.error is not None:
@@ -51,6 +55,7 @@ class JobEvent:
             "percent": self.percent,
             "eta_seconds": self.eta_seconds,
             "fps": self.fps,
+            "speed": self.speed,
             "message": self.message,
             "error": self.error.to_dict() if self.error else None,
             "word": self.word,

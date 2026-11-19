@@ -31,6 +31,7 @@ from backend.runtime import (
     require_whisper_model,
 )
 from backend.runtime.transcription import (
+    TranscriptionProgress,
     load_transcription_model,
     require_whisper_library,
     transcribe_segments,
@@ -182,6 +183,7 @@ class ProfanityCensor:
         eta_seconds: float | None = None,
         fps: float | None = None,
         message: str | None = None,
+        speed: float | None = None,
     ) -> None:
         progress_callback = getattr(self, "progress_callback", None)
         if progress_callback is not None:
@@ -193,6 +195,7 @@ class ProfanityCensor:
                     "eta_seconds": eta_seconds,
                     "fps": fps,
                     "message": message,
+                    **({"speed": speed} if speed is not None else {}),
                 }
             )
 
@@ -504,19 +507,44 @@ class ProfanityCensor:
                 transcription_input = temporary_audio
             self._check_cancelled()
             self.validate_transcription_audio(transcription_input)
+            batched = getattr(self, "transcription_batch_size", None) is not None
+
+            def batch_progress(progress: TranscriptionProgress) -> None:
+                speed = progress.speed
+                percent = progress.percent if progress.processed_seconds > 0 else None
+                saving = progress.processed_seconds >= progress.total_seconds
+                self._emit_progress(
+                    "transcribing", percent,
+                    None if saving else progress.eta_seconds,
+                    message="Saving and verifying transcript" if saving else "Transcribing audio",
+                    speed=speed,
+                )
+                if percent is not None:
+                    filled = int(percent * 24 / 100)
+                    bar = "#" * filled + "-" * (24 - filled)
+                    rate = f"{speed:.2f}x" if speed is not None else "N/A"
+                    eta = self._format_seconds(progress.eta_seconds) if progress.eta_seconds is not None else "--:--"
+                    sys.stdout.write(
+                        f"\r[Whisper] [{bar}] {int(percent):3d}% | speed {rate} | "
+                        f"elapsed {self._format_seconds(progress.elapsed_seconds)} | eta {eta}     "
+                    )
+                    sys.stdout.flush()
+
             if isolated:
                 segments_gen = transcribe_in_process(
                     self.whisper_library, self.model_name, self.whisper_device,
                     self.whisper_cache_dir, transcription_input, self.transcription_batch_size,
                     self.cancellation, self._check_cancelled,
                     on_ready=lambda: self._emit_progress("transcribing", message="Preparing audio for transcription"),
-                    on_transcribing=lambda: self._emit_progress("transcribing", 0.0, message="Transcribing audio"),
+                    on_transcribing=lambda: self._emit_progress("transcribing", message="Transcribing audio"),
+                    on_progress=batch_progress,
                 )
             else:
                 segments_gen = transcribe_segments(
                     model, self.whisper_library, transcription_input,
                     experimental_batch_size=getattr(self, "transcription_batch_size", None),
                     check_cancelled=self._check_cancelled,
+                    on_progress=batch_progress if batched else None,
                 )
 
             words_with_timestamps = []
@@ -553,7 +581,7 @@ class ProfanityCensor:
                                 'end': segment["start"] + ((i + 1) / num_parts) * seg_dur,
                             })
 
-                if duration > 0:
+                if duration > 0 and not batched:
                     progress = min(100, int(segment["end"] / duration * 100))
                     if progress != last_percent:
                         elapsed = time.perf_counter() - tx_started
@@ -574,6 +602,7 @@ class ProfanityCensor:
                             float(progress),
                             remaining if rate > 0 else None,
                             message=f"Whisper speed {speed}",
+                            speed=rate if rate > 0 else None,
                         )
                         last_percent = progress
 
@@ -583,9 +612,6 @@ class ProfanityCensor:
                 f"[Whisper] [########################] 100% | "
                 f"elapsed {self._format_seconds(elapsed)} | eta 00:00"
             )
-            sys.stdout.write(f"\r{completed_status:<110}\n")
-            sys.stdout.flush()
-            self._emit_progress("transcribing", 100.0, 0.0, message="Transcription completed")
             print(f"[+] Transcription complete: {len(words_with_timestamps)} words")
             record_transcription_timing(duration, elapsed, self.model_name)
 
@@ -607,6 +633,9 @@ class ProfanityCensor:
                 source_identity=self._active_source_identity,
                 cancellation=getattr(self, "cancellation", None),
             )
+            sys.stdout.write(f"\r{completed_status:<110}\n")
+            sys.stdout.flush()
+            self._emit_progress("transcribing", 100.0, 0.0, message="Transcription completed")
             print(f"[+] Transcript saved and verified: {transcript_path}")
             return persisted_transcript
         except Exception as e:

@@ -1043,6 +1043,27 @@ describe('desktop application renderer', () => {
     expect(await screen.findByText('Preparing audio for transcription')).toBeInTheDocument()
     expect(screen.getByText(/an unchanged percentage does not necessarily mean/)).toBeInTheDocument()
     expect(screen.queryByText('0%')).not.toBeInTheDocument()
+    expect(screen.getByRole('progressbar', { name: 'Transcription progress' })).not.toHaveAttribute('aria-valuenow')
+  })
+
+  it('shows one overall transcription estimate, measured progress and speed', async () => {
+    const source = 'C:\\Media\\Ready\\long.mkv'
+    vi.mocked(desktopClient.listLibrary).mockResolvedValue([{
+      source, status: 'ready', date_added: '2026-09-01T12:00:00Z', transcript: null, output: null, duration_seconds: 399,
+    }])
+    vi.mocked(desktopClient.listJobs).mockResolvedValue([{
+      id: 'long-job', source, mode: 'report_only', status: 'transcribing', progress_percent: 80, error: null,
+    }])
+    vi.mocked(desktopClient.listJobEvents).mockResolvedValue([{
+      event: 'progress', job_id: 'long-job', sequence: 2, stage: 'transcribing', percent: 80,
+      eta_seconds: 20, fps: null, speed: 1.5, message: 'Transcribing audio',
+    }])
+    renderApp('/')
+
+    expect(await screen.findByText('speed 1.50x · About 20s left')).toBeInTheDocument()
+    expect(screen.getByRole('progressbar', { name: 'Transcription progress' })).toHaveAttribute('aria-valuenow', '80')
+    expect(screen.getByText('80%')).toBeInTheDocument()
+    expect(screen.queryByText('0%')).not.toBeInTheDocument()
   })
 
   it('shows actionable transcription failure guidance and retry', async () => {
