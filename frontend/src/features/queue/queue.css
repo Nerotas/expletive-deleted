@@ -69,6 +69,14 @@ tr:last-child td { border-bottom: 0; }
 .progress-wrap { display: flex; align-items: center; gap: 9px; }
 .progress-track { height: 5px; flex: 1; background: var(--soft); min-width: 70px; }
 .progress-track span { display: block; height: 100%; background: var(--signal); }
+.progress-transcribing { animation: transcription-active 2s ease-in-out infinite; }
+.progress-indeterminate { overflow: hidden; }
+.progress-indeterminate span { animation: transcription-waiting 2s ease-in-out infinite alternate; }
+@keyframes transcription-active { 50% { opacity: .6; } }
+@keyframes transcription-waiting { to { transform: translateX(185%); } }
+@media (prefers-reduced-motion: reduce) {
+  .progress-transcribing, .progress-indeterminate span { animation: none; }
+}
 .progress-copying span { background: var(--action-purple); }
 .progress-downloading span { background: var(--action-blue); }
 .progress-preparing span { background: var(--success); }

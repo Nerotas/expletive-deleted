@@ -336,6 +336,7 @@ class JobManager:
                 percent=percent,
                 eta_seconds=progress.get("eta_seconds"),
                 fps=progress.get("fps"),
+                speed=progress.get("speed"),
                 message=progress.get("message"),
             )
 

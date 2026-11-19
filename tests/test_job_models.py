@@ -14,10 +14,17 @@ class JobModelTests(unittest.TestCase):
             stage=job.status,
             percent=job.progress_percent,
             eta_seconds=12.0,
+            speed=1.5,
         )
 
         self.assertEqual(job.to_dict()["source"], str(source))
         self.assertEqual(event.to_dict()["percent"], 42.5)
+        self.assertEqual(event.to_dict()["speed"], 1.5)
+
+    def test_invalid_transcription_speed_is_rejected(self):
+        for speed in (0, -1, float("nan"), float("inf")):
+            with self.subTest(speed=speed), self.assertRaisesRegex(ValueError, "speed"):
+                JobEvent("progress", "job-1", speed=speed)
 
     def test_failed_job_requires_structured_error(self):
         source = Path("C:/media/movie.mkv").resolve()

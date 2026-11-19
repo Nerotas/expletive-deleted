@@ -157,6 +157,44 @@ class TranscriptionProcessTests(unittest.TestCase):
         self.assertEqual(output, [])
         self.assertEqual(events, ["preparing", "transcribing"])
 
+    def test_batch_measurements_reach_parent_without_segment_output(self):
+        bootstrap = (
+            "import json,sys; json.load(sys.stdin); "
+            "print(json.dumps({'type':'ready'}),flush=True); "
+            "print(json.dumps({'type':'transcribing'}),flush=True); "
+            "print(json.dumps({'type':'progress','progress':{'processed_seconds':120,"
+            "'total_seconds':150,'elapsed_seconds':40}}),flush=True); "
+            "print(json.dumps({'type':'completed'}),flush=True)"
+        )
+        progress = []
+        with patch("backend.runtime.transcription_process._BOOTSTRAP", bootstrap):
+            self.assertEqual(list(transcribe_in_process(
+                "faster-whisper", "large-v3", "cpu", Path("."), "clip.wav",
+                4, Event(), lambda: None, on_progress=progress.append,
+            )), [])
+        self.assertEqual(len(progress), 1)
+        self.assertEqual(progress[0].percent, 80.0)
+        self.assertEqual(progress[0].speed, 3.0)
+        self.assertEqual(progress[0].eta_seconds, 10.0)
+
+    def test_invalid_batch_measurements_are_rejected(self):
+        for processed, total, elapsed in (
+            ("True", "10", "1"), ("11", "10", "1"), ("1", "10", "-1"),
+            ("1", "float('nan')", "1"), ("1", "10", "float('inf')"),
+        ):
+            bootstrap = (
+                "import json,sys; json.load(sys.stdin); "
+                "print(json.dumps({'type':'ready'}),flush=True); "
+                "print(json.dumps({'type':'transcribing'}),flush=True); "
+                "print(json.dumps({'type':'progress','progress':{"
+                f"'processed_seconds':{processed},'total_seconds':{total},'elapsed_seconds':{elapsed}"
+                "}}),flush=True)"
+            )
+            with self.subTest(values=(processed, total, elapsed)), patch(
+                "backend.runtime.transcription_process._BOOTSTRAP", bootstrap,
+            ), self.assertRaisesRegex(RuntimeError, "invalid progress"):
+                list(self.invoke(Event()))
+
     def test_memory_error_with_empty_detail_is_actionable(self):
         bootstrap = (
             "import json,sys; json.load(sys.stdin); "

@@ -1,4 +1,4 @@
-import type { JobStatus, LibraryStatus } from '../types/domain'
+import type { JobEvent, JobStatus, LibraryStatus } from '../types/domain'
 
 export function fileName(path: string): string {
   return path.split(/[\\/]/).pop() ?? path
@@ -8,6 +8,20 @@ export function formatEta(seconds: number): string {
   const total = Math.max(0, Math.round(seconds))
   const minutes = Math.floor(total / 60)
   return minutes ? `${minutes}m ${total % 60}s` : `${total}s`
+}
+
+export function formatJobProgress(event: JobEvent | undefined): string | undefined {
+  if (event?.stage === 'transcribing' && event.speed != null) {
+    const speed = `speed ${event.speed.toFixed(2)}x`
+    return event.eta_seconds != null
+      ? `${speed} · About ${formatEta(event.eta_seconds)} left`
+      : `${event.message ?? 'Transcribing audio'} · ${speed}`
+  }
+  if (event?.fps) {
+    return `${Math.round(event.fps)} FPS${event.eta_seconds != null ? ` · ${formatEta(event.eta_seconds)} left` : ''}`
+  }
+  if (event?.eta_seconds != null) return `${formatEta(event.eta_seconds)} left`
+  return event?.message ?? undefined
 }
 
 export function formatDuration(seconds: number): string {

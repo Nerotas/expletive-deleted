@@ -18,6 +18,7 @@ from backend.censor.engine import (
     validate_transcript_data,
     write_transcript_atomic,
 )
+from backend.runtime.transcription import TranscriptionProgress
 from better_profanity import profanity
 from backend.runtime.environment import (
     PROJECT_ROOT,
@@ -447,6 +448,56 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("[Whisper] [############------------]  50%", output.getvalue())
         self.assertIn("speed 3.00x", output.getvalue())
         self.assertIn("[Whisper] [########################] 100%", output.getvalue())
+
+    def test_batched_transcription_reports_one_estimate_and_waits_for_verified_save(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            censor = object.__new__(ProfanityCensor)
+            censor.input_file = str(Path(temporary_directory) / "input.mkv")
+            Path(censor.input_file).write_bytes(b"source")
+            censor.model_name = "large-v3"
+            censor.whisper_library = "faster-whisper"
+            censor.whisper_device = "cpu"
+            censor.whisper_cache_dir = Path(temporary_directory)
+            censor.transcripts_dir = temporary_directory
+            censor.transcription_batch_size = 4
+            censor.isolate_transcription = True
+            censor.cancellation = Event()
+            censor.get_media_duration_seconds = MagicMock(return_value=399.0)
+            censor.has_discrete_center_audio = MagicMock(return_value=False)
+            censor.validate_transcription_audio = MagicMock()
+            events = []
+            censor.progress_callback = events.append
+
+            def transcribe(*_args, **kwargs):
+                kwargs["on_ready"]()
+                kwargs["on_transcribing"]()
+                kwargs["on_progress"](TranscriptionProgress(0, 150, 0))
+                kwargs["on_progress"](TranscriptionProgress(120, 150, 40))
+                yield {"text": " hello", "start": 29.0, "end": 300.0, "words": []}
+                kwargs["on_progress"](TranscriptionProgress(150, 150, 60))
+
+            def save(*args, **kwargs):
+                self.assertFalse(any(event.get("percent") == 100 for event in events if event["stage"] == "transcribing"))
+                return write_transcript_atomic(*args, **kwargs)
+
+            output = io.StringIO()
+            with (
+                patch("backend.censor.engine.transcribe_in_process", side_effect=transcribe),
+                patch("backend.censor.engine.write_transcript_atomic", side_effect=save),
+                patch("backend.censor.engine.record_transcription_timing"),
+                patch("backend.censor.engine.sys.stdout", output),
+            ):
+                censor.transcribe_with_timestamps()
+
+        transcription = [event for event in events if event["stage"] == "transcribing"]
+        estimates = [event for event in transcription if event.get("speed") is not None]
+        self.assertEqual([event["percent"] for event in estimates], [80.0, 99.0])
+        self.assertEqual(estimates[0]["speed"], 3.0)
+        self.assertEqual(estimates[0]["eta_seconds"], 10.0)
+        self.assertIsNone(estimates[1]["eta_seconds"])
+        self.assertEqual(transcription[-1]["percent"], 100.0)
+        self.assertIn("speed 3.00x", output.getvalue())
+        self.assertIn("eta 00:10", output.getvalue())
 
     def create_surround_censor(self):
         censor = object.__new__(ProfanityCensor)

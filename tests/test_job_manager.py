@@ -41,7 +41,7 @@ class FakeCensor:
         self.__class__.processed_sources.append(self.input_file.name)
         self.__class__.started.set()
         callback = self.options["progress_callback"]
-        callback({"event": "progress", "stage": "transcribing", "percent": 50.0, "eta_seconds": 1.0})
+        callback({"event": "progress", "stage": "transcribing", "percent": 50.0, "eta_seconds": 1.0, "speed": 1.5})
         callback({"event": "detection", "word": "example", "start": 1.0, "end": 1.5})
         if self.create_partial_output:
             self.output_file.write_bytes(b"partial")
@@ -272,6 +272,7 @@ class JobManagerTests(unittest.TestCase):
             try:
                 job = manager.submit(source, "report_only")
                 completed = manager.wait(job.id, timeout=2)
+                events = manager.events(job.id)
             finally:
                 manager.close()
 
@@ -279,6 +280,7 @@ class JobManagerTests(unittest.TestCase):
         self.assertFalse(output_path(source, settings.directories.output).exists())
         self.assertEqual(FakeCensor.instances[-1].options["transcription_batch_size"], 4)
         self.assertTrue(FakeCensor.instances[-1].options["isolate_transcription"])
+        self.assertTrue(any(event.speed == 1.5 and event.eta_seconds == 1.0 for event in events))
 
     def test_verified_transcript_can_promote_to_the_censor_lane(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

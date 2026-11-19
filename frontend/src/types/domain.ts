@@ -97,6 +97,7 @@ export type JobEvent = {
   percent: number | null
   eta_seconds: number | null
   fps: number | null
+  speed?: number | null
   message: string | null
 }
 

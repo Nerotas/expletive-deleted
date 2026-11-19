@@ -12,6 +12,8 @@ from queue import Empty, Full, Queue
 from threading import Event, Thread
 from typing import Any
 
+from .transcription import TranscriptionProgress
+
 
 _BOOTSTRAP = (
     "import json,sys; request=json.load(sys.stdin); "
@@ -42,6 +44,18 @@ def _validate_segment(segment: object) -> dict[str, Any]:
     return segment
 
 
+def _validate_progress(progress: object) -> TranscriptionProgress:
+    if not isinstance(progress, dict):
+        raise RuntimeError("The transcription worker sent invalid progress.")
+    values = [progress.get(key) for key in ("processed_seconds", "total_seconds", "elapsed_seconds")]
+    if any(type(value) not in (int, float) or not math.isfinite(value) or value < 0 for value in values):
+        raise RuntimeError("The transcription worker sent invalid progress.")
+    processed, total, elapsed = values
+    if processed > total:
+        raise RuntimeError("The transcription worker sent invalid progress.")
+    return TranscriptionProgress(processed, total, elapsed)
+
+
 def transcribe_in_process(
     library: str,
     model_name: str,
@@ -53,6 +67,7 @@ def transcribe_in_process(
     check_cancelled: Callable[[], None],
     on_ready: Callable[[], None] | None = None,
     on_transcribing: Callable[[], None] | None = None,
+    on_progress: Callable[[TranscriptionProgress], None] | None = None,
 ) -> Iterator[dict[str, Any]]:
     """Terminate the child when cancelled, even inside model loading or native inference."""
     check_cancelled()
@@ -136,6 +151,10 @@ def transcribe_in_process(
                     on_transcribing()
             elif event == "segment" and transcribing:
                 yield _validate_segment(message.get("segment"))
+            elif event == "progress" and transcribing:
+                progress = _validate_progress(message.get("progress"))
+                if on_progress:
+                    on_progress(progress)
             elif event == "completed" and transcribing:
                 completed = True
                 break

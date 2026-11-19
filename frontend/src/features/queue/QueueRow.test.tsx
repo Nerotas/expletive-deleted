@@ -1,12 +1,12 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { QueueRow } from './QueueRow'
-import type { LibraryItem } from '../../types/domain'
+import type { Job, JobEvent, LibraryItem } from '../../types/domain'
 
-function row(item: LibraryItem) {
+function row(item: LibraryItem, job?: Job, event?: JobEvent) {
   const submit = vi.fn().mockResolvedValue(undefined)
   render(<table><tbody><QueueRow
-    item={item} active={false} processingReady setupReason="" busy={false} selected={false}
+    item={item} job={job} event={event} active={false} processingReady setupReason="" busy={false} selected={false}
     onToggleSelection={vi.fn()} onReview={vi.fn()} onArchive={vi.fn()}
     onOpenOutput={vi.fn()} onRetry={vi.fn()} onAuthenticationRequired={vi.fn()}
     onDownloadJavaScriptRuntime={vi.fn()} onSubmit={submit}
@@ -42,5 +42,30 @@ describe('source identity in the Queue', () => {
   it('shows the media length as a compact clock value', () => {
     row({ source: 'C:\\Ready\\film.mkv', status: 'ready', date_added: '', transcript: null, output: null, duration_seconds: 3723 })
     expect(screen.getByText('1:02:03')).toBeInTheDocument()
+  })
+
+  it('shows the same aggregate transcription speed and estimate in a table row', () => {
+    const source = 'C:\\Ready\\film.mkv'
+    row(
+      { source, status: 'ready', date_added: '', transcript: null, output: null, duration_seconds: 399 },
+      { id: 'job-1', source, mode: 'report_only', status: 'transcribing', progress_percent: 80, error: null },
+      { event: 'progress', job_id: 'job-1', sequence: 1, stage: 'transcribing', percent: 80,
+        eta_seconds: 20, fps: null, speed: 1.5, message: 'Transcribing audio' },
+    )
+    expect(screen.getByText('speed 1.50x · About 20s left')).toBeInTheDocument()
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '80')
+  })
+
+  it('does not present transcript saving as completed inference with zero time left', () => {
+    const source = 'C:\\Ready\\film.mkv'
+    row(
+      { source, status: 'ready', date_added: '', transcript: null, output: null, duration_seconds: 399 },
+      { id: 'job-1', source, mode: 'report_only', status: 'transcribing', progress_percent: 99, error: null },
+      { event: 'progress', job_id: 'job-1', sequence: 1, stage: 'transcribing', percent: 99,
+        eta_seconds: null, fps: null, speed: 1.5, message: 'Saving and verifying transcript' },
+    )
+    expect(screen.getByText('Saving and verifying transcript · speed 1.50x')).toBeInTheDocument()
+    expect(screen.queryByText(/0s left/)).not.toBeInTheDocument()
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '99')
   })
 })

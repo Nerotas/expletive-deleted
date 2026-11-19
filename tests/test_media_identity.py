@@ -292,7 +292,7 @@ class MediaIdentityTests(unittest.TestCase):
             ("Checking and preparing audio", None),
             ("Loading the speech model", None),
             ("Preparing audio for transcription", None),
-            ("Transcribing audio", 0.0),
+            ("Transcribing audio", None),
         ])
 
     def test_renamed_source_reuses_recorded_transcript_without_transcription(self):
